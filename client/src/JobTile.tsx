@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
+import ReactDOM from 'react-dom';
 import JobTileDropdown from './JobTileDropdown';
 import JobTileStatsPopover from './JobTileStatsPopover';
+import type { CompanyTagColor, UserJobNote } from './ClientSaveLoad';
 
 interface JobScores {
   resume: number;
@@ -79,6 +81,7 @@ interface QualityOfLifeResult {
 
 interface JobTileProps {
   wrapper?: RankedJobWrapper;
+  isUserCreatedJob?: boolean;
   resumeId?: string;
   resumeText?: string;
   resumeDisplayName?: string;
@@ -90,6 +93,24 @@ interface JobTileProps {
   qualityOfLifeResultOverride?: QualityOfLifeResult;
   onHideJob?: (jobUrl?: string) => void;
   onHideCompany?: (companyName?: string) => void;
+  jobUserNote?: UserJobNote;
+  companyUserNote?: UserJobNote;
+  onSaveUserNote?: (note: UserJobNote) => void;
+  onClearUserNote?: () => void;
+  onSaveCompanyUserNote?: (note: UserJobNote) => void;
+  onClearCompanyUserNote?: () => void;
+  companyTagColors?: CompanyTagColor[];
+  onSetCompanyTagColors?: (colors: CompanyTagColor[]) => void;
+  onAwardReadCompletion?: () => void;
+  hasReadCompletionAwarded?: boolean;
+  onSaveUserCreatedJobDetails?: (sourceUrl: string, updates: {
+    name: string;
+    companyName: string;
+    location: string;
+    remote: string;
+    type: string;
+    description: string;
+  }) => void;
 }
 
 const formatScore = (score: number): string => {
@@ -105,6 +126,41 @@ const getPreview = (value: string, maxLength = 160): string => {
     return normalized;
   }
   return `${normalized.slice(0, maxLength)}...`;
+};
+
+const noteInlineLinkRegex = /\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)|(https?:\/\/[^\s]+)/i;
+
+const trimUrlPunctuation = (rawUrl: string): string => {
+  return rawUrl.replace(/[),.;!?]+$/, '');
+};
+
+const getFirstLinkFromNotes = (notes?: string): string | null => {
+  const text = String(notes ?? '').trim();
+  if (!text) {
+    return null;
+  }
+
+  const match = text.match(noteInlineLinkRegex);
+  if (!match) {
+    return null;
+  }
+
+  const markdownUrl = match[2];
+  const rawUrl = match[3];
+  const candidate = markdownUrl || rawUrl;
+  if (!candidate) {
+    return null;
+  }
+
+  const cleaned = trimUrlPunctuation(candidate);
+  return cleaned || null;
+};
+
+const getUserScoreBand = (score: number): 'blue' | 'green' | 'yellow' | 'red' => {
+  if (score >= 80) return 'blue';
+  if (score >= 60) return 'green';
+  if (score >= 40) return 'yellow';
+  return 'red';
 };
 
 const getSourceHost = (sourceUrl?: string): string => {
@@ -138,6 +194,7 @@ const getScoreBand = (score?: number): ScoreBand => {
 
 const JobTile: React.FC<JobTileProps> = ({
   wrapper,
+  isUserCreatedJob,
   resumeId,
   resumeText,
   resumeDisplayName,
@@ -149,6 +206,17 @@ const JobTile: React.FC<JobTileProps> = ({
   qualityOfLifeResultOverride,
   onHideJob,
   onHideCompany,
+  jobUserNote,
+  companyUserNote,
+  onSaveUserNote,
+  onClearUserNote,
+  onSaveCompanyUserNote,
+  onClearCompanyUserNote,
+  companyTagColors,
+  onSetCompanyTagColors,
+  onAwardReadCompletion,
+  hasReadCompletionAwarded,
+  onSaveUserCreatedJobDetails,
 }) => {
   const job = wrapper?.job;
   const scores = wrapper?.scores;
@@ -163,6 +231,13 @@ const JobTile: React.FC<JobTileProps> = ({
   const [auditText, setAuditText] = useState<string | null>(null);
   const [auditError, setAuditError] = useState<string | null>(null);
   const [isStatsPopoverOpen, setIsStatsPopoverOpen] = useState(false);
+
+  const hasJobUserNotes = Boolean(
+    jobUserNote && (jobUserNote.notes.length > 0 || jobUserNote.userScore !== null),
+  );
+  const hasCompanyUserNotes = Boolean(
+    companyUserNote && (companyUserNote.notes.length > 0 || companyUserNote.userScore !== null),
+  );
 
   // auditResultOverride comes from the App-level job:audit:result listener;
   // local ack state takes precedence when this tile triggered the audit.
@@ -262,6 +337,8 @@ const JobTile: React.FC<JobTileProps> = ({
   const freshBand = getScoreBand(scores?.fresh);
   const auditBand = getScoreBand(displayedAuditScore);
   const sourceHost = getSourceHost(job?.source_url);
+  const companyNoteLink = getFirstLinkFromNotes(companyUserNote?.notes);
+  const jobNoteLink = getFirstLinkFromNotes(jobUserNote?.notes);
 
   const getFullAuditText = (): string => {
     if (!resolvedAuditText) {
@@ -283,11 +360,54 @@ const JobTile: React.FC<JobTileProps> = ({
     window.open(job.source_url, '_blank', 'noopener,noreferrer');
   };
 
+  const openExternalUrl = (url: string) => {
+    window.open(url, '_blank', 'noopener,noreferrer');
+  };
+
+  const handleNotesBubbleClick = (event: React.MouseEvent<HTMLElement>, url?: string | null) => {
+    if (!url) {
+      return;
+    }
+    event.stopPropagation();
+    openExternalUrl(url);
+  };
+
+  const handleNotesBubbleKeyDown = (event: React.KeyboardEvent<HTMLElement>, url?: string | null) => {
+    if (!url) {
+      return;
+    }
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      event.stopPropagation();
+      openExternalUrl(url);
+    }
+  };
+
   const openStatsPopover = () => {
     setIsStatsPopoverOpen(true);
   };
 
-  const handleScoreBubbleKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+  const isInteractiveElement = (target: EventTarget | null): boolean => {
+    const element = target as HTMLElement | null;
+    if (!element) {
+      return false;
+    }
+    return Boolean(
+      element.closest('button, a, input, select, textarea, [role="menu"], [role="menuitem"], [role="listbox"], [role="option"]'),
+    );
+  };
+
+  const handleTileClick = (event: React.MouseEvent<HTMLDivElement>) => {
+    if (isInteractiveElement(event.target)) {
+      return;
+    }
+    openStatsPopover();
+  };
+
+  const handleTileKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (isInteractiveElement(event.target)) {
+      return;
+    }
     if (event.key === 'Enter' || event.key === ' ') {
       event.preventDefault();
       openStatsPopover();
@@ -295,10 +415,47 @@ const JobTile: React.FC<JobTileProps> = ({
   };
 
   return (
-    <div className="job-tile">
+    <div
+      className={`job-tile${isUserCreatedJob ? ' job-tile--user-created' : ''}`}
+      onClick={handleTileClick}
+      role="button"
+      tabIndex={0}
+      onKeyDown={handleTileKeyDown}
+      aria-label={`Open details for ${job?.name ?? 'job'}`}
+    >
       <div className="job-tile-fixed-layout">
         <div className="job-tile-header">
-          <h2 className="job-title">{job?.name || 'Job Title'}</h2>
+          <div className="job-title-row">
+            <h2 className="job-title">{job?.name || 'Job Title'}</h2>
+            {isUserCreatedJob && (
+              <span
+                className="job-user-created-badge"
+                title="This job was added by you"
+                aria-label="User created job"
+              >
+                User Created
+              </span>
+            )}
+            {hasReadCompletionAwarded && (
+              <span
+                className="job-read-badge"
+                title="Read bonus already claimed for this job"
+                aria-label="Read bonus already claimed"
+              >
+                <svg viewBox="0 0 24 24" width="13" height="13" aria-hidden="true" focusable="false">
+                  <path
+                    d="M1.8 12s3.8-6.7 10.2-6.7S22.2 12 22.2 12s-3.8 6.7-10.2 6.7S1.8 12 1.8 12z"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.8"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                  <circle cx="12" cy="12" r="3.2" fill="currentColor" />
+                </svg>
+              </span>
+            )}
+          </div>
           <JobTileDropdown
             job={job}
             resumeId={resumeId}
@@ -316,13 +473,63 @@ const JobTile: React.FC<JobTileProps> = ({
 
         <div className="job-meta">
           <p className="job-company"><strong>Company:</strong> {job?.company_name || 'Company Name'}</p>
+          {Array.isArray(companyTagColors) && companyTagColors.length > 0 && (
+            <div className="job-company-tags" aria-label="Company tags">
+              {companyTagColors.map((color) => (
+                <span key={color} className={`job-company-tag job-company-tag--${color}`}>
+                  {color}
+                </span>
+              ))}
+            </div>
+          )}
           <p className="job-location"><strong>Location:</strong> {job?.location || 'Location'}</p>
           <p className="job-type"><strong>Type:</strong> {job?.type || 'Full-time'}</p>
           {job?.remote && <p className="job-remote"><strong>Remote:</strong> {job.remote}</p>}
         </div>
 
         <div className="job-text-block">
-          <p className="job-description">{job?.description || 'Job description goes here. Click to learn more.'}</p>
+          {hasCompanyUserNotes && (
+            <div
+              className={`job-user-notes${companyNoteLink ? ' job-user-notes--link' : ''}`}
+              onClick={(event) => handleNotesBubbleClick(event, companyNoteLink)}
+              onKeyDown={(event) => handleNotesBubbleKeyDown(event, companyNoteLink)}
+              role={companyNoteLink ? 'button' : undefined}
+              tabIndex={companyNoteLink ? 0 : undefined}
+              title={companyNoteLink ? `Open link: ${companyNoteLink}` : undefined}
+            >
+              <p className="job-user-notes-kind">Company notes</p>
+              {companyUserNote?.userScore !== null && companyUserNote?.userScore !== undefined && (
+                <span className={`job-user-score-badge job-user-score-badge--${getUserScoreBand(companyUserNote.userScore)}`}>
+                  Company score: {companyUserNote.userScore}/100
+                </span>
+              )}
+              {companyUserNote?.notes && (
+                <p className="job-user-notes-text">{companyUserNote.notes}</p>
+              )}
+            </div>
+          )}
+
+          {hasJobUserNotes && (
+            <div
+              className={`job-user-notes${jobNoteLink ? ' job-user-notes--link' : ''}`}
+              onClick={(event) => handleNotesBubbleClick(event, jobNoteLink)}
+              onKeyDown={(event) => handleNotesBubbleKeyDown(event, jobNoteLink)}
+              role={jobNoteLink ? 'button' : undefined}
+              tabIndex={jobNoteLink ? 0 : undefined}
+              title={jobNoteLink ? `Open link: ${jobNoteLink}` : undefined}
+            >
+              <p className="job-user-notes-kind">Job notes</p>
+              {jobUserNote?.userScore !== null && jobUserNote?.userScore !== undefined && (
+                <span className={`job-user-score-badge job-user-score-badge--${getUserScoreBand(jobUserNote.userScore)}`}>
+                  Job score: {jobUserNote.userScore}/100
+                </span>
+              )}
+              {jobUserNote?.notes && (
+                <p className="job-user-notes-text">{jobUserNote.notes}</p>
+              )}
+            </div>
+          )}
+          <p className="job-description">{job?.description || auditTooltip}</p>
           {job?.ai_summary && <p className="job-summary"><em>{job.ai_summary}</em></p>}
         </div>
 
@@ -336,11 +543,6 @@ const JobTile: React.FC<JobTileProps> = ({
             <div className="score-bubbles-row">
               <div
                 className={`score-bubble score-bubble--${resumeBand}`}
-                role="button"
-                tabIndex={0}
-                onClick={openStatsPopover}
-                onKeyDown={handleScoreBubbleKeyDown}
-                aria-label="Open job stats"
               >
                 <span className="score-bubble-label">Resume</span>
                 <span className="score-bubble-value">{formatScore(scores.resume)}%</span>
@@ -349,11 +551,6 @@ const JobTile: React.FC<JobTileProps> = ({
 
               <div
                 className={`score-bubble score-bubble--impact score-bubble--${impactBand}`}
-                role="button"
-                tabIndex={0}
-                onClick={openStatsPopover}
-                onKeyDown={handleScoreBubbleKeyDown}
-                aria-label="Open job stats"
               >
                 <span className="score-bubble-label">
                   Impact
@@ -370,11 +567,6 @@ const JobTile: React.FC<JobTileProps> = ({
 
               <div
                 className={`score-bubble score-bubble--${qualityOfLifeBand}`}
-                role="button"
-                tabIndex={0}
-                onClick={openStatsPopover}
-                onKeyDown={handleScoreBubbleKeyDown}
-                aria-label="Open job stats"
               >
                 <span className="score-bubble-label">
                   QoL
@@ -391,11 +583,6 @@ const JobTile: React.FC<JobTileProps> = ({
 
               <div
                 className={`score-bubble score-bubble--${locationBand}`}
-                role="button"
-                tabIndex={0}
-                onClick={openStatsPopover}
-                onKeyDown={handleScoreBubbleKeyDown}
-                aria-label="Open job stats"
               >
                 <span className="score-bubble-label">Location</span>
                 <span className="score-bubble-value">{formatScore(scores.location)}%</span>
@@ -404,11 +591,6 @@ const JobTile: React.FC<JobTileProps> = ({
 
               <div
                 className={`score-bubble score-bubble--${freshBand}`}
-                role="button"
-                tabIndex={0}
-                onClick={openStatsPopover}
-                onKeyDown={handleScoreBubbleKeyDown}
-                aria-label="Open job stats"
               >
                 <span className="score-bubble-label">Fresh</span>
                 <span className="score-bubble-value">{formatScore(scores.fresh)}%</span>
@@ -417,11 +599,6 @@ const JobTile: React.FC<JobTileProps> = ({
 
               <div
                 className={`score-bubble score-bubble--audit score-bubble--${auditBand}`}
-                role="button"
-                tabIndex={0}
-                onClick={openStatsPopover}
-                onKeyDown={handleScoreBubbleKeyDown}
-                aria-label="Open job stats"
               >
                 <span className="score-bubble-label">
                   Audit
@@ -470,28 +647,46 @@ const JobTile: React.FC<JobTileProps> = ({
         )}
       </div>
 
-      <JobTileStatsPopover
-        isOpen={isStatsPopoverOpen}
-        onClose={() => setIsStatsPopoverOpen(false)}
-        jobName={job?.name}
-        jobSourceUrl={job?.source_url}
-        companyName={job?.company_name}
-        location={job?.location}
-        jobType={job?.type}
-        remote={job?.remote}
-        jobDescription={job?.description}
-        jobSummary={job?.ai_summary}
-        totalScore={totalScore}
-        resumeScore={scores?.resume}
-        impactScore={displayedImpactScore}
-        qualityOfLifeScore={displayedQualityOfLifeScore}
-        locationScore={scores?.location}
-        freshScore={scores?.fresh}
-        auditScore={displayedAuditScore}
-        impactSummary={resolvedImpactSummary}
-        qualityOfLifeSummary={resolvedQualityOfLifeSummary}
-        fullAuditText={getFullAuditText()}
-      />
+      {ReactDOM.createPortal(
+        <JobTileStatsPopover
+          isOpen={isStatsPopoverOpen}
+          onClose={() => setIsStatsPopoverOpen(false)}
+          isUserCreatedJob={isUserCreatedJob}
+          jobName={job?.name}
+          jobSourceUrl={job?.source_url}
+          companyName={job?.company_name}
+          location={job?.location}
+          jobType={job?.type}
+          remote={job?.remote}
+          jobDescription={job?.description}
+          jobSummary={job?.ai_summary}
+          totalScore={totalScore}
+          resumeScore={scores?.resume}
+          impactScore={displayedImpactScore}
+          qualityOfLifeScore={displayedQualityOfLifeScore}
+          locationScore={scores?.location}
+          freshScore={scores?.fresh}
+          auditScore={displayedAuditScore}
+          impactSummary={resolvedImpactSummary}
+          qualityOfLifeSummary={resolvedQualityOfLifeSummary}
+          fullAuditText={getFullAuditText()}
+          jobUserNote={jobUserNote}
+          companyUserNote={companyUserNote}
+          companyTagColors={companyTagColors}
+          onSaveUserNote={onSaveUserNote}
+          onClearUserNote={onClearUserNote}
+          onSaveCompanyUserNote={onSaveCompanyUserNote}
+          onClearCompanyUserNote={onClearCompanyUserNote}
+          onSetCompanyTagColors={onSetCompanyTagColors}
+          onAwardReadCompletion={onAwardReadCompletion}
+          onSaveUserCreatedJobDetails={
+            job?.source_url && onSaveUserCreatedJobDetails
+              ? (updates) => onSaveUserCreatedJobDetails(job.source_url!, updates)
+              : undefined
+          }
+        />,
+        document.body,
+      )}
     </div>
   );
 };

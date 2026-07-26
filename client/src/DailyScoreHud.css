@@ -1,0 +1,995 @@
+.daily-note-hud {
+  position: fixed;
+  right: 18px;
+  bottom: 18px;
+  z-index: 70;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+  min-width: 92px;
+  padding: 10px 14px 12px;
+  border-radius: 18px;
+  border: 1px solid rgba(125, 211, 252, 0.42);
+  background:
+    radial-gradient(circle at top left, rgba(34, 211, 238, 0.28), transparent 48%),
+    radial-gradient(circle at bottom right, rgba(168, 85, 247, 0.22), transparent 42%),
+    linear-gradient(135deg, rgba(2, 6, 23, 0.78), rgba(15, 23, 42, 0.92));
+  box-shadow:
+    0 0 0 1px rgba(34, 211, 238, 0.16) inset,
+    0 0 22px rgba(34, 211, 238, 0.28),
+    0 0 38px rgba(168, 85, 247, 0.18),
+    0 16px 36px rgba(2, 6, 23, 0.42);
+  backdrop-filter: blur(10px) saturate(145%);
+  -webkit-backdrop-filter: blur(10px) saturate(145%);
+  pointer-events: none;
+  overflow: hidden;
+  isolation: isolate;
+  animation: daily-note-hud-float 4.8s ease-in-out infinite;
+}
+
+.daily-note-hud--tier-0 {
+  box-shadow:
+    0 0 0 1px rgba(34, 211, 238, 0.14) inset,
+    0 0 18px rgba(34, 211, 238, 0.22),
+    0 0 28px rgba(168, 85, 247, 0.12),
+    0 16px 36px rgba(2, 6, 23, 0.4);
+}
+
+.daily-note-hud--tier-1 {
+  border-color: rgba(125, 211, 252, 0.55);
+  box-shadow:
+    0 0 0 1px rgba(125, 211, 252, 0.2) inset,
+    0 0 22px rgba(34, 211, 238, 0.3),
+    0 0 36px rgba(168, 85, 247, 0.18),
+    0 0 10px rgba(236, 72, 153, 0.08),
+    0 16px 36px rgba(2, 6, 23, 0.42);
+}
+
+.daily-note-hud--tier-2 {
+  border-color: rgba(103, 232, 249, 0.72);
+  background:
+    radial-gradient(circle at top left, rgba(34, 211, 238, 0.36), transparent 40%),
+    radial-gradient(circle at bottom right, rgba(232, 121, 249, 0.3), transparent 40%),
+    linear-gradient(135deg, rgba(2, 6, 23, 0.84), rgba(15, 23, 42, 0.95));
+  box-shadow:
+    0 0 0 1px rgba(103, 232, 249, 0.24) inset,
+    0 0 26px rgba(34, 211, 238, 0.42),
+    0 0 44px rgba(168, 85, 247, 0.24),
+    0 0 18px rgba(14, 165, 233, 0.12),
+    0 16px 38px rgba(2, 6, 23, 0.46);
+}
+
+.daily-note-hud--tier-3 {
+  border-color: rgba(192, 132, 252, 0.82);
+  box-shadow:
+    0 0 0 1px rgba(192, 132, 252, 0.28) inset,
+    0 0 30px rgba(34, 211, 238, 0.5),
+    0 0 56px rgba(168, 85, 247, 0.36),
+    0 0 24px rgba(236, 72, 153, 0.2),
+    0 0 0 6px rgba(34, 211, 238, 0.05),
+    0 16px 42px rgba(2, 6, 23, 0.5);
+}
+
+.daily-note-hud--tier-4 {
+  border-color: rgba(248, 113, 113, 0.95);
+  background:
+    radial-gradient(circle at 18% 20%, rgba(56, 189, 248, 0.36), transparent 26%),
+    radial-gradient(circle at 82% 18%, rgba(236, 72, 153, 0.42), transparent 28%),
+    radial-gradient(circle at 60% 88%, rgba(244, 114, 182, 0.24), transparent 32%),
+    linear-gradient(135deg, rgba(2, 6, 23, 0.92), rgba(15, 23, 42, 0.98));
+  box-shadow:
+    0 0 0 1px rgba(248, 113, 113, 0.35) inset,
+    0 0 38px rgba(34, 211, 238, 0.58),
+    0 0 72px rgba(236, 72, 153, 0.42),
+    0 0 24px rgba(248, 113, 113, 0.24),
+    0 0 0 8px rgba(248, 113, 113, 0.05),
+    0 18px 46px rgba(2, 6, 23, 0.56);
+  animation:
+    daily-note-hud-float 3.4s ease-in-out infinite,
+    daily-note-hud-overload 1.15s ease-in-out infinite;
+}
+
+.daily-note-hud--tier-5 {
+  border-color: rgba(94, 234, 212, 0.95);
+  background:
+    radial-gradient(circle at 18% 20%, rgba(45, 212, 191, 0.34), transparent 30%),
+    radial-gradient(circle at 84% 72%, rgba(16, 185, 129, 0.28), transparent 36%),
+    linear-gradient(135deg, rgba(3, 12, 22, 0.94), rgba(10, 35, 40, 0.98));
+  box-shadow:
+    0 0 0 1px rgba(45, 212, 191, 0.32) inset,
+    0 0 34px rgba(45, 212, 191, 0.42),
+    0 0 62px rgba(20, 184, 166, 0.32),
+    0 18px 46px rgba(2, 6, 23, 0.56);
+  animation:
+    daily-note-hud-float 3.1s ease-in-out infinite,
+    daily-note-hud-quantum 1.8s ease-in-out infinite;
+}
+
+.daily-note-hud--tier-6 {
+  border-color: rgba(251, 191, 36, 0.95);
+  background:
+    radial-gradient(circle at 26% 16%, rgba(252, 211, 77, 0.34), transparent 28%),
+    radial-gradient(circle at 76% 82%, rgba(251, 146, 60, 0.3), transparent 38%),
+    linear-gradient(135deg, rgba(18, 10, 2, 0.94), rgba(38, 20, 6, 0.98));
+  box-shadow:
+    0 0 0 1px rgba(251, 191, 36, 0.34) inset,
+    0 0 40px rgba(245, 158, 11, 0.5),
+    0 0 78px rgba(251, 146, 60, 0.36),
+    0 18px 46px rgba(2, 6, 23, 0.58);
+  animation:
+    daily-note-hud-float 2.9s ease-in-out infinite,
+    daily-note-hud-nova 1.28s ease-in-out infinite;
+}
+
+.daily-note-hud--tier-7 {
+  border-color: rgba(196, 181, 253, 0.97);
+  background:
+    radial-gradient(circle at 12% 12%, rgba(129, 140, 248, 0.3), transparent 30%),
+    radial-gradient(circle at 82% 86%, rgba(216, 180, 254, 0.34), transparent 36%),
+    linear-gradient(135deg, rgba(9, 7, 22, 0.95), rgba(24, 14, 44, 0.99));
+  box-shadow:
+    0 0 0 1px rgba(196, 181, 253, 0.35) inset,
+    0 0 44px rgba(129, 140, 248, 0.56),
+    0 0 86px rgba(216, 180, 254, 0.44),
+    0 0 0 10px rgba(99, 102, 241, 0.07),
+    0 18px 48px rgba(2, 6, 23, 0.6);
+  animation:
+    daily-note-hud-float 2.7s ease-in-out infinite,
+    daily-note-hud-pulsar 1.04s ease-in-out infinite;
+}
+
+.daily-note-hud--tier-8 {
+  border-color: rgba(244, 114, 182, 0.98);
+  background:
+    radial-gradient(circle at 16% 26%, rgba(56, 189, 248, 0.3), transparent 28%),
+    radial-gradient(circle at 86% 18%, rgba(236, 72, 153, 0.4), transparent 30%),
+    radial-gradient(circle at 68% 88%, rgba(192, 132, 252, 0.26), transparent 34%),
+    linear-gradient(135deg, rgba(16, 6, 24, 0.96), rgba(34, 10, 36, 0.99));
+  box-shadow:
+    0 0 0 1px rgba(244, 114, 182, 0.36) inset,
+    0 0 48px rgba(236, 72, 153, 0.62),
+    0 0 92px rgba(56, 189, 248, 0.42),
+    0 0 0 12px rgba(244, 114, 182, 0.08),
+    0 20px 50px rgba(2, 6, 23, 0.64);
+  animation:
+    daily-note-hud-float 2.45s ease-in-out infinite,
+    daily-note-hud-singularity 0.92s ease-in-out infinite;
+}
+
+.daily-note-hud--tier-9 {
+  border-color: rgba(255, 255, 255, 0.98);
+  background:
+    radial-gradient(circle at 18% 22%, rgba(56, 189, 248, 0.36), transparent 26%),
+    radial-gradient(circle at 84% 16%, rgba(251, 113, 133, 0.38), transparent 30%),
+    radial-gradient(circle at 56% 84%, rgba(250, 204, 21, 0.28), transparent 34%),
+    linear-gradient(135deg, rgba(6, 8, 26, 0.98), rgba(28, 6, 42, 1));
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.45) inset,
+    0 0 52px rgba(255, 255, 255, 0.46),
+    0 0 112px rgba(56, 189, 248, 0.44),
+    0 0 0 14px rgba(255, 255, 255, 0.08),
+    0 24px 54px rgba(2, 6, 23, 0.68);
+  animation:
+    daily-note-hud-float 2.2s ease-in-out infinite,
+    daily-note-hud-transcendent 0.76s ease-in-out infinite;
+}
+
+.daily-note-hud--tier-10 {
+  border-color: rgba(110, 231, 183, 0.98);
+  background:
+    radial-gradient(circle at 20% 22%, rgba(45, 212, 191, 0.34), transparent 28%),
+    radial-gradient(circle at 82% 18%, rgba(167, 243, 208, 0.28), transparent 32%),
+    radial-gradient(circle at 58% 84%, rgba(56, 189, 248, 0.22), transparent 34%),
+    linear-gradient(135deg, rgba(2, 16, 22, 0.98), rgba(6, 34, 46, 1));
+  box-shadow:
+    0 0 0 1px rgba(110, 231, 183, 0.45) inset,
+    0 0 56px rgba(45, 212, 191, 0.48),
+    0 0 118px rgba(56, 189, 248, 0.42),
+    0 0 0 15px rgba(110, 231, 183, 0.08),
+    0 24px 56px rgba(2, 6, 23, 0.7);
+  animation:
+    daily-note-hud-float 2.1s ease-in-out infinite,
+    daily-note-hud-quantum 0.72s ease-in-out infinite;
+}
+
+.daily-note-hud--tier-11 {
+  border-color: rgba(253, 224, 71, 0.98);
+  background:
+    radial-gradient(circle at 18% 24%, rgba(250, 204, 21, 0.34), transparent 28%),
+    radial-gradient(circle at 84% 18%, rgba(251, 146, 60, 0.3), transparent 30%),
+    radial-gradient(circle at 60% 82%, rgba(248, 113, 113, 0.22), transparent 34%),
+    linear-gradient(135deg, rgba(24, 12, 2, 0.98), rgba(46, 24, 4, 1));
+  box-shadow:
+    0 0 0 1px rgba(253, 224, 71, 0.46) inset,
+    0 0 60px rgba(245, 158, 11, 0.56),
+    0 0 124px rgba(251, 146, 60, 0.44),
+    0 0 0 16px rgba(253, 224, 71, 0.09),
+    0 24px 56px rgba(2, 6, 23, 0.72);
+  animation:
+    daily-note-hud-float 2s ease-in-out infinite,
+    daily-note-hud-nova 0.66s ease-in-out infinite;
+}
+
+.daily-note-hud--tier-12 {
+  border-color: rgba(196, 181, 253, 0.99);
+  background:
+    radial-gradient(circle at 16% 22%, rgba(129, 140, 248, 0.34), transparent 28%),
+    radial-gradient(circle at 84% 18%, rgba(216, 180, 254, 0.32), transparent 32%),
+    radial-gradient(circle at 62% 84%, rgba(192, 132, 252, 0.24), transparent 34%),
+    linear-gradient(135deg, rgba(8, 6, 26, 0.99), rgba(24, 10, 46, 1));
+  box-shadow:
+    0 0 0 1px rgba(196, 181, 253, 0.47) inset,
+    0 0 62px rgba(129, 140, 248, 0.6),
+    0 0 130px rgba(216, 180, 254, 0.48),
+    0 0 0 16px rgba(196, 181, 253, 0.1),
+    0 24px 58px rgba(2, 6, 23, 0.74);
+  animation:
+    daily-note-hud-float 1.9s ease-in-out infinite,
+    daily-note-hud-pulsar 0.62s ease-in-out infinite;
+}
+
+.daily-note-hud--tier-13 {
+  border-color: rgba(125, 211, 252, 0.99);
+  background:
+    radial-gradient(circle at 18% 20%, rgba(14, 165, 233, 0.34), transparent 28%),
+    radial-gradient(circle at 84% 20%, rgba(34, 211, 238, 0.3), transparent 32%),
+    radial-gradient(circle at 60% 86%, rgba(96, 165, 250, 0.24), transparent 34%),
+    linear-gradient(135deg, rgba(2, 10, 28, 0.99), rgba(5, 24, 56, 1));
+  box-shadow:
+    0 0 0 1px rgba(125, 211, 252, 0.5) inset,
+    0 0 66px rgba(14, 165, 233, 0.62),
+    0 0 136px rgba(34, 211, 238, 0.52),
+    0 0 0 17px rgba(125, 211, 252, 0.1),
+    0 24px 58px rgba(2, 6, 23, 0.76);
+  animation:
+    daily-note-hud-float 1.82s ease-in-out infinite,
+    daily-note-hud-singularity 0.58s ease-in-out infinite;
+}
+
+.daily-note-hud--tier-14 {
+  border-color: rgba(244, 114, 182, 0.99);
+  background:
+    radial-gradient(circle at 16% 20%, rgba(236, 72, 153, 0.35), transparent 28%),
+    radial-gradient(circle at 84% 18%, rgba(248, 113, 113, 0.3), transparent 30%),
+    radial-gradient(circle at 60% 84%, rgba(192, 132, 252, 0.24), transparent 34%),
+    linear-gradient(135deg, rgba(22, 6, 26, 0.99), rgba(44, 8, 36, 1));
+  box-shadow:
+    0 0 0 1px rgba(244, 114, 182, 0.5) inset,
+    0 0 70px rgba(236, 72, 153, 0.64),
+    0 0 142px rgba(248, 113, 113, 0.54),
+    0 0 0 18px rgba(244, 114, 182, 0.11),
+    0 24px 60px rgba(2, 6, 23, 0.78);
+  animation:
+    daily-note-hud-float 1.74s ease-in-out infinite,
+    daily-note-hud-transcendent 0.54s ease-in-out infinite;
+}
+
+.daily-note-hud--tier-15 {
+  border-color: rgba(251, 146, 60, 0.99);
+  background:
+    radial-gradient(circle at 18% 22%, rgba(251, 146, 60, 0.35), transparent 28%),
+    radial-gradient(circle at 84% 20%, rgba(250, 204, 21, 0.3), transparent 30%),
+    radial-gradient(circle at 62% 84%, rgba(248, 113, 113, 0.24), transparent 34%),
+    linear-gradient(135deg, rgba(26, 10, 2, 0.99), rgba(50, 20, 2, 1));
+  box-shadow:
+    0 0 0 1px rgba(251, 146, 60, 0.52) inset,
+    0 0 74px rgba(249, 115, 22, 0.66),
+    0 0 148px rgba(250, 204, 21, 0.56),
+    0 0 0 19px rgba(251, 146, 60, 0.12),
+    0 24px 60px rgba(2, 6, 23, 0.8);
+  animation:
+    daily-note-hud-float 1.66s ease-in-out infinite,
+    daily-note-hud-nova 0.5s ease-in-out infinite;
+}
+
+.daily-note-hud--tier-16 {
+  border-color: rgba(167, 139, 250, 1);
+  background:
+    radial-gradient(circle at 18% 22%, rgba(147, 51, 234, 0.34), transparent 28%),
+    radial-gradient(circle at 84% 18%, rgba(236, 72, 153, 0.3), transparent 30%),
+    radial-gradient(circle at 60% 84%, rgba(59, 130, 246, 0.24), transparent 34%),
+    linear-gradient(135deg, rgba(14, 5, 32, 0.99), rgba(34, 8, 56, 1));
+  box-shadow:
+    0 0 0 1px rgba(167, 139, 250, 0.54) inset,
+    0 0 78px rgba(147, 51, 234, 0.7),
+    0 0 154px rgba(236, 72, 153, 0.58),
+    0 0 0 20px rgba(167, 139, 250, 0.12),
+    0 26px 62px rgba(2, 6, 23, 0.82);
+  animation:
+    daily-note-hud-float 1.58s ease-in-out infinite,
+    daily-note-hud-pulsar 0.46s ease-in-out infinite;
+}
+
+.daily-note-hud--tier-17 {
+  border-color: rgba(45, 212, 191, 1);
+  background:
+    radial-gradient(circle at 16% 20%, rgba(45, 212, 191, 0.35), transparent 28%),
+    radial-gradient(circle at 86% 20%, rgba(14, 165, 233, 0.3), transparent 30%),
+    radial-gradient(circle at 60% 84%, rgba(96, 165, 250, 0.24), transparent 34%),
+    linear-gradient(135deg, rgba(2, 18, 20, 0.99), rgba(2, 34, 40, 1));
+  box-shadow:
+    0 0 0 1px rgba(45, 212, 191, 0.56) inset,
+    0 0 82px rgba(45, 212, 191, 0.74),
+    0 0 160px rgba(14, 165, 233, 0.6),
+    0 0 0 21px rgba(45, 212, 191, 0.13),
+    0 26px 62px rgba(2, 6, 23, 0.84);
+  animation:
+    daily-note-hud-float 1.5s ease-in-out infinite,
+    daily-note-hud-quantum 0.42s ease-in-out infinite;
+}
+
+.daily-note-hud--tier-18 {
+  border-color: rgba(248, 250, 252, 1);
+  background:
+    radial-gradient(circle at 16% 20%, rgba(255, 255, 255, 0.34), transparent 28%),
+    radial-gradient(circle at 84% 18%, rgba(125, 211, 252, 0.32), transparent 30%),
+    radial-gradient(circle at 60% 84%, rgba(244, 114, 182, 0.24), transparent 34%),
+    linear-gradient(135deg, rgba(8, 10, 28, 1), rgba(22, 6, 40, 1));
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.6) inset,
+    0 0 86px rgba(255, 255, 255, 0.74),
+    0 0 168px rgba(125, 211, 252, 0.64),
+    0 0 0 22px rgba(255, 255, 255, 0.13),
+    0 28px 64px rgba(2, 6, 23, 0.86);
+  animation:
+    daily-note-hud-float 1.42s ease-in-out infinite,
+    daily-note-hud-transcendent 0.38s ease-in-out infinite;
+}
+
+.daily-note-hud--tier-19 {
+  border-color: rgba(255, 255, 255, 1);
+  background:
+    radial-gradient(circle at 14% 18%, rgba(255, 255, 255, 0.38), transparent 26%),
+    radial-gradient(circle at 84% 18%, rgba(56, 189, 248, 0.34), transparent 30%),
+    radial-gradient(circle at 60% 84%, rgba(250, 204, 21, 0.28), transparent 34%),
+    linear-gradient(135deg, rgba(6, 8, 30, 1), rgba(20, 4, 46, 1));
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.66) inset,
+    0 0 92px rgba(255, 255, 255, 0.8),
+    0 0 178px rgba(56, 189, 248, 0.68),
+    0 0 0 24px rgba(255, 255, 255, 0.15),
+    0 28px 66px rgba(2, 6, 23, 0.9);
+  animation:
+    daily-note-hud-float 1.34s ease-in-out infinite,
+    daily-note-hud-singularity 0.34s ease-in-out infinite;
+}
+
+.daily-note-hud__particles {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  mix-blend-mode: screen;
+}
+
+.daily-note-hud__particle {
+  position: absolute;
+  border-radius: 999px;
+  background: radial-gradient(circle, hsla(var(--particle-hue, 190), 100%, 80%, 0.98) 0%, hsla(var(--particle-hue, 190), 100%, 70%, 0.44) 52%, transparent 72%);
+  box-shadow:
+    0 0 10px hsla(var(--particle-hue, 190), 100%, 72%, 0.55),
+    0 0 22px hsla(var(--particle-hue, 190), 100%, 68%, 0.24);
+  animation-name: daily-note-hud-particle-float, daily-note-hud-particle-twinkle;
+  animation-timing-function: linear, ease-in-out;
+  animation-iteration-count: infinite, infinite;
+  will-change: transform, opacity;
+}
+
+.daily-note-hud--tier-0 .daily-note-hud__particles {
+  display: none;
+}
+
+.daily-note-hud--tier-0 .daily-note-hud__value {
+  text-shadow:
+    0 0 8px rgba(34, 211, 238, 0.6),
+    0 0 18px rgba(56, 189, 248, 0.35),
+    0 0 28px rgba(168, 85, 247, 0.22);
+}
+
+.daily-note-hud--tier-1 .daily-note-hud__value {
+  text-shadow:
+    0 0 10px rgba(34, 211, 238, 0.7),
+    0 0 22px rgba(56, 189, 248, 0.5),
+    0 0 34px rgba(168, 85, 247, 0.3),
+    0 0 42px rgba(236, 72, 153, 0.16);
+}
+
+.daily-note-hud--tier-2 .daily-note-hud__value {
+  text-shadow:
+    0 0 12px rgba(103, 232, 249, 0.8),
+    0 0 26px rgba(34, 211, 238, 0.6),
+    0 0 42px rgba(168, 85, 247, 0.4),
+    0 0 56px rgba(236, 72, 153, 0.18);
+}
+
+.daily-note-hud--tier-3 .daily-note-hud__value {
+  text-shadow:
+    0 0 14px rgba(192, 132, 252, 0.95),
+    0 0 30px rgba(34, 211, 238, 0.72),
+    0 0 48px rgba(236, 72, 153, 0.52),
+    0 0 72px rgba(56, 189, 248, 0.2);
+}
+
+.daily-note-hud--tier-4 .daily-note-hud__value {
+  text-shadow:
+    0 0 16px rgba(248, 113, 113, 1),
+    0 0 32px rgba(34, 211, 238, 0.9),
+    0 0 52px rgba(236, 72, 153, 0.78),
+    0 0 88px rgba(56, 189, 248, 0.28);
+}
+
+.daily-note-hud--tier-5 .daily-note-hud__value {
+  text-shadow:
+    0 0 16px rgba(45, 212, 191, 0.96),
+    0 0 36px rgba(20, 184, 166, 0.84),
+    0 0 64px rgba(110, 231, 183, 0.42);
+}
+
+.daily-note-hud--tier-6 .daily-note-hud__value {
+  text-shadow:
+    0 0 18px rgba(251, 191, 36, 1),
+    0 0 40px rgba(245, 158, 11, 0.88),
+    0 0 72px rgba(251, 146, 60, 0.5);
+}
+
+.daily-note-hud--tier-7 .daily-note-hud__value {
+  text-shadow:
+    0 0 18px rgba(196, 181, 253, 1),
+    0 0 42px rgba(129, 140, 248, 0.9),
+    0 0 76px rgba(216, 180, 254, 0.54);
+}
+
+.daily-note-hud--tier-8 .daily-note-hud__value {
+  text-shadow:
+    0 0 20px rgba(244, 114, 182, 1),
+    0 0 44px rgba(236, 72, 153, 0.92),
+    0 0 82px rgba(56, 189, 248, 0.58);
+}
+
+.daily-note-hud--tier-9 .daily-note-hud__value {
+  text-shadow:
+    0 0 22px rgba(255, 255, 255, 1),
+    0 0 48px rgba(56, 189, 248, 0.98),
+    0 0 92px rgba(251, 113, 133, 0.62);
+}
+
+.daily-note-hud--tier-10 .daily-note-hud__value {
+  text-shadow:
+    0 0 24px rgba(110, 231, 183, 1),
+    0 0 56px rgba(45, 212, 191, 0.98),
+    0 0 98px rgba(56, 189, 248, 0.66);
+}
+
+.daily-note-hud--tier-11 .daily-note-hud__value {
+  text-shadow:
+    0 0 24px rgba(253, 224, 71, 1),
+    0 0 58px rgba(245, 158, 11, 1),
+    0 0 104px rgba(251, 146, 60, 0.7);
+}
+
+.daily-note-hud--tier-12 .daily-note-hud__value {
+  text-shadow:
+    0 0 24px rgba(196, 181, 253, 1),
+    0 0 60px rgba(129, 140, 248, 1),
+    0 0 108px rgba(216, 180, 254, 0.74);
+}
+
+.daily-note-hud--tier-13 .daily-note-hud__value {
+  text-shadow:
+    0 0 24px rgba(125, 211, 252, 1),
+    0 0 62px rgba(14, 165, 233, 1),
+    0 0 112px rgba(34, 211, 238, 0.76);
+}
+
+.daily-note-hud--tier-14 .daily-note-hud__value {
+  text-shadow:
+    0 0 24px rgba(244, 114, 182, 1),
+    0 0 64px rgba(236, 72, 153, 1),
+    0 0 116px rgba(248, 113, 113, 0.78);
+}
+
+.daily-note-hud--tier-15 .daily-note-hud__value {
+  text-shadow:
+    0 0 26px rgba(251, 146, 60, 1),
+    0 0 66px rgba(249, 115, 22, 1),
+    0 0 120px rgba(250, 204, 21, 0.8);
+}
+
+.daily-note-hud--tier-16 .daily-note-hud__value {
+  text-shadow:
+    0 0 26px rgba(167, 139, 250, 1),
+    0 0 68px rgba(147, 51, 234, 1),
+    0 0 124px rgba(236, 72, 153, 0.82);
+}
+
+.daily-note-hud--tier-17 .daily-note-hud__value {
+  text-shadow:
+    0 0 26px rgba(45, 212, 191, 1),
+    0 0 72px rgba(45, 212, 191, 1),
+    0 0 128px rgba(14, 165, 233, 0.84);
+}
+
+.daily-note-hud--tier-18 .daily-note-hud__value {
+  text-shadow:
+    0 0 28px rgba(255, 255, 255, 1),
+    0 0 76px rgba(255, 255, 255, 1),
+    0 0 136px rgba(125, 211, 252, 0.9);
+}
+
+.daily-note-hud--tier-19 .daily-note-hud__value {
+  text-shadow:
+    0 0 30px rgba(255, 255, 255, 1),
+    0 0 82px rgba(255, 255, 255, 1),
+    0 0 148px rgba(56, 189, 248, 0.96);
+}
+
+.daily-note-hud--tier-3::before,
+.daily-note-hud--tier-4::before,
+.daily-note-hud--tier-5::before,
+.daily-note-hud--tier-6::before,
+.daily-note-hud--tier-7::before,
+.daily-note-hud--tier-8::before,
+.daily-note-hud--tier-9::before,
+.daily-note-hud--tier-10::before,
+.daily-note-hud--tier-11::before,
+.daily-note-hud--tier-12::before,
+.daily-note-hud--tier-13::before,
+.daily-note-hud--tier-14::before,
+.daily-note-hud--tier-15::before,
+.daily-note-hud--tier-16::before,
+.daily-note-hud--tier-17::before,
+.daily-note-hud--tier-18::before,
+.daily-note-hud--tier-19::before {
+  animation-duration: 2.2s;
+}
+
+.daily-note-hud--tier-4::after {
+  opacity: 0.82;
+}
+
+.daily-note-hud--tier-5::after,
+.daily-note-hud--tier-6::after,
+.daily-note-hud--tier-7::after,
+.daily-note-hud--tier-8::after,
+.daily-note-hud--tier-9::after,
+.daily-note-hud--tier-10::after,
+.daily-note-hud--tier-11::after,
+.daily-note-hud--tier-12::after,
+.daily-note-hud--tier-13::after,
+.daily-note-hud--tier-14::after,
+.daily-note-hud--tier-15::after,
+.daily-note-hud--tier-16::after,
+.daily-note-hud--tier-17::after,
+.daily-note-hud--tier-18::after,
+.daily-note-hud--tier-19::after {
+  opacity: 0.88;
+}
+
+.daily-note-hud--tier-4 .daily-note-hud__label {
+  color: #fda4af;
+}
+
+.daily-note-hud--tier-5 .daily-note-hud__label {
+  color: #99f6e4;
+}
+
+.daily-note-hud--tier-6 .daily-note-hud__label {
+  color: #fde68a;
+}
+
+.daily-note-hud--tier-7 .daily-note-hud__label {
+  color: #ddd6fe;
+}
+
+.daily-note-hud--tier-8 .daily-note-hud__label {
+  color: #f9a8d4;
+}
+
+.daily-note-hud--tier-9 .daily-note-hud__label {
+  color: #ffffff;
+}
+
+.daily-note-hud--tier-10 .daily-note-hud__label {
+  color: #a7f3d0;
+}
+
+.daily-note-hud--tier-11 .daily-note-hud__label {
+  color: #fde68a;
+}
+
+.daily-note-hud--tier-12 .daily-note-hud__label {
+  color: #ddd6fe;
+}
+
+.daily-note-hud--tier-13 .daily-note-hud__label {
+  color: #bae6fd;
+}
+
+.daily-note-hud--tier-14 .daily-note-hud__label {
+  color: #fbcfe8;
+}
+
+.daily-note-hud--tier-15 .daily-note-hud__label {
+  color: #fdba74;
+}
+
+.daily-note-hud--tier-16 .daily-note-hud__label {
+  color: #c4b5fd;
+}
+
+.daily-note-hud--tier-17 .daily-note-hud__label {
+  color: #99f6e4;
+}
+
+.daily-note-hud--tier-18 .daily-note-hud__label {
+  color: #f8fafc;
+}
+
+.daily-note-hud--tier-19 .daily-note-hud__label {
+  color: #ffffff;
+}
+
+.daily-note-hud--tier-4 .daily-note-hud__value {
+  animation:
+    daily-note-hud-pulse 1.15s ease-in-out infinite,
+    daily-note-hud-buzz 0.18s steps(2, end) infinite;
+}
+
+.daily-note-hud--tier-5 .daily-note-hud__value {
+  animation:
+    daily-note-hud-pulse 1.05s ease-in-out infinite,
+    daily-note-hud-buzz 0.17s steps(2, end) infinite;
+}
+
+.daily-note-hud--tier-6 .daily-note-hud__value {
+  animation:
+    daily-note-hud-pulse 0.96s ease-in-out infinite,
+    daily-note-hud-buzz 0.16s steps(2, end) infinite;
+}
+
+.daily-note-hud--tier-7 .daily-note-hud__value {
+  animation:
+    daily-note-hud-pulse 0.88s ease-in-out infinite,
+    daily-note-hud-buzz 0.145s steps(2, end) infinite;
+}
+
+.daily-note-hud--tier-8 .daily-note-hud__value {
+  animation:
+    daily-note-hud-pulse 0.8s ease-in-out infinite,
+    daily-note-hud-buzz 0.13s steps(2, end) infinite;
+}
+
+.daily-note-hud--tier-9 .daily-note-hud__value {
+  animation:
+    daily-note-hud-pulse 0.72s ease-in-out infinite,
+    daily-note-hud-buzz 0.11s steps(2, end) infinite;
+}
+
+.daily-note-hud--tier-10 .daily-note-hud__value {
+  animation:
+    daily-note-hud-pulse 0.68s ease-in-out infinite,
+    daily-note-hud-buzz 0.1s steps(2, end) infinite;
+}
+
+.daily-note-hud--tier-11 .daily-note-hud__value {
+  animation:
+    daily-note-hud-pulse 0.64s ease-in-out infinite,
+    daily-note-hud-buzz 0.095s steps(2, end) infinite;
+}
+
+.daily-note-hud--tier-12 .daily-note-hud__value {
+  animation:
+    daily-note-hud-pulse 0.6s ease-in-out infinite,
+    daily-note-hud-buzz 0.09s steps(2, end) infinite;
+}
+
+.daily-note-hud--tier-13 .daily-note-hud__value {
+  animation:
+    daily-note-hud-pulse 0.56s ease-in-out infinite,
+    daily-note-hud-buzz 0.085s steps(2, end) infinite;
+}
+
+.daily-note-hud--tier-14 .daily-note-hud__value {
+  animation:
+    daily-note-hud-pulse 0.52s ease-in-out infinite,
+    daily-note-hud-buzz 0.08s steps(2, end) infinite;
+}
+
+.daily-note-hud--tier-15 .daily-note-hud__value {
+  animation:
+    daily-note-hud-pulse 0.48s ease-in-out infinite,
+    daily-note-hud-buzz 0.075s steps(2, end) infinite;
+}
+
+.daily-note-hud--tier-16 .daily-note-hud__value {
+  animation:
+    daily-note-hud-pulse 0.44s ease-in-out infinite,
+    daily-note-hud-buzz 0.07s steps(2, end) infinite;
+}
+
+.daily-note-hud--tier-17 .daily-note-hud__value {
+  animation:
+    daily-note-hud-pulse 0.4s ease-in-out infinite,
+    daily-note-hud-buzz 0.065s steps(2, end) infinite;
+}
+
+.daily-note-hud--tier-18 .daily-note-hud__value {
+  animation:
+    daily-note-hud-pulse 0.36s ease-in-out infinite,
+    daily-note-hud-buzz 0.06s steps(2, end) infinite;
+}
+
+.daily-note-hud--tier-19 .daily-note-hud__value {
+  animation:
+    daily-note-hud-pulse 0.32s ease-in-out infinite,
+    daily-note-hud-buzz 0.055s steps(2, end) infinite;
+}
+
+.daily-note-hud::before {
+  content: '';
+  position: absolute;
+  inset: -45% -25%;
+  background: linear-gradient(
+    115deg,
+    rgba(255, 255, 255, 0) 0%,
+    rgba(255, 255, 255, 0) 34%,
+    rgba(125, 211, 252, 0.22) 42%,
+    rgba(255, 255, 255, 0.48) 50%,
+    rgba(236, 72, 153, 0.2) 58%,
+    rgba(255, 255, 255, 0) 68%,
+    rgba(255, 255, 255, 0) 100%
+  );
+  mix-blend-mode: screen;
+  transform: translateX(-110%) skewX(-12deg);
+  animation: daily-note-hud-shimmer 3.2s linear infinite;
+  pointer-events: none;
+}
+
+.daily-note-hud::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(135deg, rgba(34, 211, 238, 0.08), rgba(168, 85, 247, 0.06));
+  opacity: 0.65;
+  pointer-events: none;
+}
+
+.daily-note-hud__label,
+.daily-note-hud__value {
+  position: relative;
+  z-index: 1;
+  text-transform: uppercase;
+  letter-spacing: 0.22em;
+}
+
+.daily-note-hud__label {
+  font-size: 0.62rem;
+  font-weight: 800;
+  color: #93c5fd;
+  text-shadow: 0 0 10px rgba(56, 189, 248, 0.28);
+}
+
+.daily-note-hud__value {
+  font-size: 2rem;
+  line-height: 1;
+  font-weight: 900;
+  color: #e0f2fe;
+  text-shadow:
+    0 0 8px rgba(34, 211, 238, 0.7),
+    0 0 18px rgba(56, 189, 248, 0.42),
+    0 0 28px rgba(168, 85, 247, 0.32);
+  animation: daily-note-hud-pulse 1.9s ease-in-out infinite;
+}
+
+.daily-note-hud__stats {
+  position: relative;
+  z-index: 1;
+  margin-top: 4px;
+  padding-top: 5px;
+  width: 100%;
+  border-top: 1px solid rgba(125, 211, 252, 0.26);
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.daily-note-hud__stat-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.daily-note-hud__stat-label,
+.daily-note-hud__stat-value {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 0.58rem;
+  line-height: 1.05;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.daily-note-hud__stat-label {
+  color: rgba(186, 230, 253, 0.86);
+}
+
+.daily-note-hud__stat-value {
+  color: #e0f2fe;
+  font-weight: 700;
+  text-shadow: 0 0 8px rgba(56, 189, 248, 0.38);
+}
+
+@keyframes daily-note-hud-float {
+  0%,
+  100% {
+    transform: translateY(0) translateX(0);
+  }
+  50% {
+    transform: translateY(-5px) translateX(-1px);
+  }
+}
+
+@keyframes daily-note-hud-shimmer {
+  0% {
+    transform: translateX(-120%) skewX(-12deg);
+  }
+  100% {
+    transform: translateX(120%) skewX(-12deg);
+  }
+}
+
+@keyframes daily-note-hud-pulse {
+  0%,
+  100% {
+    filter: brightness(1);
+    transform: scale(1);
+  }
+  50% {
+    filter: brightness(1.24);
+    transform: scale(1.03);
+  }
+}
+
+@keyframes daily-note-hud-overload {
+  0%,
+  100% {
+    box-shadow:
+      0 0 0 1px rgba(248, 113, 113, 0.35) inset,
+      0 0 38px rgba(34, 211, 238, 0.58),
+      0 0 72px rgba(236, 72, 153, 0.42),
+      0 0 24px rgba(248, 113, 113, 0.24),
+      0 0 0 8px rgba(248, 113, 113, 0.05),
+      0 18px 46px rgba(2, 6, 23, 0.56);
+  }
+  50% {
+    box-shadow:
+      0 0 0 1px rgba(248, 113, 113, 0.45) inset,
+      0 0 48px rgba(34, 211, 238, 0.72),
+      0 0 92px rgba(236, 72, 153, 0.56),
+      0 0 32px rgba(248, 113, 113, 0.3),
+      0 0 0 10px rgba(248, 113, 113, 0.08),
+      0 18px 46px rgba(2, 6, 23, 0.6);
+  }
+}
+
+@keyframes daily-note-hud-quantum {
+  0%,
+  100% {
+    filter: hue-rotate(0deg) saturate(1);
+  }
+  50% {
+    filter: hue-rotate(24deg) saturate(1.24);
+  }
+}
+
+@keyframes daily-note-hud-nova {
+  0%,
+  100% {
+    filter: brightness(1);
+  }
+  50% {
+    filter: brightness(1.34);
+  }
+}
+
+@keyframes daily-note-hud-pulsar {
+  0%,
+  100% {
+    transform: translateY(0) scale(1);
+  }
+  50% {
+    transform: translateY(-2px) scale(1.03);
+  }
+}
+
+@keyframes daily-note-hud-singularity {
+  0%,
+  100% {
+    filter: contrast(1.05) saturate(1.08);
+  }
+  50% {
+    filter: contrast(1.28) saturate(1.32);
+  }
+}
+
+@keyframes daily-note-hud-transcendent {
+  0%,
+  100% {
+    filter: brightness(1) contrast(1.08);
+  }
+  50% {
+    filter: brightness(1.42) contrast(1.28);
+  }
+}
+
+@keyframes daily-note-hud-particle-float {
+  0% {
+    transform: translate3d(0, 0, 0) scale(0.7);
+  }
+  25% {
+    transform: translate3d(8px, -10px, 0) scale(1);
+  }
+  50% {
+    transform: translate3d(-6px, -18px, 0) scale(1.05);
+  }
+  75% {
+    transform: translate3d(6px, -28px, 0) scale(0.9);
+  }
+  100% {
+    transform: translate3d(0, -36px, 0) scale(0.65);
+  }
+}
+
+@keyframes daily-note-hud-particle-twinkle {
+  0%,
+  100% {
+    opacity: 0.25;
+    filter: saturate(1);
+  }
+  50% {
+    opacity: 1;
+    filter: saturate(1.35) brightness(1.2);
+  }
+}
+
+@keyframes daily-note-hud-buzz {
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1.03);
+  }
+  25% {
+    transform: translate(0.5px, -0.5px) scale(1.035);
+  }
+  50% {
+    transform: translate(-0.75px, 0.5px) scale(1.045);
+  }
+  75% {
+    transform: translate(0.75px, 0) scale(1.03);
+  }
+}
+
+@media (max-width: 640px) {
+  .daily-note-hud {
+    right: 12px;
+    bottom: 12px;
+    min-width: 78px;
+    padding: 8px 12px 10px;
+    border-radius: 16px;
+  }
+
+  .daily-note-hud__value {
+    font-size: 1.65rem;
+  }
+
+  .daily-note-hud__stats {
+    margin-top: 2px;
+    gap: 2px;
+  }
+
+  .daily-note-hud__stat-label,
+  .daily-note-hud__stat-value {
+    font-size: 0.52rem;
+  }
+}

@@ -1,7 +1,6 @@
 // ClimateBaseAPI.ts
 // Handles fetching and normalizing jobs from Climatebase embedded page payload.
 import { ScrapedJob } from './ScrapedJob.js';
-import { nameToLonLat } from '../utils/NameToLonLat.js';
 
 const CLIMATEBASE_JOBS_URL = 'https://climatebase.org/jobs';
 const FETCH_TIMEOUT = 30000;
@@ -240,31 +239,12 @@ export async function fetchAllClimatebaseJobs(): Promise<ScrapedJob[]> {
     return [];
   }
 
-  const locationPromises = new Map<string, Promise<{ lat: number; lon: number }>>();
-
-  const normalized = await Promise.all(
-    jobs.map(async (job) => {
-      const norm = normalizeJob(job);
-      const locationKey = norm.location.trim().toLowerCase();
-
-      if (!locationPromises.has(locationKey)) {
-        locationPromises.set(
-          locationKey,
-          nameToLonLat(norm.location).catch(() => ({ lat: 0, lon: 0 }))
-        );
-      }
-
-      try {
-        const { lat, lon } = await locationPromises.get(locationKey)!;
-        norm.location_lat = lat;
-        norm.location_lon = lon;
-        return norm;
-      } catch {
-        norm.location_lat = 0;
-        norm.location_lon = 0;
-        return norm;
-      }
-    })
-  );
+  // Keep ingestion non-blocking: do not wait on geocoding during scrape fetch.
+  const normalized = jobs.map((job) => {
+    const norm = normalizeJob(job);
+    norm.location_lat = 0;
+    norm.location_lon = 0;
+    return norm;
+  });
   return normalized;
 }

@@ -1,6 +1,7 @@
 import type { ScrapedJob } from './ScrapedJob.js';
 import { normalizeJobsWithCoordinates, type NormalizedPortalJob } from './PortalIngestionUtils.js';
 import { collectPaginatedHtmlJobs, stripHtmlTags } from './PaginatedHtmlScrapeUtils.js';
+import { deriveDescriptionFromContext } from './ScrapeDescriptionUtils.js';
 
 const HEALTHECAREERS_BASE_URL = 'https://www.healthecareers.com/search-jobs';
 const MAX_HEALTHECAREERS_PAGES = 500;
@@ -48,6 +49,7 @@ function parseHealthECareersJobs(html: string): NormalizedPortalJob[] {
     const companyMatch = context.match(/(?:company|employer)[^>]*>\s*([^<]{2,140})\s*</i);
     const locationMatch = context.match(/(?:location|city|state)[^>]*>\s*([^<]{2,140})\s*</i);
     const postedMatch = context.match(/(?:posted|date)[^>]*>\s*([^<]{3,60})\s*</i);
+    const description = deriveDescriptionFromContext(context, title);
 
     jobs.push({
       title,
@@ -57,7 +59,7 @@ function parseHealthECareersJobs(html: string): NormalizedPortalJob[] {
       type: 'Unknown',
       sourceUrl,
       posted: postedMatch?.[1]?.trim(),
-      description: '',
+      description,
       tags: ['Medical', 'Healthcare'],
     });
   }

@@ -1,0 +1,363 @@
+# Shared job title keywords used across keyword-based APIs.
+# One keyword per line.
+
+software engineer
+senior software engineer
+staff software engineer
+principal software engineer
+backend engineer
+frontend engineer
+full stack engineer
+full stack developer
+web developer
+application developer
+mobile developer
+android developer
+ios developer
+react developer
+node.js developer
+typescript developer
+python developer
+java developer
+c# developer
+golang developer
+rust developer
+php developer
+ruby developer
+wordpress developer
+qa engineer
+software test engineer
+test automation engineer
+sdet
+quality assurance analyst
+release engineer
+build engineer
+platform engineer
+site reliability engineer
+sre
+devops engineer
+cloud engineer
+cloud architect
+solutions architect
+enterprise architect
+systems engineer
+network engineer
+security engineer
+application security engineer
+cybersecurity analyst
+security analyst
+information security analyst
+it support specialist
+help desk technician
+desktop support technician
+technical support engineer
+it administrator
+systems administrator
+database administrator
+data engineer
+data analyst
+senior data analyst
+business intelligence analyst
+bi analyst
+analytics engineer
+data scientist
+machine learning engineer
+ml engineer
+ai engineer
+research scientist
+research engineer
+nlp engineer
+computer vision engineer
+prompt engineer
+product manager
+senior product manager
+group product manager
+technical product manager
+program manager
+technical program manager
+project manager
+project coordinator
+scrum master
+agile coach
+product owner
+business analyst
+strategy analyst
+operations analyst
+process analyst
+operations manager
+business operations manager
+chief of staff
+general manager
+office manager
+executive assistant
+administrative assistant
+administrative coordinator
+customer service representative
+customer support specialist
+customer success manager
+account manager
+technical account manager
+implementation specialist
+solutions consultant
+sales representative
+inside sales representative
+outside sales representative
+business development representative
+bdr
+sdr
+account executive
+enterprise account executive
+sales manager
+regional sales manager
+channel manager
+partnerships manager
+growth manager
+marketing coordinator
+marketing specialist
+digital marketing specialist
+performance marketing manager
+seo specialist
+content marketing manager
+social media manager
+communications manager
+public relations manager
+brand manager
+product marketing manager
+demand generation manager
+graphic designer
+ui designer
+ux designer
+ui ux designer
+product designer
+visual designer
+motion designer
+instructional designer
+copywriter
+technical writer
+content writer
+editor
+finance analyst
+financial analyst
+fp&a analyst
+accountant
+staff accountant
+senior accountant
+tax accountant
+cost accountant
+auditor
+controller
+bookkeeper
+payroll specialist
+procurement specialist
+sourcing specialist
+supply chain analyst
+supply chain manager
+logistics coordinator
+logistics manager
+inventory analyst
+operations coordinator
+warehouse associate
+warehouse manager
+fulfillment associate
+forklift operator
+purchasing manager
+buyer
+category manager
+human resources generalist
+hr generalist
+hr manager
+hr business partner
+recruiter
+technical recruiter
+talent acquisition specialist
+talent acquisition manager
+people operations specialist
+learning and development specialist
+compensation analyst
+benefits specialist
+legal assistant
+paralegal
+contract administrator
+contracts manager
+compliance analyst
+risk analyst
+policy analyst
+government affairs manager
+public affairs specialist
+grant writer
+grant manager
+fundraising manager
+development manager nonprofit
+nonprofit program manager
+program coordinator
+case manager
+social worker
+community manager
+community organizer
+community outreach coordinator
+volunteer coordinator
+health educator
+public health specialist
+epidemiologist
+research coordinator
+clinical research coordinator
+clinical data manager
+clinical trial manager
+medical assistant
+registered nurse
+licensed practical nurse
+nurse practitioner
+physician assistant
+care coordinator
+occupational therapist
+physical therapist
+speech therapist
+mental health counselor
+therapist
+psychologist
+pharmacist
+pharmacy technician
+radiology technician
+laboratory technician
+lab technologist
+quality control specialist
+quality manager
+manufacturing engineer
+process engineer
+industrial engineer
+mechanical engineer
+electrical engineer
+electronics engineer
+firmware engineer
+embedded engineer
+hardware engineer
+controls engineer
+automation engineer
+robotics engineer
+civil engineer
+structural engineer
+transportation engineer
+environmental engineer
+energy engineer
+renewable energy engineer
+solar engineer
+wind technician
+field engineer
+field service technician
+construction manager
+construction superintendent
+project engineer
+estimator
+architect
+urban planner
+gis analyst
+geospatial analyst
+survey technician
+safety manager
+ehs manager
+hse coordinator
+facilities manager
+maintenance technician
+maintenance manager
+electrician
+plumber
+hvac technician
+automotive technician
+mechanic
+truck driver
+delivery driver
+bus driver
+school bus driver
+teacher
+elementary teacher
+high school teacher
+special education teacher
+substitute teacher
+teaching assistant
+school counselor
+academic advisor
+librarian
+instructional coach
+curriculum specialist
+professor
+lecturer
+research assistant
+research associate
+economist
+statistician
+actuary
+claims adjuster
+claims specialist
+underwriter
+loan officer
+mortgage processor
+bank teller
+branch manager
+fraud analyst
+investigator
+operations supervisor
+call center representative
+call center manager
+retail associate
+retail manager
+store manager
+assistant store manager
+cashier
+barista
+restaurant manager
+assistant restaurant manager
+line cook
+chef
+kitchen manager
+hotel manager
+front desk agent
+guest services agent
+event coordinator
+event manager
+travel consultant
+flight attendant
+airport operations agent
+property manager
+leasing consultant
+real estate analyst
+real estate coordinator
+mortgage underwriter
+customer experience manager
+member services representative
+success coach
+program specialist
+program assistant
+service coordinator
+intake coordinator
+admissions counselor
+billing specialist
+medical biller
+medical coder
+revenue cycle analyst
+patient services representative
+patient access specialist
+care navigator
+donor relations manager
+partnerships coordinator
+sustainability analyst
+climate analyst
+carbon analyst
+esg analyst
+impact analyst
+impact manager
+resilience planner
+disaster response coordinator
+humanitarian program manager
+monitoring and evaluation specialist
+me&l specialist
+meals coordinator
+operations associate
+finance manager
+accounting manager
+treasury analyst
+business manager
+office administrator
+executive director
+chief operating officer
+chief technology officer
+chief financial officer

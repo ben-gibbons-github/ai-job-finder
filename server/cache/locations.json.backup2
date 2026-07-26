@@ -1,0 +1,231 @@
+{
+  "mote | chisinau": {
+    "lat": 0,
+    "lon": 0
+  },
+  "ote | sri lanka": {
+    "lat": 0,
+    "lon": 0
+  },
+  "mote | abuja": {
+    "lat": 0,
+    "lon": 0
+  },
+  "farringdon": {
+    "lat": -35.51703,
+    "lon": 149.66606
+  },
+  "ilford": {
+    "lat": 51.55765,
+    "lon": 0.07278
+  },
+  "gu4,  guildford": {
+    "lat": 51.2567483,
+    "lon": -0.554298
+  },
+  "amersham": {
+    "lat": 51.66667,
+    "lon": -0.61667
+  },
+  "san mateo county, california, united states": {
+    "lat": 29.4241,
+    "lon": -98.4936,
+    "isHardcoded": true
+  },
+  "lockhart, tx": {
+    "lat": 29.8832105,
+    "lon": -97.6736292
+  },
+  "mechanicsburg, pa": {
+    "lat": 40.2101972,
+    "lon": -77.0047276
+  },
+  "århus, denmark": {
+    "lat": 56.1496278,
+    "lon": 10.2134046
+  },
+  "marysville, oh": {
+    "lat": 40.2364486,
+    "lon": -83.3671432
+  },
+  "anaheim, ca": {
+    "lat": 33.8347516,
+    "lon": -117.911732
+  },
+  "puyallup, wa": {
+    "lat": 47.1849009,
+    "lon": -122.29214
+  },
+  "irving, tx": {
+    "lat": 32.8295183,
+    "lon": -96.9442177
+  },
+  "doral, fl": {
+    "lat": 25.8195424,
+    "lon": -80.3553302
+  },
+  "irvine, ca": {
+    "lat": 33.6856969,
+    "lon": -117.825981
+  },
+  "kazanlak, bulgaria": {
+    "lat": 42.6191296,
+    "lon": 25.3933333
+  },
+  "mundelein, il": {
+    "lat": 42.263079,
+    "lon": -88.0039653
+  },
+  "glendale, ca": {
+    "lat": 34.1469416,
+    "lon": -118.2478471
+  },
+  "palm bay, fl": {
+    "lat": 27.9946969,
+    "lon": -80.6366144
+  },
+  "peoria, il": {
+    "lat": 40.6938609,
+    "lon": -89.5891008
+  },
+  "făgăraș, romania": {
+    "lat": 45.8449461,
+    "lon": 24.9703211
+  },
+  "lynnwood, wa": {
+    "lat": 47.8278656,
+    "lon": -122.3053932
+  },
+  "merritt island, fl": {
+    "lat": 28.2662775,
+    "lon": -80.6636984
+  },
+  "revere, ma": {
+    "lat": 42.4084302,
+    "lon": -71.0119948
+  },
+  "dickson, tn": {
+    "lat": 36.1459327,
+    "lon": -87.3480592
+  },
+  "brandywine, md": {
+    "lat": 38.6934548,
+    "lon": -76.8843081
+  },
+  "logan, ut": {
+    "lat": 41.7313063,
+    "lon": -111.834914
+  },
+  "redcar": {
+    "lat": 54.6179021,
+    "lon": -1.0687914
+  },
+  "brownsville, tx": {
+    "lat": 25.9024289,
+    "lon": -97.4981698
+  },
+  "montgomery, tx": {
+    "lat": 30.301949,
+    "lon": -95.5065944
+  },
+  "addison, il": {
+    "lat": 41.931696,
+    "lon": -87.9889556
+  },
+  "beaverton, mi": {
+    "lat": 43.882247,
+    "lon": -84.484732
+  },
+  "poughkeepsie, ny": {
+    "lat": 41.7065539,
+    "lon": -73.9283672
+  },
+  "beachwood, oh": {
+    "lat": 41.464498,
+    "lon": -81.508732
+  },
+  "mattoon, il": {
+    "lat": 39.4842821,
+    "lon": -88.3773279
+  },
+  "salisbury, nc": {
+    "lat": 35.6709727,
+    "lon": -80.4742261
+  },
+  "shelbyville, tn": {
+    "lat": 35.483406,
+    "lon": -86.4602717
+  },
+  "four corners, fl": {
+    "lat": 28.333492,
+    "lon": -81.6299887
+  },
+  "rockledge, fl": {
+    "lat": 28.330831,
+    "lon": -80.7349162
+  },
+  "fenton, mo": {
+    "lat": 38.5131989,
+    "lon": -90.4400578
+  },
+  "barra do garças, brazil": {
+    "lat": -15.8916033,
+    "lon": -52.2615413
+  },
+  "mishawaka, in": {
+    "lat": 41.6611642,
+    "lon": -86.1807031
+  },
+  "roseburg, or": {
+    "lat": 43.216505,
+    "lon": -123.3417381
+  },
+  "oakbrook, il": {
+    "lat": 40.8266144,
+    "lon": -89.6057736
+  },
+  "murfreesboro, tn": {
+    "lat": 35.8460396,
+    "lon": -86.3921096
+  },
+  "gurgaon, india": {
+    "lat": 28.4646148,
+    "lon": 77.0299194
+  },
+  "redmond, wa": {
+    "lat": 47.6694141,
+    "lon": -122.1238767
+  },
+  "addison, tx": {
+    "lat": 32.9601193,
+    "lon": -96.8300029
+  },
+  "ozorków, poland": {
+    "lat": 51.9636101,
+    "lon": 19.2918111
+  },
+  "deerfield, il": {
+    "lat": 42.1711365,
+    "lon": -87.8445119
+  },
+  "whitney, tx": {
+    "lat": 31.951823,
+    "lon": -97.3214012
+  },
+  "‘afīf, saudi arabia": {
+    "lat": 23.9023697,
+    "lon": 42.9150847
+  },
+  "richland, wa": {
+    "lat": 46.2804298,
+    "lon": -119.275205
+  },
+  "topeka, ks": {
+    "lat": 39.049011,
+    "lon": -95.677556
+  },
+  "north smithfield, ri": {
+    "lat": 41.9667652,
+    "lon": -71.5495071
+  }
+}

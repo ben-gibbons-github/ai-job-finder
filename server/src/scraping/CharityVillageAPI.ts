@@ -1,6 +1,7 @@
 import type { ScrapedJob } from './ScrapedJob.js';
 import { normalizeJobsWithCoordinates, type NormalizedPortalJob } from './PortalIngestionUtils.js';
 import { collectPaginatedHtmlJobs, stripHtmlTags } from './PaginatedHtmlScrapeUtils.js';
+import { deriveDescriptionFromContext } from './ScrapeDescriptionUtils.js';
 
 const CHARITY_VILLAGE_BASE_URL = 'https://www.charityvillage.com/jobs';
 const MAX_CHARITY_VILLAGE_PAGES = 500;
@@ -29,6 +30,7 @@ function parseCharityVillageJobs(html: string): NormalizedPortalJob[] {
     const context = html.slice(Math.max(0, from - 250), from + 1200);
     const companyMatch = context.match(/jobTeaser_companyName[^>]*>([^<]{2,120})</i);
     const locationMatch = context.match(/jobTeaserLocation[^>]*>([^<]{2,120})</i);
+    const description = deriveDescriptionFromContext(context, title);
 
     jobs.push({
       title,
@@ -37,7 +39,7 @@ function parseCharityVillageJobs(html: string): NormalizedPortalJob[] {
       remote: /\bremote\b|\bhybrid\b/i.test(context) ? 'Remote' : 'Unknown',
       type: 'Unknown',
       sourceUrl,
-      description: '',
+      description,
       tags: ['CharityVillage', 'Nonprofit'],
     });
   }

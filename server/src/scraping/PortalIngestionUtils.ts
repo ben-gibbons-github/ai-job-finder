@@ -1,5 +1,4 @@
 import type { ScrapedJob } from './ScrapedJob.js';
-import { nameToLonLat } from '../utils/NameToLonLat.js';
 
 const FETCH_TIMEOUT_MS = 30_000;
 
@@ -49,24 +48,9 @@ export async function normalizeJobsWithCoordinates(
   source: string,
   jobs: NormalizedPortalJob[],
 ): Promise<ScrapedJob[]> {
-  const locationPromises = new Map<string, Promise<{ lat: number; lon: number }>>();
-
-  return Promise.all(
-    jobs.map(async (job) => {
-      const location = (job.location || 'Remote').trim();
-      const key = location.toLowerCase();
-
-      if (!locationPromises.has(key)) {
-        locationPromises.set(
-          key,
-          nameToLonLat(location).catch(() => ({ lat: 0, lon: 0 })),
-        );
-      }
-
-      const { lat, lon } = await locationPromises.get(key)!;
-      return toScrapedJob(source, job, lat, lon);
-    }),
-  );
+  // Keep ingestion non-blocking: do not wait on network geocoding during scraping.
+  // Missing coordinates are backfilled later by background geocoding.
+  return jobs.map((job) => toScrapedJob(source, job, 0, 0));
 }
 
 export async function fetchJson(url: string): Promise<unknown> {

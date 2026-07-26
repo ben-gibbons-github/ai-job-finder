@@ -86,45 +86,6 @@ async function fetchFromOpenStreetMap(query) {
     })
         .filter((item) => item !== null);
 }
-export async function reverseGeocodeOpenStreetMap(lat, lng) {
-    if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
-        return null;
-    }
-    const response = await axios.get('https://nominatim.openstreetmap.org/reverse', {
-        params: {
-            lat,
-            lon: lng,
-            format: 'jsonv2',
-            addressdetails: 1,
-            zoom: 10,
-        },
-        headers: {
-            'User-Agent': 'JobFinder/1.0 (location-autocomplete)',
-        },
-        timeout: REQUEST_TIMEOUT_MS,
-    });
-    const item = response.data;
-    const city = item?.address?.city ||
-        item?.address?.town ||
-        item?.address?.village ||
-        item?.address?.hamlet ||
-        item?.address?.county ||
-        String(item?.display_name || '').split(',')[0];
-    const state = item?.address?.state;
-    const country = item?.address?.country;
-    const latNum = Number.parseFloat(String(item?.lat ?? lat));
-    const lngNum = Number.parseFloat(String(item?.lon ?? lng));
-    if (!city || Number.isNaN(latNum) || Number.isNaN(lngNum)) {
-        return null;
-    }
-    return toLocationOption({
-        city,
-        state,
-        country,
-        lat: latNum,
-        lng: lngNum,
-    });
-}
 async function fetchFromOpenMeteo(query) {
     const response = await axios.get('https://geocoding-api.open-meteo.com/v1/search', {
         params: {

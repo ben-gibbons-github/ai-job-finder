@@ -13,69 +13,43 @@ function pageUrl(page: number): string {
   return url.toString();
 }
 
-function extractCompanyName(listingText: string): string {
-  const normalized = listingText.replace(/\s+/g, ' ').trim();
-  if (!normalized) {
-    return 'Unknown Company';
-  }
-
-  const locationPatterns = [
-    /\bRemote\s*\([^)]*\)/,
-    /\bRemote\b/,
-    /\b[A-Z][a-zA-Z.'-]+(?:\s+[A-Z][a-zA-Z.'-]+)*,\s*[A-Z]{2}(?:\s*\([^)]+\))?\b/,
-    /\b[A-Z][a-zA-Z.'-]+(?:\s+[A-Z][a-zA-Z.'-]+)*\s*,\s*[A-Z][a-zA-Z.'-]+(?:\s+[A-Z][a-zA-Z.'-]+)*\b/,
-  ];
-
-  let locationIndex = -1;
-  for (const pattern of locationPatterns) {
-    const match = normalized.match(pattern);
-    if (match?.index !== undefined && match.index >= 0) {
-      locationIndex = match.index;
-      break;
-    }
-  }
-
-  const prefix = locationIndex > 0 ? normalized.slice(0, locationIndex).trim() : normalized;
-  const companyMatch = prefix.match(/([A-Z0-9&.,'()\-]+(?:\s+[A-Z0-9&.,'()\-]+){0,6})\s*$/);
-
-  if (companyMatch?.[1]) {
-    return companyMatch[1].trim();
-  }
-
-  return 'Unknown Company';
-}
-
 function parseTechJobsForGood(html: string): NormalizedPortalJob[] {
   const jobs: NormalizedPortalJob[] = [];
-  const linkPattern =
-    /<a[^>]+href="((?:https:\/\/www\.techjobsforgood\.com)?\/jobs\/[0-9]+\/?(?:\?[^"\s]*)?)"[^>]*>([\s\S]*?)<\/a>/gi;
+  const cardPattern =
+    /<div class="ui raised fluid card job-card"[\s\S]*?<\/div>\s*<\/div>\s*<\/div>/gi;
 
-  for (const match of html.matchAll(linkPattern)) {
-    const rawUrl = (match[1] || '').trim();
+  for (const cardHtml of html.match(cardPattern) || []) {
+    const hrefMatch = cardHtml.match(/<a class="content" href="((?:https:\/\/www\.techjobsforgood\.com)?\/jobs\/[0-9]+\/?(?:\?[^"\s]*)?)"/i);
+    const rawUrl = (hrefMatch?.[1] || '').trim();
     const sourceUrl = rawUrl.startsWith('http') ? rawUrl : `https://www.techjobsforgood.com${rawUrl}`;
-    const title = stripHtmlTags(match[2] || '');
+
+    const titleMatch = cardHtml.match(/<div class="header job-title"[^>]*title="([^"]+)"/i)
+      || cardHtml.match(/<div class="header job-title"[^>]*>([\s\S]*?)<\/div>/i);
+    const title = stripHtmlTags(titleMatch?.[1] || '');
+
+    const companyMatch = cardHtml.match(/<div class="meta company-name"[^>]*title="([^"]+)"/i)
+      || cardHtml.match(/<span class="company_name"[^>]*>([\s\S]*?)<\/span>/i);
+    const company = stripHtmlTags(companyMatch?.[1] || '') || 'Unknown Company';
+
+    const locationMatch = cardHtml.match(/<span class="location"[^>]*title="([^"]+)"/i)
+      || cardHtml.match(/<span class="location"[^>]*>([\s\S]*?)<\/span>/i);
+    const location = stripHtmlTags(locationMatch?.[1] || '') || 'Unknown';
+
+    const descriptionMatch = cardHtml.match(/<div class="content job-snippet"[^>]*>([\s\S]*?)<\/div>/i);
+    const description = stripHtmlTags(descriptionMatch?.[1] || '');
 
     if (!sourceUrl || !title) {
       continue;
     }
 
-    if (/saved jobs|my applications|create email alert|post a job/i.test(title)) {
-      continue;
-    }
-
-    const from = match.index ?? 0;
-    const context = html.slice(Math.max(0, from - 400), from + 1200);
-    const locationMatch = context.match(/\b(Remote\s*\([^)]*\)|[A-Za-z .'-]+,\s*[A-Z]{2})\b/);
-    const company = extractCompanyName(title);
-
     jobs.push({
       title,
       company,
-      location: locationMatch?.[1]?.trim() || 'Unknown',
-      remote: /\bremote\b/i.test(context) ? 'Remote' : 'Unknown',
+      location,
+      remote: /\bremote\b/i.test(`${location} ${description}`) ? 'Remote' : 'Unknown',
       type: 'Unknown',
       sourceUrl,
-      description: '',
+      description,
       tags: ['TechJobsForGood', 'Mission Driven', 'Tech'],
     });
   }

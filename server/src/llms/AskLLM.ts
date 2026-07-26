@@ -147,6 +147,7 @@ export async function askGeminiWithSearch(
 	}
 
 	const apiKey = options.apiKey ?? GEMINI_API_KEY
+	console.log(`Using Gemini model "${options.model ?? 'gemini-2.5-flash'}" with search tool enabled.`)
 	if (!apiKey) {
 		throw new Error('Missing Gemini API key. Set GEMINI_API_KEY or pass options.apiKey.')
 	}

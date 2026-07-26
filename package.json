@@ -4,6 +4,7 @@
   "main": "index.js",
   "scripts": {
     "dev": "node -e \"const {execSync}=require('child_process');try{execSync('lsof -ti:4000,3010 | xargs kill -9',{stdio:'ignore'})}catch{}\" && concurrently --kill-others --kill-others-on-fail -n server,client -c cyan,magenta \"npm run dev --prefix server\" \"npm run dev --prefix client\"",
+    "quickDev": "node -e \"const {execSync}=require('child_process');try{execSync('lsof -ti:4000,3010 | xargs kill -9',{stdio:'ignore'})}catch{}\" && concurrently --kill-others --kill-others-on-fail -n server,client -c cyan,magenta \"CACHE_ONLY_SCRAPING=1 npm run dev --prefix server\" \"npm run dev --prefix client\"",
     "test-llm": "tsx server/src/llms/testAskLLM.ts"
   },
   "keywords": [],

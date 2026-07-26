@@ -1,6 +1,55 @@
 import { fetchJson, normalizeJobsWithCoordinates, parseCsvEnv } from './PortalIngestionUtils.js';
 import { fetchPortalFallbackJobs } from './TerraBoardFallback.js';
-const DEFAULT_LEVER_BOARDS = ['palantir'];
+const DEFAULT_LEVER_BOARDS = [
+    'palantir',
+    'anduril',
+    'calendly',
+    'figma',
+    'gusto',
+    'improbable',
+    'mixpanel',
+    'postman',
+    'procore',
+    'rippling',
+    'scaleai',
+    'seekout',
+    'thoughtspot',
+    'udemy',
+    'wealthfront',
+    'ziprecruiter',
+    'vanta',
+    'amplitude',
+    'netlify',
+    'coinbase',
+    'brex',
+    'attentive',
+    'checkr',
+    'benchling',
+    'klarna',
+    'headway',
+    'mavenclinic',
+    'notion',
+    'opendoor',
+    'samsara',
+    'snyk',
+    'tripactions',
+    'reddit',
+    'robinhood',
+    'squarespace',
+    'discord',
+    'figma',
+    'doordash',
+    'ramp',
+    'scale',
+    'afresh',
+    'thousandeyes',
+    'udacity',
+    'zapier',
+    'zipline',
+    'whatnot',
+    'openai',
+    'notco',
+];
 function parseLeverPosting(board, posting) {
     return {
         title: posting.text || 'Unknown Role',
@@ -16,7 +65,7 @@ function parseLeverPosting(board, posting) {
 }
 export async function fetchAllLeverJobs() {
     const envBoards = parseCsvEnv(process.env.LEVER_BOARDS);
-    const boards = envBoards.length > 0 ? envBoards : DEFAULT_LEVER_BOARDS;
+    const boards = Array.from(new Set(envBoards.length > 0 ? envBoards : DEFAULT_LEVER_BOARDS));
     const normalized = [];
     for (const board of boards) {
         try {

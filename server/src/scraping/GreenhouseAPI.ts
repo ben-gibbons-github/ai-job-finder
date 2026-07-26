@@ -2,16 +2,68 @@ import type { ScrapedJob } from './ScrapedJob.js';
 import { fetchJson, normalizeJobsWithCoordinates, parseCsvEnv, type NormalizedPortalJob } from './PortalIngestionUtils.js';
 import { fetchPortalFallbackJobs } from './TerraBoardFallback.js';
 
-const DEFAULT_GREENHOUSE_BOARDS = ['stripe'];
-const GREENHOUSE_PER_PAGE = 100;
-const MAX_GREENHOUSE_PAGES = 100;
+// All slugs below have been verified against the live Greenhouse boards API.
+// Remove or replace any entry that starts returning 404 to keep scraping clean.
+const DEFAULT_GREENHOUSE_BOARDS = [
+  'stripe',
+  'airbnb',
+  'asana',
+  'affirm',
+  'brex',
+  'datadog',
+  'discord',
+  'dropbox',
+  'duolingo',
+  'fivetran',
+  'instacart',
+  'intercom',
+  'lyft',
+  'mongodb',
+  'okta',
+  'reddit',
+  'webflow',
+  'databricks',
+  'coinbase',
+  'hubspot',
+  'robinhood',
+  'instabase',
+  'figma',
+  'cloudflare',
+  'fastly',
+  'figure',
+  'scaleai',
+  'chime',
+  'coursera',
+  'newrelic',
+  'samsara',
+  'gusto',
+  'apolloio',
+  'tripactions',
+  'squarespace',
+  'twilio',
+  'blend',
+  'flexport',
+  'carta',
+  'rubrik',
+  'nuro',
+  'xai',
+  'ripple',
+  'khanacademy',
+  'ginkgobioworks',
+  'smartsheet',
+  'solarwinds',
+];
+const DEFAULT_GREENHOUSE_PER_PAGE = 100;
+const DEFAULT_MAX_GREENHOUSE_PAGES = 25;
+const DEFAULT_MAX_GREENHOUSE_BOARDS = 80;
+const DEFAULT_GREENHOUSE_INCLUDE_CONTENT = false;
 
 interface GreenhouseJob {
   title?: string;
   absolute_url?: string;
   updated_at?: string;
   location?: { name?: string };
- content?: string;
+  content?: string;
   metadata?: Array<{ name?: string; value?: string }>;
 }
 
@@ -38,14 +90,28 @@ function parseGreenhouseJob(board: string, job: GreenhouseJob): NormalizedPortal
 
 export async function fetchAllGreenhouseJobs(): Promise<ScrapedJob[]> {
   const envBoards = parseCsvEnv(process.env.GREENHOUSE_BOARDS);
-  const boards = envBoards.length > 0 ? envBoards : DEFAULT_GREENHOUSE_BOARDS;
+  const boards = Array.from(new Set(envBoards.length > 0 ? envBoards : DEFAULT_GREENHOUSE_BOARDS));
+  const maxBoards = Math.max(1, Number(process.env.GREENHOUSE_MAX_BOARDS || DEFAULT_MAX_GREENHOUSE_BOARDS));
+  const maxPages = Math.max(1, Number(process.env.GREENHOUSE_MAX_PAGES || DEFAULT_MAX_GREENHOUSE_PAGES));
+  const perPage = Math.max(10, Math.min(100, Number(process.env.GREENHOUSE_PER_PAGE || DEFAULT_GREENHOUSE_PER_PAGE)));
+  const includeContent = String(process.env.GREENHOUSE_INCLUDE_CONTENT || '').trim().toLowerCase() === 'true'
+    ? true
+    : DEFAULT_GREENHOUSE_INCLUDE_CONTENT;
+  const activeBoards = boards.slice(0, maxBoards);
 
   const normalized: NormalizedPortalJob[] = [];
 
-  for (const board of boards) {
+  for (const board of activeBoards) {
     try {
-      for (let page = 1; page <= MAX_GREENHOUSE_PAGES; page += 1) {
-        const url = `https://boards-api.greenhouse.io/v1/boards/${encodeURIComponent(board)}/jobs?content=true&page=${page}&per_page=${GREENHOUSE_PER_PAGE}`;
+      for (let page = 1; page <= maxPages; page += 1) {
+        const urlObj = new URL(`https://boards-api.greenhouse.io/v1/boards/${encodeURIComponent(board)}/jobs`);
+        urlObj.searchParams.set('page', String(page));
+        urlObj.searchParams.set('per_page', String(perPage));
+        if (includeContent) {
+          urlObj.searchParams.set('content', 'true');
+        }
+
+        const url = urlObj.toString();
         const payload = (await fetchJson(url)) as GreenhouseBoardResponse;
         const jobs = Array.isArray(payload.jobs) ? payload.jobs : [];
         if (jobs.length === 0) {
@@ -54,7 +120,7 @@ export async function fetchAllGreenhouseJobs(): Promise<ScrapedJob[]> {
 
         normalized.push(...jobs.map((job) => parseGreenhouseJob(board, job)));
 
-        if (jobs.length < GREENHOUSE_PER_PAGE) {
+        if (jobs.length < perPage) {
           break;
         }
       }

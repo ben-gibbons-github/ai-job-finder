@@ -1,6 +1,7 @@
 import type { ScrapedJob } from './ScrapedJob.js';
 import { normalizeJobsWithCoordinates, type NormalizedPortalJob } from './PortalIngestionUtils.js';
 import { collectPaginatedHtmlJobs, stripHtmlTags } from './PaginatedHtmlScrapeUtils.js';
+import { deriveDescriptionFromContext } from './ScrapeDescriptionUtils.js';
 
 const ASHP_CAREER_PHARM_BASE_URL = 'https://careers.ashp.org/jobs/';
 const MAX_ASHP_PAGES = 500;
@@ -45,6 +46,7 @@ function parseAshpJobs(html: string): NormalizedPortalJob[] {
 
     const from = match.index ?? 0;
     const context = decodedHtml.slice(Math.max(0, from - 350), from + 1600);
+    const description = deriveDescriptionFromContext(context, title);
 
     jobs.push({
       title,
@@ -53,7 +55,7 @@ function parseAshpJobs(html: string): NormalizedPortalJob[] {
       remote: /\bremote\b|\bhybrid\b|work from home/i.test(context) ? 'Remote' : 'Unknown',
       type: 'Unknown',
       sourceUrl,
-      description: '',
+      description,
       tags: ['Medical', 'Pharmacy', 'Healthcare'],
     });
   }

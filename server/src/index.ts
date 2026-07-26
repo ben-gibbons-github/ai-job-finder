@@ -147,14 +147,14 @@ io.on('connection', (socket) => {
 
   const cachedDefaultSearchResponse = top100Search.getCached()
   if (cachedDefaultSearchResponse) {
-    socket.emit('search:results', cachedDefaultSearchResponse)
+    socket.emit('search:results', { ...cachedDefaultSearchResponse, isInitialResponse: true })
   } else {
     // Build and send the default results once jobs are available and cache is ready.
     ;(async () => {
       try {
         const cached = await top100Search.getOrBuild(JOBS)
         if (cached) {
-          socket.emit('search:results', cached)
+          socket.emit('search:results', { ...cached, isInitialResponse: true })
         }
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error)

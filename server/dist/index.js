@@ -6,7 +6,7 @@ import express from 'express';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
 import { scrapeJobsMain } from './scraping/ScrapeJobMain.js';
-import { reverseGeocodeOpenStreetMap, searchLocationsOpenStreetMap, } from './searching/LocationSearch.js';
+import { searchLocationsOpenStreetMap } from './searching/LocationSearch.js';
 import { getSearchSuggestionCount, getSearchSuggestions, rebuildSearchSuggestions } from './searching/SearchSuggestion.js';
 import SearchMain from './searching/SearchMain.js';
 import { Top100Search } from './searching/Top100Search.js';
@@ -125,7 +125,7 @@ io.on('connection', (socket) => {
     socket.emit('server:hello', 'Hello from Socket.IO server!');
     const cachedDefaultSearchResponse = top100Search.getCached();
     if (cachedDefaultSearchResponse) {
-        socket.emit('search:results', cachedDefaultSearchResponse);
+        socket.emit('search:results', { ...cachedDefaultSearchResponse, isInitialResponse: true });
     }
     else {
         // Build and send the default results once jobs are available and cache is ready.
@@ -134,7 +134,7 @@ io.on('connection', (socket) => {
             try {
                 const cached = await top100Search.getOrBuild(JOBS);
                 if (cached) {
-                    socket.emit('search:results', cached);
+                    socket.emit('search:results', { ...cached, isInitialResponse: true });
                 }
             }
             catch (error) {
@@ -262,31 +262,6 @@ io.on('connection', (socket) => {
             const message = error instanceof Error ? error.message : String(error);
             console.error(`Location search failed for "${query}": ${message}`);
             callback?.({ options: [], error: 'Failed to search locations' });
-        }
-    });
-    socket.on('locations:reverse', async (payload, callback) => {
-        if (!consumeLeakyBucket(socket.id, 'locations:reverse')) {
-            emitRateLimitError(socket, 'locations:reverse');
-            callbackRateLimitError(callback, {
-                option: null,
-                error: 'Rate limit exceeded for reverse location lookup',
-            });
-            return;
-        }
-        const lat = Number(payload?.lat);
-        const lng = Number(payload?.lng);
-        if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
-            callback?.({ option: null, error: 'Invalid coordinates' });
-            return;
-        }
-        try {
-            const option = await reverseGeocodeOpenStreetMap(lat, lng);
-            callback?.({ option });
-        }
-        catch (error) {
-            const message = error instanceof Error ? error.message : String(error);
-            console.error(`Reverse location lookup failed for ${lat},${lng}: ${message}`);
-            callback?.({ option: null, error: 'Failed to reverse geocode location' });
         }
     });
     socket.on('disconnect', () => {

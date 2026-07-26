@@ -44,6 +44,7 @@ async function ensureCacheLoaded() {
 async function persistCacheToDisk() {
     const payload = Object.fromEntries(locationSearchCache);
     await cacheHandler.save(JSON.stringify(payload, null, 2)).catch(() => undefined);
+    console.trace("persistCacheToDisk:: stack trace");
 }
 export async function getCachedLocationSearch(query) {
     await ensureCacheLoaded();

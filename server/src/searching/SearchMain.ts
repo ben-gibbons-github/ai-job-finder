@@ -5,6 +5,7 @@ import type {
   ScoreWeights,
   SearchPayload,
   SearchLogFlags,
+  UserRatingMode,
   JobScores,
   JobAiPayload,
   SearchAiCoverage,
@@ -13,7 +14,7 @@ import type {
   RankedJobWrapper,
 } from './SearchInterfaces.js'
 import { auditJob } from './SearchAudit.js'
-import { geocodeUserLocation, geocodeJobLocations } from './SearchDistance.js'
+import { geocodeUserLocation, geocodeJobLocations, isRemoteJob } from './SearchDistance.js'
 import { calculateIndividualScores, jobMatchesQuery } from './SearchUtils.js'
 
 const SERVER_HIDDEN_EXCLUSIONS_ENABLED = true
@@ -24,6 +25,149 @@ function normalizeExactUrl(value: unknown): string {
 
 function normalizeExactCompanyName(value: unknown): string {
   return String(value ?? '').trim().toLowerCase()
+}
+
+function parseUserRatingMode(value: unknown): UserRatingMode {
+  if (value === 'none' || value === 'sort' || value === 'ratedOnly' || value === 'hideRated') {
+    return value
+  }
+  return 'none'
+}
+
+function normalizeUserScore(value: unknown): number | null {
+  const score = Number(value)
+  if (!Number.isFinite(score)) {
+    return null
+  }
+  return Math.max(0, Math.min(100, score))
+}
+
+function buildUserRatingMap(raw: unknown, normalizeKey: (value: unknown) => string): Map<string, number> {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+    return new Map<string, number>()
+  }
+
+  const entries = Object.entries(raw as Record<string, unknown>)
+    .map(([key, value]) => {
+      const normalizedKey = normalizeKey(key)
+      const normalizedScore = normalizeUserScore(value)
+      return [normalizedKey, normalizedScore] as const
+    })
+    .filter(([key, score]) => key.length > 0 && score !== null)
+
+  return new Map(entries as Array<[string, number]>)
+}
+
+function getRatedCompanyKeys(job: ScrapedJob): string[] {
+  const keys = [
+    normalizeExactCompanyName(job.company_name),
+    normalizeExactCompanyName(job.scrapedEmployer?.name),
+  ].filter((value) => value.length > 0)
+
+  return Array.from(new Set(keys))
+}
+
+function getEffectiveUserRating(job: ScrapedJob, jobRatingMap: Map<string, number>, companyRatingMap: Map<string, number>): number | null {
+  const sourceUrl = normalizeExactUrl(job.source_url)
+  if (sourceUrl.length > 0) {
+    const jobRating = jobRatingMap.get(sourceUrl)
+    if (typeof jobRating === 'number') {
+      return jobRating
+    }
+  }
+
+  const companyKeys = getRatedCompanyKeys(job)
+  for (const companyKey of companyKeys) {
+    const companyRating = companyRatingMap.get(companyKey)
+    if (typeof companyRating === 'number') {
+      return companyRating
+    }
+  }
+
+  return null
+}
+
+function hasAnyUserRating(job: ScrapedJob, ratedJobUrls: Set<string>, ratedCompanies: Set<string>): boolean {
+  const sourceUrl = normalizeExactUrl(job.source_url)
+  if (sourceUrl.length > 0 && ratedJobUrls.has(sourceUrl)) {
+    return true
+  }
+
+  const companyKeys = getRatedCompanyKeys(job)
+  return companyKeys.some((companyKey) => ratedCompanies.has(companyKey))
+}
+
+function sanitizeAddedJobs(raw: unknown): ScrapedJob[] {
+  if (!Array.isArray(raw) || raw.length === 0) {
+    return []
+  }
+
+  const jobs: ScrapedJob[] = []
+  const nowIso = new Date().toISOString()
+
+  for (let index = 0; index < raw.length; index += 1) {
+    const row = raw[index]
+    if (!row || typeof row !== 'object' || Array.isArray(row)) {
+      continue
+    }
+
+    const obj = row as Record<string, unknown>
+    const name = String(obj.name ?? '').trim()
+    const companyName = String(obj.company_name ?? '').trim()
+    if (!name || !companyName) {
+      continue
+    }
+
+    const sourceUrlRaw = String(obj.source_url ?? '').trim()
+    const sourceUrl = sourceUrlRaw || `local://added-job/${Date.now()}-${index}`
+    const userScore = normalizeUserScore(obj.userScore)
+    const ratingBoost = typeof userScore === 'number' ? Math.max(0.45, userScore / 100) : 0.25
+
+    jobs.push({
+      name,
+      company_name: companyName,
+      location: String(obj.location ?? 'Unknown').trim() || 'Unknown',
+      remote: String(obj.remote ?? 'Unknown').trim() || 'Unknown',
+      location_lon: 0,
+      location_lat: 0,
+      description: String(obj.description ?? '').trim(),
+      type: String(obj.type ?? 'Unknown').trim() || 'Unknown',
+      source: 'AddedByUser',
+      source_url: sourceUrl,
+      posted: String(obj.posted ?? '').trim() || nowIso,
+      impact_number: 0,
+      audit_number: Math.round(ratingBoost * 100),
+      audit_text: '',
+      tags: ['User Added'],
+    })
+  }
+
+  return jobs
+}
+
+function mergeAddedJobs(baseJobs: ScrapedJob[], addedJobs: ScrapedJob[]): ScrapedJob[] {
+  if (addedJobs.length === 0) {
+    return baseJobs
+  }
+
+  const dedup = new Map<string, ScrapedJob>()
+  for (const job of addedJobs) {
+    const sourceUrl = normalizeExactUrl(job.source_url)
+    if (!sourceUrl) {
+      continue
+    }
+    dedup.set(sourceUrl, job)
+  }
+
+  for (const job of baseJobs) {
+    const sourceUrl = normalizeExactUrl(job.source_url)
+    if (!sourceUrl || dedup.has(sourceUrl)) {
+      continue
+    }
+    dedup.set(sourceUrl, job)
+  }
+
+  return Array.from(dedup.values())
 }
 
 function buildJobAiPayload(job: ScrapedJob): JobAiPayload | undefined {
@@ -79,11 +223,17 @@ function buildSearchAiCoverage(wrappers: RankedJobWrapper[]): SearchAiCoverage {
   const auditCount = wrappers.filter((wrapper) => wrapper.aiPayload?.audit?.hasData === true).length
   const impactCount = wrappers.filter((wrapper) => wrapper.aiPayload?.impact?.hasData === true).length
   const qualityOfLifeCount = wrappers.filter((wrapper) => wrapper.aiPayload?.qualityOfLife?.hasData === true).length
+  const geocodedCount = wrappers.filter((wrapper) => {
+    const lat = Number(wrapper.job.location_lat)
+    const lon = Number(wrapper.job.location_lon)
+    return Number.isFinite(lat) && Number.isFinite(lon)
+  }).length
 
   return {
     auditPercent: toPercent(auditCount, totalMatched),
     impactPercent: toPercent(impactCount, totalMatched),
     qualityOfLifePercent: toPercent(qualityOfLifeCount, totalMatched),
+    geocodedPercent: toPercent(geocodedCount, totalMatched),
     totalMatched,
   }
 }
@@ -139,7 +289,10 @@ class SearchMain {
         )
       : new Set<string>()
 
-    const visibleJobs = jobs.filter((job) => {
+    const addedJobs = sanitizeAddedJobs(searchPayload.addedJobs)
+    const jobsForSearch = mergeAddedJobs(jobs, addedJobs)
+
+    const visibleJobs = jobsForSearch.filter((job) => {
       const sourceUrl = normalizeExactUrl(job.source_url)
       const companyName = normalizeExactCompanyName(job.company_name)
       if (sourceUrl && hiddenJobUrls.has(sourceUrl)) {
@@ -150,6 +303,44 @@ class SearchMain {
       }
       return true
     })
+
+    const includeRemoteJobs = searchPayload.includeRemoteJobs !== false
+    const remoteFilteredJobs = includeRemoteJobs
+      ? visibleJobs
+      : visibleJobs.filter((job) => !isRemoteJob(job))
+
+    const userRatingMode = parseUserRatingMode(searchPayload.userRatingMode)
+    const jobRatingMap = userRatingMode !== 'none'
+      ? buildUserRatingMap(searchPayload.userRatings?.jobRatingsByUrl, normalizeExactUrl)
+      : new Map<string, number>()
+    const companyRatingMap = userRatingMode !== 'none'
+      ? buildUserRatingMap(searchPayload.userRatings?.companyRatingsByName, normalizeExactCompanyName)
+      : new Map<string, number>()
+    const ratedJobUrls = userRatingMode === 'ratedOnly' || userRatingMode === 'hideRated'
+      ? new Set([
+          ...Array.from(jobRatingMap.keys()),
+          ...(Array.isArray(searchPayload.userRatingFilter?.ratedJobUrls)
+            ? searchPayload.userRatingFilter.ratedJobUrls
+                .map((value: unknown) => normalizeExactUrl(value))
+                .filter((value: string) => value.length > 0)
+            : []),
+        ])
+      : new Set<string>()
+    const ratedCompanies = userRatingMode === 'ratedOnly' || userRatingMode === 'hideRated'
+      ? new Set([
+          ...Array.from(companyRatingMap.keys()),
+          ...(Array.isArray(searchPayload.userRatingFilter?.ratedCompanies)
+            ? searchPayload.userRatingFilter.ratedCompanies
+                .map((value: unknown) => normalizeExactCompanyName(value))
+                .filter((value: string) => value.length > 0)
+            : []),
+        ])
+      : new Set<string>()
+    const ratingFilteredJobs = userRatingMode === 'ratedOnly'
+      ? remoteFilteredJobs.filter((job) => hasAnyUserRating(job, ratedJobUrls, ratedCompanies))
+      : userRatingMode === 'hideRated'
+        ? remoteFilteredJobs.filter((job) => !hasAnyUserRating(job, ratedJobUrls, ratedCompanies))
+        : remoteFilteredJobs
 
     if (logSearchMain) {
       console.log(
@@ -167,12 +358,22 @@ class SearchMain {
         hiddenJobUrls.size,
         'hiddenCompanies:',
         hiddenCompanies.size,
+        'userRatingMode:',
+        userRatingMode,
+        'jobRatingMap:',
+        jobRatingMap.size,
+        'companyRatingMap:',
+        companyRatingMap.size,
+        'ratedJobUrls:',
+        ratedJobUrls.size,
+        'ratedCompanies:',
+        ratedCompanies.size,
       )
     }
 
     const matched = queryTerms.length > 0
-      ? visibleJobs.filter((job) => jobMatchesQuery(job, queryTerms, logFlags.query === true))
-      : visibleJobs // If no query terms, consider all visible jobs as matched (subject to pagination later)
+      ? ratingFilteredJobs.filter((job) => jobMatchesQuery(job, queryTerms, logFlags.query === true))
+      : ratingFilteredJobs // If no query terms, consider all visible jobs as matched (subject to pagination later)
 
     const resumeText = typeof searchPayload.resumeText === 'string' ? searchPayload.resumeText : ''
     const locationText = typeof searchPayload.locationText === 'string' ? searchPayload.locationText : ''
@@ -202,6 +403,9 @@ class SearchMain {
     const rankedWrappers = jobsWithCoords
       .map((job) => {
         const scores = calculateIndividualScores(job, resumeText, locationText, userLat, userLon, logFlags)
+        const addedJobBonus = job.source === 'AddedByUser'
+          ? Math.max(0.45, Number.isFinite(job.audit_number) ? Number(job.audit_number) / 100 : 0.45)
+          : 0
         // Calculate total score using weights
         const totalScore =
           (scores.resume ?? 0) * (searchPayload.scoreWeights?.resume ?? 1) +
@@ -209,7 +413,8 @@ class SearchMain {
           (scores.location ?? 0) * (searchPayload.scoreWeights?.location ?? 1) +
           (scores.fresh ?? 0) * (searchPayload.scoreWeights?.fresh ?? 1) +
           (scores.audit ?? 0) * (searchPayload.scoreWeights?.audit ?? 1) + 
-          (scores.qualityOfLife ?? 0) * (searchPayload.scoreWeights?.qualityOfLife ?? 1);
+          (scores.qualityOfLife ?? 0) * (searchPayload.scoreWeights?.qualityOfLife ?? 1) +
+          addedJobBonus;
           
         return {
           job,
@@ -220,28 +425,64 @@ class SearchMain {
       })
       .sort((a, b) => b.totalScore - a.totalScore)
 
+    const sortedByUserRatingWrappers = userRatingMode === 'none'
+      ? rankedWrappers
+      : rankedWrappers
+          .map((wrapper, originalIndex) => {
+            const userRating = getEffectiveUserRating(wrapper.job, jobRatingMap, companyRatingMap)
+
+            return {
+              wrapper,
+              originalIndex,
+              userRating,
+            }
+          })
+          .sort((a, b) => {
+            const aHasRating = a.userRating !== null
+            const bHasRating = b.userRating !== null
+
+            if (aHasRating !== bHasRating) {
+              return aHasRating ? -1 : 1
+            }
+
+            if (aHasRating && bHasRating) {
+              if (a.userRating !== b.userRating) {
+                return Number(b.userRating) - Number(a.userRating)
+              }
+
+              return a.originalIndex - b.originalIndex
+            }
+
+            return a.originalIndex - b.originalIndex
+          })
+          .map((entry) => entry.wrapper)
+
     const start = Number.isInteger(searchPayload.start) ? Number(searchPayload.start) : 0
-    const end = Number.isInteger(searchPayload.end) ? Number(searchPayload.end) : rankedWrappers.length
+    const end = Number.isInteger(searchPayload.end) ? Number(searchPayload.end) : sortedByUserRatingWrappers.length
     const meta: SearchResultMeta = {
-      aiCoverage: buildSearchAiCoverage(rankedWrappers),
-      scoreDistribution: buildScoreDistribution(rankedWrappers),
+      aiCoverage: buildSearchAiCoverage(sortedByUserRatingWrappers),
+      scoreDistribution: buildScoreDistribution(sortedByUserRatingWrappers),
+      appliedFilters: {
+        includeRemoteJobs,
+        userRatingMode,
+      },
     }
 
     if (start < 0 || end < 0 || end <= start) {
-      return { matched: rankedWrappers, size: rankedWrappers.length, meta }
+      return { matched: sortedByUserRatingWrappers, size: sortedByUserRatingWrappers.length, meta }
     }
 
     if (logSearchMain) {
-      console.log(rankedWrappers.length, 'jobs matched the query. Returning ranked slice from', start, 'to', end)
+      console.log(sortedByUserRatingWrappers.length, 'jobs matched the query. Returning ranked slice from', start, 'to', end)
       console.log('SearchPayload: ' + JSON.stringify(searchPayload))
     }
 
-    const sliced = rankedWrappers.slice(start, end)
+    const sliced = sortedByUserRatingWrappers.slice(start, end)
     // sliced.map((wrapper, index) => {
     //   const shouldLaunch = true
     //   wrapper.scores.audit = Math.min(auditJob(wrapper.job, logFlags.audit === true, shouldLaunch) / 100, 1.0)
     // })
-    return { matched: sliced, size: rankedWrappers.length, meta }
+    return { matched: sliced, size: sortedByUserRatingWrappers.length, meta }
   }
 }
 

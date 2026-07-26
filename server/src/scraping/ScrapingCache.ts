@@ -3,6 +3,7 @@ import { promises as fs } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 import type { ScrapedJob } from './ScrapedJob.js';
+import { repairGenericCachedJobTitles } from './CacheJobTitleRepair.js';
 import { CacheHandler } from '../utils/CacheHandler.js';
 
 const CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
@@ -48,7 +49,12 @@ export async function readFreshCache(componentName: string): Promise<ScrapedJob[
       return null;
     }
 
-    return parsed as ScrapedJob[];
+    const repaired = repairGenericCachedJobTitles(componentName, parsed as ScrapedJob[]);
+    if (repaired.correctedCount > 0) {
+      console.log(`[CacheRepair] ${componentName}: corrected ${repaired.correctedCount} generic cached job titles`);
+    }
+
+    return repaired.jobs;
   } catch {
     return null;
   }
@@ -64,7 +70,12 @@ export async function readAnyCache(componentName: string): Promise<ScrapedJob[] 
       return null;
     }
 
-    return parsed as ScrapedJob[];
+    const repaired = repairGenericCachedJobTitles(componentName, parsed as ScrapedJob[]);
+    if (repaired.correctedCount > 0) {
+      console.log(`[CacheRepair] ${componentName}: corrected ${repaired.correctedCount} generic cached job titles`);
+    }
+
+    return repaired.jobs;
   } catch {
     return null;
   }

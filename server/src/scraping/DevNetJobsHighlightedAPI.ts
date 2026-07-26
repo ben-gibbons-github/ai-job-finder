@@ -1,5 +1,6 @@
 import type { ScrapedJob } from './ScrapedJob.js';
 import { normalizeJobsWithCoordinates, type NormalizedPortalJob } from './PortalIngestionUtils.js';
+import { deriveDescriptionFromContext } from './ScrapeDescriptionUtils.js';
 
 const DEVNET_HIGHLIGHTED_URL = 'https://devnetjobs.org/highlighted_jobs.aspx';
 
@@ -26,6 +27,7 @@ function parseDevNetHighlightedJobs(html: string): NormalizedPortalJob[] {
     const companyMatch = context.match(/\n\s*([A-Z][A-Za-z0-9&.,'()\-\/ ]{2,100})\s*\n\s*\n\s*Location:/i);
     const locationMatch = context.match(/Location:\s*([^\n\r]{2,120})/i);
     const applyMatch = context.match(/Apply by:\s*([^\n\r]{4,40})/i);
+    const description = deriveDescriptionFromContext(context, title);
 
     jobs.push({
       title,
@@ -35,7 +37,7 @@ function parseDevNetHighlightedJobs(html: string): NormalizedPortalJob[] {
       type: 'Unknown',
       sourceUrl,
       posted: applyMatch?.[1]?.trim(),
-      description: '',
+      description,
       tags: ['DevNetJobs', 'Highlighted'],
     });
   }

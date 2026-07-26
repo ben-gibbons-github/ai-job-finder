@@ -4,7 +4,8 @@
   "type": "module",
   "main": "dist/index.js",
   "scripts": {
-    "dev": "tsx watch src/index.ts",
+    "dev": "NODE_OPTIONS=--max-old-space-size=32768 tsx watch src/index.ts",
+    "quickDev": "CACHE_ONLY_SCRAPING=1 NODE_OPTIONS=--max-old-space-size=32768 tsx watch src/index.ts",
     "build": "tsc -p tsconfig.json",
     "start": "node dist/index.js",
     "test": "vitest run",

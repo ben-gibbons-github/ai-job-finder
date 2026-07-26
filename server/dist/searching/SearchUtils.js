@@ -14,7 +14,7 @@ import { getOrCreateEmployer } from '../scraping/ScrapedEmployerCache.js';
  */
 export function calculateIndividualScores(job, resumeText, locationText, userLat, userLon, logFlags = {}) {
     // Resume score
-    const resumeScore = Math.min(calculateResumeScore(job, resumeText, logFlags.resume === true), 1.0);
+    const resumeScore = calculateResumeScore(job, resumeText, logFlags.resume === true);
     // Location score (based on distance and remote status)
     const locationScore = calculateLocationScore(userLat, userLon, job, locationText, logFlags.location === true);
     // Freshness score

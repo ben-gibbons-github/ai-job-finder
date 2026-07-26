@@ -144,8 +144,10 @@ function isRemoteWithNoCountryAttached(job) {
 export function isRemoteJob(job) {
     const remoteKeywords = ['remote', 'anywhere', 'distributed', 'work from home'];
     const loc = toSafeText(job.location);
+    const rem = toSafeText(job.remote);
     const typ = toSafeText(job.type);
-    return remoteKeywords.some((kw) => loc.includes(kw) || typ.includes(kw));
+    const desc = toSafeText(job.description);
+    return remoteKeywords.some((kw) => loc.includes(kw) || rem.includes(kw) || typ.includes(kw) || desc.includes(kw));
 }
 /**
  * Calculates the location score based on geographic distance and remote status

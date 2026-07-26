@@ -5,6 +5,26 @@ import { collectPaginatedHtmlJobs, stripHtmlTags } from './PaginatedHtmlScrapeUt
 const IMPACTPOOL_URL = 'https://www.impactpool.org/search';
 const MAX_IMPACTPOOL_PAGES = 250;
 
+function isGenericImpactPoolTitle(value: string): boolean {
+  const normalized = value.toLowerCase().replace(/[^a-z0-9]/g, '');
+  return normalized === 'impactpool' || normalized === 'job' || normalized === 'jobs';
+}
+
+function extractImpactPoolTitle(anchorHtml: string): string {
+  const cardTitleMatch = anchorHtml.match(/type=["']cardTitle["'][^>]*>([\s\S]*?)<\/div>/i);
+  const cardTitle = stripHtmlTags(cardTitleMatch?.[1] || '');
+  if (cardTitle && !isGenericImpactPoolTitle(cardTitle)) {
+    return cardTitle;
+  }
+
+  const fallback = stripHtmlTags(anchorHtml);
+  if (fallback && !isGenericImpactPoolTitle(fallback)) {
+    return fallback;
+  }
+
+  return '';
+}
+
 function pageUrl(page: number): string {
   const url = new URL(IMPACTPOOL_URL);
   if (page > 1) {
@@ -17,12 +37,12 @@ function pageUrl(page: number): string {
 function parseImpactPoolJobs(html: string): NormalizedPortalJob[] {
   const jobs: NormalizedPortalJob[] = [];
   const linkPattern =
-    /<a[^>]+href="((?:https:\/\/www\.impactpool\.org)?\/jobs\/[0-9]+)"[^>]*>([\s\S]*?)<\/a>/gi;
+    /<a[^>]+href="((?:https:\/\/www\.impactpool\.org)?\/jobs\/[0-9]+(?:\/[^"?#\s]+)?)"[^>]*>([\s\S]*?)<\/a>/gi;
 
   for (const match of html.matchAll(linkPattern)) {
     const rawUrl = (match[1] || '').trim();
     const sourceUrl = rawUrl.startsWith('http') ? rawUrl : `https://www.impactpool.org${rawUrl}`;
-    const title = stripHtmlTags(match[2] || '');
+    const title = extractImpactPoolTitle(match[2] || '');
 
     if (!sourceUrl || !title) {
       continue;

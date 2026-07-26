@@ -26,6 +26,29 @@ export interface SearchLogFlags {
 }
 
 export type SearchCommand = 'AIAuditAllJobsInThisSearch'
+export type UserRatingMode = 'none' | 'sort' | 'ratedOnly' | 'hideRated'
+
+export interface UserRatingFilterPayload {
+  ratedJobUrls?: string[]
+  ratedCompanies?: string[]
+}
+
+export interface UserRatingsPayload {
+  jobRatingsByUrl?: Record<string, number>
+  companyRatingsByName?: Record<string, number>
+}
+
+export interface AddedJobPayload {
+  name?: string
+  company_name?: string
+  location?: string
+  remote?: string
+  type?: string
+  description?: string
+  source_url?: string
+  posted?: string
+  userScore?: number | null
+}
 
 /**
  * Search parameters and configuration
@@ -34,6 +57,10 @@ export interface SearchPayload {
   query?: string
   resumeText?: string
   locationText?: string
+  includeRemoteJobs?: boolean
+  userRatingMode?: UserRatingMode
+  userRatings?: UserRatingsPayload
+  userRatingFilter?: UserRatingFilterPayload
   start?: number
   end?: number
   location?: string
@@ -42,6 +69,7 @@ export interface SearchPayload {
   searchLogFlags?: SearchLogFlags
   hiddenJobUrls?: string[]
   hiddenCompanies?: string[]
+  addedJobs?: AddedJobPayload[]
   command?: SearchCommand
   [key: string]: any
 }
@@ -85,6 +113,7 @@ export interface SearchAiCoverage {
   auditPercent: number
   impactPercent: number
   qualityOfLifePercent: number
+  geocodedPercent: number
   totalMatched: number
 }
 
@@ -97,6 +126,10 @@ export interface SearchScoreBucket {
 export interface SearchResultMeta {
   aiCoverage: SearchAiCoverage
   scoreDistribution: SearchScoreBucket[]
+  appliedFilters: {
+    includeRemoteJobs: boolean
+    userRatingMode: UserRatingMode
+  }
 }
 
 /**

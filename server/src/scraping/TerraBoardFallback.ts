@@ -1,8 +1,56 @@
-import { normalizeJobsWithCoordinates, type NormalizedPortalJob } from './PortalIngestionUtils.js';
+import {
+  normalizeJobsWithCoordinates,
+  parseCsvEnv,
+  type NormalizedPortalJob,
+} from './PortalIngestionUtils.js';
 import type { ScrapedJob } from './ScrapedJob.js';
 
-const TERRA_SEARCH_QUERIES = ['software', 'engineer', 'analyst', 'policy', 'operations'];
-const MAX_TERRA_PAGES = 30;
+const DEFAULT_TERRA_SEARCH_QUERIES = [
+  'software engineer',
+  'data engineer',
+  'data analyst',
+  'machine learning',
+  'ai engineer',
+  'product manager',
+  'project manager',
+  'operations',
+  'policy',
+  'research',
+  'climate',
+  'energy',
+  'sustainability',
+  'supply chain',
+  'logistics',
+  'marketing',
+  'sales',
+  'customer success',
+  'finance',
+  'accounting',
+  'human resources',
+  'talent acquisition',
+  'healthcare',
+  'public health',
+  'nonprofit',
+  'government',
+  'education',
+  'operations manager',
+  'administrative assistant',
+  'business analyst',
+];
+const DEFAULT_MAX_TERRA_PAGES = 60;
+
+function getTerraSearchQueries(): string[] {
+  const envQueries = parseCsvEnv(process.env.TERRA_FALLBACK_QUERIES);
+  if (envQueries.length > 0) {
+    return Array.from(new Set(envQueries));
+  }
+
+  return DEFAULT_TERRA_SEARCH_QUERIES;
+}
+
+function getMaxTerraPages(): number {
+  return Math.max(1, Number(process.env.TERRA_FALLBACK_MAX_PAGES || DEFAULT_MAX_TERRA_PAGES));
+}
 
 function decodeEscaped(value: string): string {
   try {
@@ -83,10 +131,12 @@ function extractFromHtml(html: string): TerraExtracted[] {
 }
 
 async function fetchTerraHtmlJobs(): Promise<TerraExtracted[]> {
+  const queries = getTerraSearchQueries();
+  const maxPages = getMaxTerraPages();
   const allRows: TerraExtracted[] = [];
 
-  for (const query of TERRA_SEARCH_QUERIES) {
-    for (let page = 1; page <= MAX_TERRA_PAGES; page += 1) {
+  for (const query of queries) {
+    for (let page = 1; page <= maxPages; page += 1) {
       const url =
         page === 1
           ? `https://www.terra.do/climate-jobs/job-board/search/?query=${encodeURIComponent(query)}`

@@ -1,4 +1,3 @@
-import { nameToLonLat } from '../utils/NameToLonLat.js';
 const CLIMATEBASE_JOBS_URL = 'https://climatebase.org/jobs';
 const FETCH_TIMEOUT = 30000;
 const ALGOLIA_BROWSE_ENDPOINT = 'https://8psnffqtxq-dsn.algolia.net/1/indexes/Job_production/browse';
@@ -187,24 +186,12 @@ export async function fetchAllClimatebaseJobs() {
         console.warn('Climatebase payload contained no jobs.');
         return [];
     }
-    const locationPromises = new Map();
-    const normalized = await Promise.all(jobs.map(async (job) => {
+    // Keep ingestion non-blocking: do not wait on geocoding during scrape fetch.
+    const normalized = jobs.map((job) => {
         const norm = normalizeJob(job);
-        const locationKey = norm.location.trim().toLowerCase();
-        if (!locationPromises.has(locationKey)) {
-            locationPromises.set(locationKey, nameToLonLat(norm.location).catch(() => ({ lat: 0, lon: 0 })));
-        }
-        try {
-            const { lat, lon } = await locationPromises.get(locationKey);
-            norm.location_lat = lat;
-            norm.location_lon = lon;
-            return norm;
-        }
-        catch {
-            norm.location_lat = 0;
-            norm.location_lon = 0;
-            return norm;
-        }
-    }));
+        norm.location_lat = 0;
+        norm.location_lon = 0;
+        return norm;
+    });
     return normalized;
 }

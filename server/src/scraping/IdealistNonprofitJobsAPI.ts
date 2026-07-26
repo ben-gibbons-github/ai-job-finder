@@ -1,6 +1,7 @@
 import type { ScrapedJob } from './ScrapedJob.js';
 import { normalizeJobsWithCoordinates, type NormalizedPortalJob } from './PortalIngestionUtils.js';
 import { collectPaginatedHtmlJobs, stripHtmlTags } from './PaginatedHtmlScrapeUtils.js';
+import { deriveDescriptionFromContext } from './ScrapeDescriptionUtils.js';
 
 const IDEALIST_NONPROFIT_BASE_URL = 'https://www.idealist.org/en/nonprofit-jobs';
 const MAX_IDEALIST_NONPROFIT_PAGES = 500;
@@ -41,6 +42,7 @@ function parseIdealistNonprofitJobs(html: string): NormalizedPortalJob[] {
 
     const from = match.index ?? 0;
     const context = html.slice(Math.max(0, from - 220), from + 900);
+    const description = deriveDescriptionFromContext(context, title);
 
     jobs.push({
       title,
@@ -49,7 +51,7 @@ function parseIdealistNonprofitJobs(html: string): NormalizedPortalJob[] {
       remote: /\bremote\b|\bhybrid\b/i.test(context) ? 'Remote' : 'Unknown',
       type: 'Unknown',
       sourceUrl,
-      description: '',
+      description,
       tags: ['Idealist', 'Nonprofit'],
     });
   }

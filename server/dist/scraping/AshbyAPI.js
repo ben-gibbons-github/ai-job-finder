@@ -1,7 +1,45 @@
 import { fetchPortalJobsFromEndpointList } from './GenericEndpointPortalAPI.js';
 import { normalizeJobsWithCoordinates } from './PortalIngestionUtils.js';
 import { fetchPortalFallbackJobs } from './TerraBoardFallback.js';
-const DEFAULT_ASHBY_ORGS = ['openai', 'anthropic', 'stripe'];
+const DEFAULT_ASHBY_ORGS = [
+    'openai',
+    'anthropic',
+    'stripe',
+    'notion',
+    'ramp',
+    'retool',
+    'vercel',
+    'planetscale',
+    'chainguard',
+    'pulley',
+    'harvey',
+    'cursor',
+    'loom',
+    'ramp',
+    'linear',
+    'retool',
+    'vanta',
+    'fathom',
+    'mercury',
+    'perplexityai',
+    'scaleai',
+    'remotecom',
+    'figma',
+    'notion',
+    'arc',
+    'posthog',
+    'chime',
+    'turing',
+    'modal',
+    'runway',
+    'character',
+    'tailscale',
+    'render',
+    'warp',
+    'alan',
+    'blend360',
+    'zip',
+];
 function findJobArrays(value) {
     if (Array.isArray(value)) {
         const maybeJobArray = value.every((entry) => typeof entry === 'object' && entry !== null && ('id' in entry || 'title' in entry));
@@ -89,7 +127,7 @@ export async function fetchAllAshbyJobs() {
         .split(',')
         .map((value) => value.trim())
         .filter(Boolean);
-    const orgs = envOrgs.length > 0 ? envOrgs : DEFAULT_ASHBY_ORGS;
+    const orgs = Array.from(new Set(envOrgs.length > 0 ? envOrgs : DEFAULT_ASHBY_ORGS));
     const normalizedByOrg = await Promise.all(orgs.map((org) => fetchAshbyOrgJobs(org)));
     const normalized = normalizedByOrg.flat();
     if (normalized.length > 0) {

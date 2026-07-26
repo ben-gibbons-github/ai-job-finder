@@ -38,10 +38,15 @@ fly secrets set \
   EIGHTYK_HOURS_ALGOLIA_API_KEY=... \
   GEOAPIFY_API_KEY=... \
   MAPQUEST_API_KEY=... \
+  INDEED_RSS_LOCATION=United\ States \
+  CRAIGSLIST_CATEGORIES=jjj \
+  USAJOBS_API_KEY=... \
+  USAJOBS_USER_AGENT_EMAIL=you@example.com \
+  ADZUNA_APP_ID=... \
+  ADZUNA_APP_KEY=... \
+  JOOBLE_API_KEY=... \
+  REED_API_KEY=... \
   ASHBY_FEED_ENDPOINTS=... \
-  ASHBY_ORGS=openai,anthropic,stripe \
-  GREENHOUSE_BOARDS=stripe \
-  LEVER_BOARDS=palantir \
   AUDIT_ALL_MAX_CONCURRENCY=4 \
   AUDIT_ALL_MAX_JOBS=250 \
   SHUTDOWN_TIMEOUT_MS=10000 \
@@ -85,4 +90,12 @@ Then open `https://<your-fly-app>.fly.dev` and verify:
 - `CACHE_SEED_MODE=overwrite` refreshes mounted cache files from git-uploaded seed caches at startup.
 - `CACHE_SEED_MODE=missing` only copies missing files from `cache_seed` to mounted cache volume.
 - `CACHE_SEED_MODE=off` disables startup seeding.
-- `ASHBY_FEED_ENDPOINTS`, `ASHBY_ORGS`, `GREENHOUSE_BOARDS`, and `LEVER_BOARDS` control how many boards/orgs are ingested; if omitted, the app falls back to tiny default sets.
+- `ASHBY_FEED_ENDPOINTS`, `ASHBY_ORGS`, `GREENHOUSE_BOARDS`, and `LEVER_BOARDS` control how many boards/orgs are ingested.
+- If `ASHBY_ORGS`, `GREENHOUSE_BOARDS`, or `LEVER_BOARDS` are omitted, the app now falls back to expanded built-in generalist target packs.
+- `INDEED_RSS_QUERIES` can be set to custom comma-separated non-tech terms; if omitted, a large built-in generalist query pack is used.
+- `INDEED_RSS_LOCATIONS` can be set to a comma-separated list to multiply volume across regions; if omitted, the scraper uses a broad built-in location set.
+- `CRAIGSLIST_AREAS` and `CRAIGSLIST_CATEGORIES` can be set for Craigslist RSS ingestion; if omitted, a broad built-in US metro area list with `jjj` (all jobs) is used.
+- `USAJOBS_API_KEY` and `USAJOBS_USER_AGENT_EMAIL` enable high-volume public-sector ingestion from USAJobs; optional tuning: `USAJOBS_KEYWORDS`, `USAJOBS_MAX_PAGES`, `USAJOBS_RESULTS_PER_PAGE`.
+- `ADZUNA_APP_ID` and `ADZUNA_APP_KEY` enable broad generalist ingestion across countries; optional tuning: `ADZUNA_COUNTRIES`, `ADZUNA_KEYWORDS`, `ADZUNA_MAX_PAGES`.
+- `JOOBLE_API_KEY` enables Jooble ingestion; optional tuning: `JOOBLE_KEYWORDS`, `JOOBLE_LOCATIONS`, `JOOBLE_MAX_PAGES`.
+- `REED_API_KEY` enables Reed (UK-heavy) ingestion; optional tuning: `REED_KEYWORDS`, `REED_LOCATIONS`, `REED_MAX_PAGES`.

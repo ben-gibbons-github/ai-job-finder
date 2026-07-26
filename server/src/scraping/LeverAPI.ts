@@ -2,7 +2,56 @@ import type { ScrapedJob } from './ScrapedJob.js';
 import { fetchJson, normalizeJobsWithCoordinates, parseCsvEnv, type NormalizedPortalJob } from './PortalIngestionUtils.js';
 import { fetchPortalFallbackJobs } from './TerraBoardFallback.js';
 
-const DEFAULT_LEVER_BOARDS = ['palantir'];
+const DEFAULT_LEVER_BOARDS = [
+  'palantir',
+  'anduril',
+  'calendly',
+  'figma',
+  'gusto',
+  'improbable',
+  'mixpanel',
+  'postman',
+  'procore',
+  'rippling',
+  'scaleai',
+  'seekout',
+  'thoughtspot',
+  'udemy',
+  'wealthfront',
+  'ziprecruiter',
+  'vanta',
+  'amplitude',
+  'netlify',
+  'coinbase',
+  'brex',
+  'attentive',
+  'checkr',
+  'benchling',
+  'klarna',
+  'headway',
+  'mavenclinic',
+  'notion',
+  'opendoor',
+  'samsara',
+  'snyk',
+  'tripactions',
+  'reddit',
+  'robinhood',
+  'squarespace',
+  'discord',
+  'figma',
+  'doordash',
+  'ramp',
+  'scale',
+  'afresh',
+  'thousandeyes',
+  'udacity',
+  'zapier',
+  'zipline',
+  'whatnot',
+  'openai',
+  'notco',
+];
 
 interface LeverPosting {
   text?: string;
@@ -32,7 +81,7 @@ function parseLeverPosting(board: string, posting: LeverPosting): NormalizedPort
 
 export async function fetchAllLeverJobs(): Promise<ScrapedJob[]> {
   const envBoards = parseCsvEnv(process.env.LEVER_BOARDS);
-  const boards = envBoards.length > 0 ? envBoards : DEFAULT_LEVER_BOARDS;
+  const boards = Array.from(new Set(envBoards.length > 0 ? envBoards : DEFAULT_LEVER_BOARDS));
 
   const normalized: NormalizedPortalJob[] = [];
 

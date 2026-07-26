@@ -11,6 +11,7 @@ export interface JobDistributionMeta {
     auditPercent: number
     impactPercent: number
     qualityOfLifePercent: number
+    geocodedPercent: number
     totalMatched: number
   }
   scoreDistribution: JobDistributionBucket[]
@@ -56,6 +57,11 @@ export default function JobDistributionGraph({ meta }: JobDistributionGraphProps
         'span',
         { className: 'job-distribution-graph__coverage-item' },
         `QoL ${formatPercent(Number(meta.aiCoverage?.qualityOfLifePercent ?? 0))}`,
+      ),
+      createElement(
+        'span',
+        { className: 'job-distribution-graph__coverage-item' },
+        `Geocoded ${formatPercent(Number(meta.aiCoverage?.geocodedPercent ?? 0))}`,
       ),
       createElement(
         'span',

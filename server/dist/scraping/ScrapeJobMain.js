@@ -4,6 +4,8 @@ import LeverScraper from './Lever.js';
 import AshbyScraper from './Ashby.js';
 import BreezyScraper from './Breezy.js';
 import BambooScraper from './Bamboo.js';
+import WorkableScraper from './Workable.js';
+import SmartRecruitersScraper from './SmartRecruiters.js';
 import BuiltInScraper from './BuiltIn.js';
 import BuiltInGreenTechScraper from './BuiltInGreenTech.js';
 import TerraScraper from './Terra.js';
@@ -17,6 +19,7 @@ import CharityJobScraper from './CharityJob.js';
 import EnvironmentJobScraper from './EnvironmentJob.js';
 import ImpactPoolScraper from './ImpactPool.js';
 import TechJobsForGoodScraper from './TechJobsForGood.js';
+import TrellisScraper from './Trellis.js';
 import EthicalJobsScraper from './EthicalJobs.js';
 import ImpactOpportunityScraper from './ImpactOpportunity.js';
 import EscapeTheCityScraper from './EscapeTheCity.js';
@@ -75,16 +78,37 @@ import PharmiwebEngineerRssScraper from './PharmiwebEngineerRSS.js';
 import PharmiwebDataRssScraper from './PharmiwebDataRSS.js';
 import RemotiveScraper from './Remotive.js';
 import TheMuseScraper from './TheMuse.js';
+import GeneralistIndeedRssScraper from './GeneralistIndeedRSS.js';
+import GeneralistCraigslistRssScraper from './GeneralistCraigslistRSS.js';
+import UsaJobsScraper from './USAJobs.js';
+import AdzunaScraper from './Adzuna.js';
+import JoobleScraper from './Jooble.js';
+import ReedScraper from './Reed.js';
 import scrapedEmployerCache from './ScrapedEmployerCache.js';
 import { gatherLegacyAIData } from './GatherLegacyAIData.js';
+import { logScrapeQualityFlags } from './ScrapeJobAudit.js';
+import { startBackgroundAiEnrichmentJobs } from '../utils/BackgroundAiEnrichment.js';
 import { startBackgroundGeocodeJobs } from '../utils/BackgroundGeocode.js';
-import { ensureCacheDir, readAnyCache, readFreshCache, writeCache, } from './ScrapingCache.js';
-const SCRAPE_JOBS_ON_PRODUCTION = false;
-const SCRAPE_JOBS_ON_DEV = false;
+import { loadComponentJobs, readCachesNeedUpdatingRequests, resolveCacheRefreshTargets, writeCachesNeedUpdatingRequests, } from './ScrapeJobCacheNeedUpdating.js';
+import { ensureCacheDir, } from './ScrapingCache.js';
+const SCRAPE_JOBS_ON_PRODUCTION = true;
+const SCRAPE_JOBS_ON_DEV = true;
+const BACKGROUND_AI_ON_PRODUCTION = false;
+const BACKGROUND_AI_ON_DEV = true;
+function isCacheOnlyModeEnabled() {
+    return process.env.CACHE_ONLY_SCRAPING === '1' || process.env.CACHE_ONLY_SCRAPING === 'true';
+}
 function shouldRunBackgroundGeocodeInCurrentEnv() {
     return process.env.NODE_ENV !== 'production';
 }
+function shouldRunBackgroundAiInCurrentEnv() {
+    const isProduction = process.env.NODE_ENV === 'production';
+    return isProduction ? BACKGROUND_AI_ON_PRODUCTION : BACKGROUND_AI_ON_DEV;
+}
 function shouldScrapeInCurrentEnv() {
+    if (isCacheOnlyModeEnabled()) {
+        return false;
+    }
     const isProduction = process.env.NODE_ENV === 'production';
     return isProduction ? SCRAPE_JOBS_ON_PRODUCTION : SCRAPE_JOBS_ON_DEV;
 }
@@ -114,15 +138,35 @@ function logScraperEnvDiagnostics() {
     const diagnostics = [
         `NODE_ENV=${process.env.NODE_ENV || 'unset'}`,
         `CACHE_SEED_MODE=${process.env.CACHE_SEED_MODE || 'unset'}`,
+        `CACHE_ONLY_SCRAPING=${process.env.CACHE_ONLY_SCRAPING || 'unset'}`,
         summarizeSecret('CLIMATEBASE_ALGOLIA_API_KEY'),
         summarizeSecret('ESCAPE_THE_CITY_ALGOLIA_API_KEY'),
         summarizeSecret('EIGHTYK_HOURS_ALGOLIA_API_KEY'),
         summarizeSecret('GEOAPIFY_API_KEY'),
         summarizeSecret('MAPQUEST_API_KEY'),
+        summarizeCsvEnv('INDEED_RSS_QUERIES', ['customer service', 'administrative assistant', 'warehouse associate', 'retail manager', 'sales representative']),
+        summarizeCsvEnv('INDEED_RSS_LOCATIONS', ['United States', 'New York, NY', 'Los Angeles, CA', 'Chicago, IL', 'Houston, TX']),
+        summarizeCsvEnv('CRAIGSLIST_AREAS', ['newyork', 'losangeles', 'chicago', 'dallas', 'houston']),
+        summarizeCsvEnv('CRAIGSLIST_CATEGORIES', ['jjj']),
+        summarizeSecret('USAJOBS_API_KEY'),
+        summarizeCsvEnv('USAJOBS_KEYWORDS', ['nurse', 'teacher', 'human resources', 'accountant', 'administrative']),
+        summarizeSecret('ADZUNA_APP_ID'),
+        summarizeSecret('ADZUNA_APP_KEY'),
+        summarizeCsvEnv('ADZUNA_COUNTRIES', ['us', 'gb', 'ca', 'au']),
+        `ADZUNA_REQUEST_DELAY_MS=${process.env.ADZUNA_REQUEST_DELAY_MS || 'unset(default 400)'}`,
+        `ADZUNA_RATE_LIMIT_COOLDOWN_MS=${process.env.ADZUNA_RATE_LIMIT_COOLDOWN_MS || 'unset(default 600000)'}`,
+        summarizeSecret('JOOBLE_API_KEY'),
+        summarizeCsvEnv('JOOBLE_LOCATIONS', ['United States', 'Remote']),
+        summarizeSecret('REED_API_KEY'),
+        summarizeCsvEnv('REED_LOCATIONS', ['London', 'Manchester', 'Birmingham', 'Leeds', 'Bristol']),
         summarizeCsvEnv('ASHBY_FEED_ENDPOINTS'),
-        summarizeCsvEnv('ASHBY_ORGS', ['openai', 'anthropic', 'stripe']),
-        summarizeCsvEnv('GREENHOUSE_BOARDS', ['stripe']),
-        summarizeCsvEnv('LEVER_BOARDS', ['palantir']),
+        summarizeCsvEnv('ASHBY_ORGS', ['openai', 'anthropic', 'stripe', 'notion', 'ramp']),
+        summarizeCsvEnv('GREENHOUSE_BOARDS', ['stripe', 'airbnb', 'asana', 'affirm', 'brex']),
+        summarizeCsvEnv('LEVER_BOARDS', ['palantir', 'anduril', 'calendly', 'figma', 'gusto']),
+        summarizeCsvEnv('WORKABLE_FEED_ENDPOINTS'),
+        summarizeCsvEnv('SMARTRECRUITERS_FEED_ENDPOINTS'),
+        summarizeCsvEnv('TERRA_FALLBACK_QUERIES', ['software', 'engineer', 'analyst', 'policy', 'operations']),
+        `TERRA_FALLBACK_MAX_PAGES=${process.env.TERRA_FALLBACK_MAX_PAGES || 'unset(default)'}`,
     ];
     console.log(`[ScrapeEnv] ${diagnostics.join(' | ')}`);
 }
@@ -150,6 +194,14 @@ const SCRAPER_COMPONENTS = [
     {
         name: 'Bamboo',
         scrapeJobs: () => new BambooScraper().scrapeJobs(),
+    },
+    {
+        name: 'Workable',
+        scrapeJobs: () => new WorkableScraper().scrapeJobs(),
+    },
+    {
+        name: 'SmartRecruiters',
+        scrapeJobs: () => new SmartRecruitersScraper().scrapeJobs(),
     },
     {
         name: 'BuiltIn',
@@ -202,6 +254,10 @@ const SCRAPER_COMPONENTS = [
     {
         name: 'TechJobsForGood',
         scrapeJobs: () => new TechJobsForGoodScraper().scrapeJobs(),
+    },
+    {
+        name: 'Trellis',
+        scrapeJobs: () => new TrellisScraper().scrapeJobs(),
     },
     {
         name: 'EthicalJobs',
@@ -435,44 +491,77 @@ const SCRAPER_COMPONENTS = [
         name: 'TheMuse',
         scrapeJobs: () => new TheMuseScraper().scrapeJobs(),
     },
+    {
+        name: 'GeneralistIndeedRSS',
+        scrapeJobs: () => new GeneralistIndeedRssScraper().scrapeJobs(),
+    },
+    {
+        name: 'GeneralistCraigslistRSS',
+        scrapeJobs: () => new GeneralistCraigslistRssScraper().scrapeJobs(),
+    },
+    {
+        name: 'USAJobs',
+        scrapeJobs: () => new UsaJobsScraper().scrapeJobs(),
+    },
+    {
+        name: 'Adzuna',
+        scrapeJobs: () => new AdzunaScraper().scrapeJobs(),
+    },
+    {
+        name: 'Jooble',
+        scrapeJobs: () => new JoobleScraper().scrapeJobs(),
+    },
+    {
+        name: 'Reed',
+        scrapeJobs: () => new ReedScraper().scrapeJobs(),
+    },
 ];
-async function loadComponentJobs(component) {
-    if (!shouldScrapeInCurrentEnv()) {
-        const cachedJobs = await readAnyCache(component.name);
-        if (cachedJobs) {
-            console.log(`Scraping disabled for current environment. Loaded ${cachedJobs.length} cached jobs for ${component.name}`);
-            return cachedJobs;
-        }
-        console.warn(`Scraping disabled for current environment and no cache found for ${component.name}. Returning 0 jobs.`);
-        return [];
-    }
-    const cachedJobs = await readFreshCache(component.name);
-    if (cachedJobs) {
-        console.log(`Loaded ${cachedJobs.length} jobs from cache for ${component.name}`);
-        return cachedJobs;
-    }
-    const scrapedJobs = await component.scrapeJobs();
-    if (scrapedJobs.length === 0) {
-        console.warn(`Scraper for ${component.name} returned 0 jobs.`);
-        const staleCache = await readAnyCache(component.name);
-        if (staleCache) {
-            console.warn(`Using stale cache for ${component.name} because fresh scrape returned 0 jobs (${staleCache.length} jobs)`);
-            return staleCache;
-        }
-        return [];
-    }
-    await writeCache(component.name, scrapedJobs);
-    console.log(`Scraped ${scrapedJobs.length} jobs from ${component.name} and updated cache`);
-    return scrapedJobs;
-}
 export async function scrapeJobsMain() {
     const jobs = [];
     console.log('Starting job scraping...');
     logScraperEnvDiagnostics();
     await ensureCacheDir();
+    const requestedUpdates = await readCachesNeedUpdatingRequests();
+    const { refreshTargets, unknownTargets } = resolveCacheRefreshTargets(requestedUpdates, SCRAPER_COMPONENTS);
+    const refreshedTargets = new Set();
+    const scrapingEnabled = shouldScrapeInCurrentEnv();
+    if (refreshTargets.size > 0) {
+        console.log(`Force-refresh requested for ${refreshTargets.size} cache(s): ${Array.from(refreshTargets).join(', ')}`);
+    }
+    if (unknownTargets.length > 0) {
+        console.warn(`Ignoring unknown entries in cachesNeedUpdating.json: ${unknownTargets.join(', ')}`);
+    }
     for (const component of SCRAPER_COMPONENTS) {
-        const componentJobs = await loadComponentJobs(component);
-        jobs.push(...componentJobs);
+        const shouldForceRefresh = refreshTargets.has(component.name);
+        const startedAtMs = Date.now();
+        console.log(`[Scraper] Enter ${component.name}`);
+        try {
+            const { jobs: componentJobs, refreshedFromSource } = await loadComponentJobs(component, {
+                scrapingEnabled,
+                forceRefreshFromSource: shouldForceRefresh,
+            });
+            if (shouldForceRefresh && refreshedFromSource) {
+                refreshedTargets.add(component.name);
+            }
+            for (const componentJob of componentJobs) {
+                jobs.push(componentJob);
+            }
+        }
+        finally {
+            const durationMs = Date.now() - startedAtMs;
+            console.log(`[Scraper] Exit ${component.name} (${durationMs}ms)`);
+        }
+    }
+    if (requestedUpdates.length > 0) {
+        const pendingRefreshes = Array.from(refreshTargets).filter((name) => !refreshedTargets.has(name));
+        const remaining = Array.from(new Set([...pendingRefreshes, ...unknownTargets]));
+        await writeCachesNeedUpdatingRequests(remaining);
+        if (remaining.length === 0) {
+            console.log('All requested cache refreshes completed. Cleared cachesNeedUpdating.json.');
+        }
+        else {
+            console.warn(`Some requested cache refreshes were not completed. Remaining in cachesNeedUpdating.json: ${remaining.join(', ')}`);
+        }
     }
     const dedupedJobs = [];
     const seenSourceUrls = new Set();
@@ -492,6 +581,7 @@ export async function scrapeJobsMain() {
     if (removedDuplicates > 0) {
         console.log(`Removed ${removedDuplicates} duplicate jobs by source_url`);
     }
+    logScrapeQualityFlags(dedupedJobs);
     if (shouldRunBackgroundGeocodeInCurrentEnv()) {
         startBackgroundGeocodeJobs(dedupedJobs);
     }
@@ -566,6 +656,12 @@ export async function scrapeJobsMain() {
         `impact ${impactEmployerCount}/${totalEmployers} (${toPercent(impactEmployerCount)}%)`,
         `qualityOfLife ${qualityOfLifeEmployerCount}/${totalEmployers} (${toPercent(qualityOfLifeEmployerCount)}%)`,
     ].join(' '));
+    if (shouldRunBackgroundAiInCurrentEnv()) {
+        startBackgroundAiEnrichmentJobs(dedupedJobs);
+    }
+    else {
+        console.log('[BackgroundAI] Skipped startup AI enrichment in current environment.');
+    }
     const uniqueEmployers = new Set();
     for (const job of dedupedJobs) {
         const normalizedEmployer = String(job.company_name ?? '').trim().toLowerCase();

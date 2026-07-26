@@ -1,6 +1,7 @@
 import type { ScrapedJob } from './ScrapedJob.js';
 import { normalizeJobsWithCoordinates, type NormalizedPortalJob } from './PortalIngestionUtils.js';
 import { collectPaginatedHtmlJobs, stripHtmlTags } from './PaginatedHtmlScrapeUtils.js';
+import { deriveDescriptionFromContext } from './ScrapeDescriptionUtils.js';
 
 const JMIR_CAREERS_BASE_URL = 'https://careers.jmir.org/jobs/';
 const MAX_JMIR_CAREERS_PAGES = 500;
@@ -46,6 +47,7 @@ function parseJmirCareersJobs(html: string): NormalizedPortalJob[] {
     const context = html.slice(Math.max(0, from - 350), from + 1600);
     const companyMatch = context.match(/(?:company|employer)\s*<\/span>\s*<span[^>]*>\s*([^<]{2,160})\s*</i);
     const locationMatch = context.match(/(?:location)\s*<\/span>\s*<span[^>]*>\s*([^<]{2,160})\s*</i);
+    const description = deriveDescriptionFromContext(context, title);
 
     jobs.push({
       title,
@@ -54,7 +56,7 @@ function parseJmirCareersJobs(html: string): NormalizedPortalJob[] {
       remote: /\bremote\b|\bhybrid\b|work from home/i.test(context) ? 'Remote' : 'Unknown',
       type: 'Unknown',
       sourceUrl,
-      description: '',
+      description,
       tags: ['Medical', 'Healthcare', 'Digital Health'],
     });
   }

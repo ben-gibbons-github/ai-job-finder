@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import './App.css'
 import JobTile from './JobTile'
 import Pagination from './Pagination'
@@ -12,7 +12,38 @@ import GlobalAIButton from './GlobalAIButton'
 import { type JobDistributionMeta } from './JobDistributionGraph'
 import SearchLoadingBar from './SearchLoadingBar'
 import InsightsHoverPopovers from './InsightsHoverPopovers'
+import DailyScoreHud from './DailyScoreHud'
 import { socket } from './socket'
+import {
+  loadAddedJobs,
+  saveAddedJobs,
+  loadAllUserNotes,
+  loadUserNotesDailyActivity,
+  loadJobsViewedDailyActivity,
+  loadCommentsWrittenDailyActivity,
+  loadUserCreatedJobsDailyActivity,
+  loadDailyScoreBreakdownByDay,
+  loadClientSearchSettings,
+  exportAllLocalDataAsXml,
+  importAllLocalDataFromXml,
+  saveClientSearchSettings,
+  saveUserNote,
+  deleteUserNote,
+  saveCompanyNote,
+  deleteCompanyNote,
+  incrementUserNotesAddedToday,
+  incrementJobsViewedToday,
+  incrementCommentsWrittenToday,
+  incrementUserCreatedJobsToday,
+  loadCompanyColorTagsByCompany,
+  type AddedJobDraft,
+  type AddedLocalJob,
+  type CompanyTagColor,
+  type DailyScoreBreakdownByDay,
+  type UserJobNote,
+  type UserRatingMode,
+  saveCompanyColorTags,
+} from './ClientSaveLoad'
 
 type SearchCommand = 'AIAuditAllJobsInThisSearch'
 
@@ -20,19 +51,54 @@ interface ClientSearchPayload {
   query: string
   resumeText: string
   locationText: string
+  includeRemoteJobs: boolean
+  userRatingMode: UserRatingMode
+  userRatings?: {
+    jobRatingsByUrl: Record<string, number>
+    companyRatingsByName: Record<string, number>
+  }
+  userRatingFilter?: {
+    ratedJobUrls: string[]
+    ratedCompanies: string[]
+  }
   start: number
   end: number
   scoreWeights: ScoreWeights
   hiddenJobUrls: string[]
   hiddenCompanies: string[]
+  addedJobs?: Array<{
+    name: string
+    company_name: string
+    location: string
+    remote: string
+    type: string
+    description: string
+    source_url: string
+    posted: string
+  }>
   command?: SearchCommand
 }
 
 const HIDDEN_JOBS_CACHE_KEY = 'hiddenJobsByUrl'
 const HIDDEN_COMPANIES_CACHE_KEY = 'hiddenCompaniesByName'
+const READ_BONUS_AWARDED_JOBS_CACHE_KEY = 'readBonusAwardedJobsByUrl_v1'
 
 function normalizeCompanyName(companyName?: string): string {
   return String(companyName ?? '').trim().toLowerCase()
+}
+
+function getLocalDateKey(date = new Date()): string {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+function hasNoteContent(note?: UserJobNote): boolean {
+  if (!note) {
+    return false
+  }
+  return note.userScore !== null || String(note.notes ?? '').trim().length > 0
 }
 
 function readStringArrayCache(cacheKey: string): string[] {
@@ -65,11 +131,13 @@ function writeStringArrayCache(cacheKey: string, entries: string[]): void {
   window.localStorage.setItem(cacheKey, JSON.stringify(entries))
 }
 
+const savedSettings = loadClientSearchSettings()
+
 function App() {
-  const [resumeText, setResumeText] = useState('')
-  const [uploadedResumeName, setUploadedResumeName] = useState('')
-  const [locationText, setLocationText] = useState('')
-  const [query, setQuery] = useState('')
+  const [resumeText, setResumeText] = useState(savedSettings.resumeText)
+  const [uploadedResumeName, setUploadedResumeName] = useState(savedSettings.uploadedResumeName)
+  const [locationText, setLocationText] = useState(savedSettings.locationText)
+  const [query, setQuery] = useState(savedSettings.query)
   const [jobs, setJobs] = useState<any[]>([])
   const [totalItems, setTotalItems] = useState(0)
   const [searchMeta, setSearchMeta] = useState<JobDistributionMeta | null>(null)
@@ -77,19 +145,30 @@ function App() {
   const [openAiCorpusSignal, setOpenAiCorpusSignal] = useState(0)
   const [searchStart, setSearchStart] = useState(0)
   const [searchEnd, setSearchEnd] = useState(100)
-  const [scoreWeights, setScoreWeights] = useState<ScoreWeights>({
-    resume: 1,
-    impact: 1,
-    location: 1,
-    fresh: 1,
-    audit: 1,
-    qualityOfLife: 1,
-  })
+  const [scoreWeights, setScoreWeights] = useState<ScoreWeights>(savedSettings.scoreWeights)
   const [auditResults, setAuditResults] = useState<Record<string, { auditScore: number; auditText: string; error?: string }>>({})
   const [impactResults, setImpactResults] = useState<Record<string, { ai_impact_score: number; ai_impact_summary: string; error?: string }>>({})
   const [qualityOfLifeResults, setQualityOfLifeResults] = useState<Record<string, { employeeQualityOfLifeScore: number; employeeQualityOfLifeSummary: string; error?: string }>>({})
   const [hiddenJobUrls, setHiddenJobUrls] = useState<string[]>(() => readStringArrayCache(HIDDEN_JOBS_CACHE_KEY))
   const [hiddenCompanies, setHiddenCompanies] = useState<string[]>(() => readStringArrayCache(HIDDEN_COMPANIES_CACHE_KEY))
+  const [readBonusAwardedJobUrls, setReadBonusAwardedJobUrls] = useState<string[]>(() => readStringArrayCache(READ_BONUS_AWARDED_JOBS_CACHE_KEY))
+  const [userNotesByJob, setUserNotesByJob] = useState<Record<string, UserJobNote>>(() => loadAllUserNotes().perJob)
+  const [userNotesByCompany, setUserNotesByCompany] = useState<Record<string, UserJobNote>>(() => loadAllUserNotes().perCompany)
+  const [companyColorTagsByCompany, setCompanyColorTagsByCompany] = useState<Record<string, CompanyTagColor[]>>(() => loadCompanyColorTagsByCompany())
+  const [addedJobs, setAddedJobs] = useState<AddedLocalJob[]>(() => loadAddedJobs())
+  const [dailyNoteAddsByDay, setDailyNoteAddsByDay] = useState<Record<string, number>>(() => loadUserNotesDailyActivity())
+  const [jobsViewedByDay, setJobsViewedByDay] = useState<Record<string, number>>(() => loadJobsViewedDailyActivity())
+  const [commentsWrittenByDay, setCommentsWrittenByDay] = useState<Record<string, number>>(() => loadCommentsWrittenDailyActivity())
+  const [userCreatedJobsByDay, setUserCreatedJobsByDay] = useState<Record<string, number>>(() => loadUserCreatedJobsDailyActivity())
+  const [dailyScoreBreakdownByDay, setDailyScoreBreakdownByDay] = useState<DailyScoreBreakdownByDay>(() => loadDailyScoreBreakdownByDay())
+  const [userRatingMode, setUserRatingMode] = useState<UserRatingMode>(savedSettings.userRatingMode)
+  const [includeRemoteJobs, setIncludeRemoteJobs] = useState(savedSettings.includeRemoteJobs)
+  const [, setClockTick] = useState(0)
+  const [isResumeLoading, setIsResumeLoading] = useState(false)
+  const hasSentInitialSearchRef = useRef(false)
+  const initialSearchTimerRef = useRef<number | null>(null)
+  const lastAutoSearchSignatureRef = useRef<string | null>(null)
+  const hasSearchResultsRef = useRef(false)
   const selectedResumeIds: string[] = []
   const resumeCatalogById = {}
 
@@ -108,10 +187,15 @@ function App() {
   }
 
   useEffect(() => {
-    const onSearchResults = (response: { results: any[]; total: number; meta?: JobDistributionMeta; error?: string }) => {
+    const onSearchResults = (response: { results: any[]; total: number; meta?: JobDistributionMeta; error?: string; isInitialResponse?: boolean }) => {
+      if (response?.isInitialResponse && hasSearchResultsRef.current) {
+        return
+      }
+
       setIsSearching(false)
       if (response?.results) {
         console.log('Received search results:', response.results)
+        hasSearchResultsRef.current = response.results.length > 0
         setJobs(response.results)
         setTotalItems(typeof response.total === 'number' ? response.total : response.results.length)
         setSearchMeta(response.meta ?? null)
@@ -177,47 +261,351 @@ function App() {
   }, [hiddenCompanies])
 
   useEffect(() => {
-    const payload: ClientSearchPayload = {
+    writeStringArrayCache(READ_BONUS_AWARDED_JOBS_CACHE_KEY, readBonusAwardedJobUrls)
+  }, [readBonusAwardedJobUrls])
+
+  useEffect(() => {
+    saveClientSearchSettings({
       query,
-      resumeText,
       locationText,
-      start: searchStart,
-      end: searchEnd,
+      resumeText,
+      uploadedResumeName,
+      userRatingMode,
+      includeRemoteJobs,
       scoreWeights,
-      hiddenJobUrls,
-      hiddenCompanies,
+    })
+  }, [query, locationText, resumeText, uploadedResumeName, userRatingMode, includeRemoteJobs, scoreWeights])
+
+  const userRatingsPayload = useMemo(() => {
+    const jobRatingsByUrl = Object.fromEntries(
+      Object.entries(userNotesByJob)
+        .map(([sourceUrl, note]) => {
+          const normalizedSourceUrl = String(sourceUrl ?? '').trim()
+          const score = Number(note?.userScore)
+          return [normalizedSourceUrl, Number.isFinite(score) ? score : NaN] as const
+        })
+        .filter(([sourceUrl, score]) => sourceUrl.length > 0 && Number.isFinite(score)),
+    )
+
+    const companyRatingsByName = Object.fromEntries(
+      Object.entries(userNotesByCompany)
+        .map(([companyName, note]) => {
+          const normalizedCompanyName = normalizeCompanyName(companyName)
+          const score = Number(note?.userScore)
+          return [normalizedCompanyName, Number.isFinite(score) ? score : NaN] as const
+        })
+        .filter(([companyName, score]) => companyName.length > 0 && Number.isFinite(score)),
+    )
+
+    return {
+      jobRatingsByUrl,
+      companyRatingsByName,
+    }
+  }, [userNotesByCompany, userNotesByJob])
+
+  const ratedJobUrls = useMemo(
+    () => Object.keys(userRatingsPayload.jobRatingsByUrl),
+    [userRatingsPayload],
+  )
+
+  const ratedCompanies = useMemo(
+    () => Object.keys(userRatingsPayload.companyRatingsByName),
+    [userRatingsPayload],
+  )
+
+  const userRatingFilter = useMemo(() => {
+    if (userRatingMode !== 'ratedOnly') {
+      return null
     }
 
-    setIsSearching(true)
-    socket.emit('search', payload)
-  }, [query, resumeText, locationText, searchStart, searchEnd, scoreWeights, hiddenJobUrls, hiddenCompanies])
+    return {
+      ratedJobUrls,
+      ratedCompanies,
+    }
+  }, [userRatingMode, ratedJobUrls, ratedCompanies])
+
+  const addedJobsSearchPayload = useMemo(
+    () =>
+      addedJobs.map((job) => ({
+        name: job.name,
+        company_name: job.companyName,
+        location: job.location,
+        remote: job.remote,
+        type: job.type,
+        description: job.description,
+        source_url: job.sourceUrl,
+        posted: job.posted,
+        userScore: job.userScore,
+      })),
+    [addedJobs],
+  )
+
+  const addedJobSourceUrls = useMemo(
+    () => new Set(addedJobs.map((job) => String(job.sourceUrl ?? '').trim()).filter((value) => value.length > 0)),
+    [addedJobs],
+  )
+
+  const logSearchLaunch = (
+    launchType: 'search' | 'searchWithCommand',
+    payload: Pick<ClientSearchPayload, 'query' | 'locationText' | 'start' | 'end' | 'includeRemoteJobs' | 'userRatingMode'> & {
+      command?: SearchCommand
+      hiddenJobUrls?: string[]
+      hiddenCompanies?: string[]
+      addedJobs?: ClientSearchPayload['addedJobs']
+    },
+    reason: string,
+  ) => {
+    console.log('[client][search] launch', {
+      launchType,
+      reason,
+      query: payload.query,
+      queryLength: payload.query.trim().length,
+      locationText: payload.locationText,
+      start: payload.start,
+      end: payload.end,
+      includeRemoteJobs: payload.includeRemoteJobs,
+      userRatingMode: payload.userRatingMode,
+      hiddenJobCount: payload.hiddenJobUrls?.length ?? 0,
+      hiddenCompanyCount: payload.hiddenCompanies?.length ?? 0,
+      addedJobsCount: payload.addedJobs?.length ?? 0,
+      command: payload.command,
+      launchedAt: new Date().toISOString(),
+    })
+  }
+
+  useEffect(() => {
+    const emitSearch = (reason: string) => {
+      const hasAttachedResume = uploadedResumeName.trim().length > 0 || resumeText.trim().length > 0
+      if ((isResumeLoading && !resumeText.trim()) || (hasAttachedResume && !resumeText.trim())) {
+        return
+      }
+
+      const persistedSettings = !hasSentInitialSearchRef.current && !resumeText.trim()
+        ? loadClientSearchSettings()
+        : null
+      const effectiveResumeText = persistedSettings?.resumeText?.trim()
+        ? persistedSettings.resumeText
+        : resumeText
+
+      const payload: ClientSearchPayload = {
+        query,
+        resumeText: effectiveResumeText,
+        locationText,
+        includeRemoteJobs,
+        userRatingMode,
+        ...(userRatingMode !== 'none' ? { userRatings: userRatingsPayload } : {}),
+        ...(userRatingFilter ? { userRatingFilter } : {}),
+        start: searchStart,
+        end: searchEnd,
+        scoreWeights,
+        hiddenJobUrls,
+        hiddenCompanies,
+        addedJobs: addedJobsSearchPayload,
+      }
+
+      const signature = JSON.stringify(payload)
+      if (lastAutoSearchSignatureRef.current === signature) {
+        return
+      }
+      lastAutoSearchSignatureRef.current = signature
+
+      setIsSearching(true)
+      logSearchLaunch('search', payload, reason)
+      socket.emit('search', payload)
+    }
+
+    if (!hasSentInitialSearchRef.current) {
+      if (initialSearchTimerRef.current !== null) {
+        window.clearTimeout(initialSearchTimerRef.current)
+      }
+
+      // Coalesce startup state hydration updates into one initial search.
+      initialSearchTimerRef.current = window.setTimeout(() => {
+        hasSentInitialSearchRef.current = true
+        initialSearchTimerRef.current = null
+        emitSearch('initialHydration')
+      }, 250)
+
+      return () => {
+        if (initialSearchTimerRef.current !== null) {
+          window.clearTimeout(initialSearchTimerRef.current)
+          initialSearchTimerRef.current = null
+        }
+      }
+    }
+
+    emitSearch('stateChange')
+  }, [query, resumeText, uploadedResumeName, isResumeLoading, locationText, includeRemoteJobs, userRatingMode, userRatingsPayload, userRatingFilter, searchStart, searchEnd, scoreWeights, hiddenJobUrls, hiddenCompanies, addedJobsSearchPayload])
 
   const handleRunAuditAllInSearch = () => {
     const payload: ClientSearchPayload = {
       query,
       resumeText,
       locationText,
+      includeRemoteJobs,
+      userRatingMode,
+      ...(userRatingMode !== 'none' ? { userRatings: userRatingsPayload } : {}),
+      ...(userRatingFilter ? { userRatingFilter } : {}),
       start: searchStart,
       end: searchEnd,
       scoreWeights,
       hiddenJobUrls,
       hiddenCompanies,
+      addedJobs: addedJobsSearchPayload,
       command: 'AIAuditAllJobsInThisSearch',
     }
 
+    logSearchLaunch('searchWithCommand', payload, 'auditAllInSearch')
     socket.emit('search', payload)
+  }
+
+  const handleExportAllData = () => {
+    const xml = exportAllLocalDataAsXml()
+    const blob = new Blob([xml], { type: 'application/xml;charset=utf-8' })
+    const objectUrl = URL.createObjectURL(blob)
+
+    const anchor = document.createElement('a')
+    anchor.href = objectUrl
+    anchor.download = `job_finder_backup_${getLocalDateKey()}.xml`
+    anchor.click()
+
+    URL.revokeObjectURL(objectUrl)
+  }
+
+  const handleImportAllData = async (xmlText: string) => {
+    const result = importAllLocalDataFromXml(xmlText)
+    if (!result.ok) {
+      window.alert(result.message)
+      return
+    }
+
+    const importedSettings = loadClientSearchSettings()
+    const importedNotes = loadAllUserNotes()
+
+    setQuery(importedSettings.query)
+    setLocationText(importedSettings.locationText)
+    setResumeText(importedSettings.resumeText)
+    setUploadedResumeName(importedSettings.uploadedResumeName)
+    setUserRatingMode(importedSettings.userRatingMode)
+    setIncludeRemoteJobs(importedSettings.includeRemoteJobs)
+    setScoreWeights(importedSettings.scoreWeights)
+
+    setUserNotesByJob(importedNotes.perJob)
+    setUserNotesByCompany(importedNotes.perCompany)
+    setCompanyColorTagsByCompany(loadCompanyColorTagsByCompany())
+    setAddedJobs(loadAddedJobs())
+    setDailyNoteAddsByDay(loadUserNotesDailyActivity())
+    setJobsViewedByDay(loadJobsViewedDailyActivity())
+    setCommentsWrittenByDay(loadCommentsWrittenDailyActivity())
+    setUserCreatedJobsByDay(loadUserCreatedJobsDailyActivity())
+    setDailyScoreBreakdownByDay(loadDailyScoreBreakdownByDay())
+
+    window.alert(result.message)
   }
 
   const onResumeUpload = async (file: File) => {
     setUploadedResumeName(file.name)
+    setIsResumeLoading(true)
 
     try {
       const extractedText = await extractTextFromFile(file)
+      if (!extractedText.trim()) {
+        setUploadedResumeName('')
+        setResumeText('')
+        return
+      }
       setResumeText(extractedText)
     } catch (error) {
       console.error('Failed to parse resume file:', error)
+      setUploadedResumeName('')
       setResumeText('')
+    } finally {
+      setIsResumeLoading(false)
     }
+  }
+
+  const handleAddJob = (draft: AddedJobDraft) => {
+    const normalizedName = draft.name.trim()
+    const normalizedCompany = draft.companyName.trim()
+    if (!normalizedName || !normalizedCompany) {
+      return
+    }
+
+    const normalizedLocation = draft.location.trim() || 'Unknown'
+    const normalizedRemote = draft.remote.trim() || 'Unknown'
+    const normalizedType = draft.type.trim() || 'Unknown'
+    const normalizedDescription = draft.description.trim()
+    const generatedId = `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`
+    const normalizedSourceUrl = draft.sourceUrl.trim() || `local://added-job/${generatedId}`
+    const userScore = Number.isFinite(Number(draft.userScore))
+      ? Math.max(0, Math.min(100, Math.round(Number(draft.userScore))))
+      : null
+
+    const nextJob: AddedLocalJob = {
+      id: generatedId,
+      name: normalizedName,
+      companyName: normalizedCompany,
+      location: normalizedLocation,
+      remote: normalizedRemote,
+      type: normalizedType,
+      description: normalizedDescription,
+      sourceUrl: normalizedSourceUrl,
+      posted: new Date().toISOString(),
+      userScore,
+    }
+
+    const nextAddedJobs = saveAddedJobs([...addedJobs, nextJob])
+    setAddedJobs(nextAddedJobs)
+    setUserCreatedJobsByDay(incrementUserCreatedJobsToday(1))
+    awardDailyScore(100)
+
+    if (userScore !== null) {
+      const updatedNotes = saveUserNote(normalizedSourceUrl, { notes: '', userScore })
+      setUserNotesByJob(updatedNotes.perJob)
+      setUserNotesByCompany(updatedNotes.perCompany)
+    }
+  }
+
+  const handleSaveUserCreatedJobDetails = (
+    sourceUrl: string,
+    updates: {
+      name: string
+      companyName: string
+      location: string
+      remote: string
+      type: string
+      description: string
+    },
+  ) => {
+    const normalizedSourceUrl = String(sourceUrl ?? '').trim()
+    if (!normalizedSourceUrl) {
+      return
+    }
+
+    let didUpdate = false
+    const next = addedJobs.map((job) => {
+      if (String(job.sourceUrl ?? '').trim() !== normalizedSourceUrl) {
+        return job
+      }
+
+      didUpdate = true
+      return {
+        ...job,
+        name: updates.name.trim() || job.name,
+        companyName: updates.companyName.trim() || job.companyName,
+        location: updates.location.trim() || 'Unknown',
+        remote: updates.remote.trim() || 'Unknown',
+        type: updates.type.trim() || 'Unknown',
+        description: updates.description.trim(),
+      }
+    })
+
+    if (!didUpdate) {
+      return
+    }
+
+    const normalized = saveAddedJobs(next)
+    setAddedJobs(normalized)
   }
 
   const handleAuditRequest = (
@@ -245,7 +633,93 @@ function App() {
     setHiddenCompanies((prev) => (prev.includes(normalized) ? prev : [...prev, normalized]))
   }
 
-  const visibleJobs = jobs.filter((wrapper) => {
+  const awardDailyScore = (points: number) => {
+    if (!Number.isFinite(points) || points <= 0) {
+      return
+    }
+
+    setDailyNoteAddsByDay(incrementUserNotesAddedToday(points))
+    setDailyScoreBreakdownByDay(loadDailyScoreBreakdownByDay())
+  }
+
+  const handleAwardReadCompletion = (sourceUrl?: string) => {
+    const normalizedSourceUrl = String(sourceUrl ?? '').trim()
+    if (!normalizedSourceUrl) {
+      return
+    }
+
+    setJobsViewedByDay(incrementJobsViewedToday(normalizedSourceUrl))
+    setDailyScoreBreakdownByDay(loadDailyScoreBreakdownByDay())
+
+    if (readBonusAwardedJobUrls.includes(normalizedSourceUrl)) {
+      return
+    }
+
+    setReadBonusAwardedJobUrls((prev) => (
+      prev.includes(normalizedSourceUrl) ? prev : [...prev, normalizedSourceUrl]
+    ))
+    awardDailyScore(10)
+  }
+
+  const trackCommentWritten = () => {
+    setCommentsWrittenByDay(incrementCommentsWrittenToday(1))
+    setDailyScoreBreakdownByDay(loadDailyScoreBreakdownByDay())
+  }
+
+  const handleSaveUserNote = (sourceUrl: string, note: UserJobNote) => {
+    const hadExistingContent = hasNoteContent(userNotesByJob[sourceUrl])
+    const hasNextContent = hasNoteContent(note)
+    const previousText = String(userNotesByJob[sourceUrl]?.notes ?? '').trim()
+    const nextText = String(note.notes ?? '').trim()
+    const updated = saveUserNote(sourceUrl, note)
+    setUserNotesByJob(updated.perJob)
+    setUserNotesByCompany(updated.perCompany)
+
+    if (nextText.length > 0 && nextText !== previousText) {
+      trackCommentWritten()
+    }
+
+    if (!hadExistingContent && hasNextContent) {
+      awardDailyScore(50)
+    }
+  }
+
+  const handleClearUserNote = (sourceUrl: string) => {
+    const updated = deleteUserNote(sourceUrl)
+    setUserNotesByJob(updated.perJob)
+    setUserNotesByCompany(updated.perCompany)
+  }
+
+  const handleSaveCompanyNote = (companyName: string, note: UserJobNote) => {
+    const hadExistingContent = hasNoteContent(userNotesByCompany[normalizeCompanyName(companyName)])
+    const hasNextContent = hasNoteContent(note)
+    const previousText = String(userNotesByCompany[normalizeCompanyName(companyName)]?.notes ?? '').trim()
+    const nextText = String(note.notes ?? '').trim()
+    const updated = saveCompanyNote(companyName, note)
+    setUserNotesByJob(updated.perJob)
+    setUserNotesByCompany(updated.perCompany)
+
+    if (nextText.length > 0 && nextText !== previousText) {
+      trackCommentWritten()
+    }
+
+    if (!hadExistingContent && hasNextContent) {
+      awardDailyScore(50)
+    }
+  }
+
+  const handleClearCompanyNote = (companyName: string) => {
+    const updated = deleteCompanyNote(companyName)
+    setUserNotesByJob(updated.perJob)
+    setUserNotesByCompany(updated.perCompany)
+  }
+
+  const handleSetCompanyColorTags = (companyName: string, colors: CompanyTagColor[]) => {
+    const updated = saveCompanyColorTags(companyName, colors)
+    setCompanyColorTagsByCompany(updated)
+  }
+
+  const visibleJobsFiltered = jobs.filter((wrapper) => {
     const jobUrl = String(wrapper?.job?.source_url ?? '').trim()
     const companyName = normalizeCompanyName(wrapper?.job?.company_name)
     if (jobUrl && hiddenJobUrls.includes(jobUrl)) {
@@ -257,18 +731,75 @@ function App() {
     return true
   })
 
+  const visibleJobs = visibleJobsFiltered
+
   const hasVisibleResults = visibleJobs.length > 0
   const hasTextQuery = query.trim().length > 0
 
+  const jobsWithUserNotesCount = visibleJobs.reduce((count, wrapper) => {
+    const jobUrl = String(wrapper?.job?.source_url ?? '').trim()
+    const companyName = normalizeCompanyName(wrapper?.job?.company_name)
+    const hasJobNote = jobUrl ? hasNoteContent(userNotesByJob[jobUrl]) : false
+    const hasCompanyNote = companyName ? hasNoteContent(userNotesByCompany[companyName]) : false
+    return hasJobNote || hasCompanyNote ? count + 1 : count
+  }, 0)
+
+  const userNotesCoveragePercent = visibleJobs.length > 0
+    ? Math.round((jobsWithUserNotesCount / visibleJobs.length) * 100)
+    : 0
+
+  const userScoreValues = visibleJobs
+    .map((wrapper) => {
+      const jobUrl = String(wrapper?.job?.source_url ?? '').trim()
+      const companyName = normalizeCompanyName(wrapper?.job?.company_name)
+      const jobScore = jobUrl ? userNotesByJob[jobUrl]?.userScore : null
+      if (typeof jobScore === 'number' && Number.isFinite(jobScore)) {
+        return jobScore
+      }
+
+      const companyScore = companyName ? userNotesByCompany[companyName]?.userScore : null
+      if (typeof companyScore === 'number' && Number.isFinite(companyScore)) {
+        return companyScore
+      }
+
+      return null
+    })
+    .filter((score): score is number => typeof score === 'number' && Number.isFinite(score))
+
+  const todayScorePoints = dailyNoteAddsByDay[getLocalDateKey()] ?? 0
+  const todayJobsViewed = jobsViewedByDay[getLocalDateKey()] ?? 0
+  const todayCommentsWritten = commentsWrittenByDay[getLocalDateKey()] ?? 0
+  const todayUserCreatedJobs = userCreatedJobsByDay[getLocalDateKey()] ?? 0
+  useEffect(() => {
+    const timerId = window.setInterval(() => {
+      setClockTick((value) => value + 1)
+    }, 60_000)
+
+    return () => window.clearInterval(timerId)
+  }, [])
+
   return (
     <main className="app">
-      <h1 className="app-title">AI Job Search</h1>
+      <h1 className={`app-title${isSearching ? ' app-title--searching' : ''}`}>AI Job Search</h1>
       <InsightsHoverPopovers
         searchMeta={searchMeta}
         scoreWeights={scoreWeights}
         onScoreWeightsChange={setScoreWeights}
         onOpenAiCorpus={() => setOpenAiCorpusSignal((value) => value + 1)}
         onRunAuditAllInSearch={handleRunAuditAllInSearch}
+        onAddJob={handleAddJob}
+        onExportAllData={handleExportAllData}
+        onImportAllData={handleImportAllData}
+        userRatingMode={userRatingMode}
+        onUserRatingModeChange={setUserRatingMode}
+        includeRemoteJobs={includeRemoteJobs}
+        onIncludeRemoteJobsChange={setIncludeRemoteJobs}
+        visibleJobsCount={visibleJobs.length}
+        jobsWithUserNotesCount={jobsWithUserNotesCount}
+        userNotesCoveragePercent={userNotesCoveragePercent}
+        userScoreValues={userScoreValues}
+        dailyNoteAddsByDay={dailyNoteAddsByDay}
+        dailyScoreBreakdownByDay={dailyScoreBreakdownByDay}
         isEnabled={hasVisibleResults}
         hasSearched={hasTextQuery}
       />
@@ -288,7 +819,7 @@ function App() {
         aria-label="Primary search controls"
       >
         <div className="compact-search-bar__text">
-          <SearchTextEntry onSearch={handleTextSearch} resultCount={totalItems} highlight={!hasTextQuery} />
+          <SearchTextEntry onSearch={handleTextSearch} resultCount={totalItems} highlight={!hasTextQuery} initialQuery={query} />
         </div>
 
         <div className={[
@@ -299,6 +830,7 @@ function App() {
           <LocationDropdown
             onSelectLocation={(location) => setLocationText(location.displayLabel)}
             placeholder={hasTextQuery ? 'Location' : 'Search first...'}
+            initialQuery={locationText}
           />
         </div>
 
@@ -329,6 +861,7 @@ function App() {
               <JobTile
                 key={wrapper.job?.name + wrapper.job?.location + wrapper.job?.company_name + wrapper.job?.source_url + resumeText + JSON.stringify(scoreWeights)}
                 wrapper={wrapper}
+                isUserCreatedJob={Boolean(wrapper.job?.source_url && addedJobSourceUrls.has(String(wrapper.job.source_url).trim()))}
                 resumeText={resumeText}
                 resumeDisplayName={uploadedResumeName}
                 selectedResumeIds={selectedResumeIds}
@@ -339,6 +872,17 @@ function App() {
                 qualityOfLifeResultOverride={wrapper.job?.source_url ? qualityOfLifeResults[wrapper.job.source_url] : undefined}
                 onHideJob={handleHideJob}
                 onHideCompany={handleHideCompany}
+                jobUserNote={wrapper.job?.source_url ? userNotesByJob[wrapper.job.source_url] : undefined}
+                companyUserNote={normalizeCompanyName(wrapper.job?.company_name) ? userNotesByCompany[normalizeCompanyName(wrapper.job?.company_name)] : undefined}
+                companyTagColors={normalizeCompanyName(wrapper.job?.company_name) ? companyColorTagsByCompany[normalizeCompanyName(wrapper.job?.company_name)] : undefined}
+                onSaveUserNote={wrapper.job?.source_url ? (note) => handleSaveUserNote(wrapper.job!.source_url!, note) : undefined}
+                onClearUserNote={wrapper.job?.source_url ? () => handleClearUserNote(wrapper.job!.source_url!) : undefined}
+                onSaveCompanyUserNote={normalizeCompanyName(wrapper.job?.company_name) ? (note) => handleSaveCompanyNote(wrapper.job!.company_name!, note) : undefined}
+                onClearCompanyUserNote={normalizeCompanyName(wrapper.job?.company_name) ? () => handleClearCompanyNote(wrapper.job!.company_name!) : undefined}
+                onSetCompanyTagColors={normalizeCompanyName(wrapper.job?.company_name) ? (colors) => handleSetCompanyColorTags(wrapper.job!.company_name!, colors) : undefined}
+                onAwardReadCompletion={wrapper.job?.source_url ? () => handleAwardReadCompletion(wrapper.job!.source_url) : undefined}
+                hasReadCompletionAwarded={Boolean(wrapper.job?.source_url && readBonusAwardedJobUrls.includes(wrapper.job.source_url))}
+                onSaveUserCreatedJobDetails={handleSaveUserCreatedJobDetails}
               />
             ))}
           </div>
@@ -351,6 +895,13 @@ function App() {
           />
         </>
       )}
+
+      <DailyScoreHud
+        scorePoints={todayScorePoints}
+        jobsViewedToday={todayJobsViewed}
+        commentsWrittenToday={todayCommentsWritten}
+        userCreatedJobsToday={todayUserCreatedJobs}
+      />
 
     </main>
   )

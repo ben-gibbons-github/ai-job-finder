@@ -29,6 +29,7 @@ async function persistCacheToDisk(): Promise<void> {
   const payload = JSON.stringify(serializeCache(), null, 2);
   await cacheHandler.save(payload);
   console.log("persistCacheToDisk::", cacheFilePath);
+  console.trace("persistCacheToDisk:: stack trace");
 }
 
 function queueCacheWrite(): Promise<void> {

@@ -1,4 +1,3 @@
-import { nameToLonLat } from '../utils/NameToLonLat.js';
 const FETCH_TIMEOUT_MS = 30_000;
 function toScrapedJob(source, job, lat, lon) {
     return {
@@ -29,16 +28,9 @@ export function parseCsvEnv(value) {
         .filter((x) => x.length > 0);
 }
 export async function normalizeJobsWithCoordinates(source, jobs) {
-    const locationPromises = new Map();
-    return Promise.all(jobs.map(async (job) => {
-        const location = (job.location || 'Remote').trim();
-        const key = location.toLowerCase();
-        if (!locationPromises.has(key)) {
-            locationPromises.set(key, nameToLonLat(location).catch(() => ({ lat: 0, lon: 0 })));
-        }
-        const { lat, lon } = await locationPromises.get(key);
-        return toScrapedJob(source, job, lat, lon);
-    }));
+    // Keep ingestion non-blocking: do not wait on network geocoding during scraping.
+    // Missing coordinates are backfilled later by background geocoding.
+    return jobs.map((job) => toScrapedJob(source, job, 0, 0));
 }
 export async function fetchJson(url) {
     const res = await fetch(url, {

@@ -6,6 +6,46 @@ import { fetchPortalFallbackJobs } from './TerraBoardFallback.js';
 const BUILTIN_JOBS_URL = 'https://www.builtin.com/jobs';
 const MAX_BUILTIN_PAGES = 50;
 
+function extractBuiltInCompanyName(obj: Record<string, unknown>, fallback = 'BuiltIn'): string {
+  const directCompany =
+    typeof obj.company === 'string'
+      ? obj.company
+      : typeof obj.companyName === 'string'
+        ? obj.companyName
+        : typeof obj.company_name === 'string'
+          ? obj.company_name
+          : '';
+  if (directCompany.trim()) {
+    return directCompany.trim();
+  }
+
+  const org = obj.hiringOrganization ?? obj.organization;
+  if (typeof org === 'string' && org.trim()) {
+    return org.trim();
+  }
+
+  if (org && typeof org === 'object') {
+    const orgObj = org as Record<string, unknown>;
+    const orgName =
+      typeof orgObj.name === 'string'
+        ? orgObj.name
+        : typeof orgObj.legalName === 'string'
+          ? orgObj.legalName
+          : typeof orgObj.alternateName === 'string'
+            ? orgObj.alternateName
+            : '';
+    if (orgName.trim()) {
+      return orgName.trim();
+    }
+  }
+
+  return fallback;
+}
+
+function isGenericBuiltInCompany(company: string): boolean {
+  return /^BuiltIn(?:\b|\s)/i.test(company.trim());
+}
+
 function collectBuiltInEntries(value: unknown): NormalizedPortalJob[] {
   if (Array.isArray(value)) {
     return value.flatMap((item) => collectBuiltInEntries(item));
@@ -28,7 +68,7 @@ function collectBuiltInEntries(value: unknown): NormalizedPortalJob[] {
   if (url.includes('builtin.com') && title) {
     entries.push({
       title: title.trim(),
-      company: 'BuiltIn',
+      company: extractBuiltInCompanyName(obj, 'BuiltIn'),
       location: 'Remote',
       remote: 'Unknown',
       type: 'Full-time',
@@ -85,7 +125,7 @@ async function fetchBuiltInPageJobs(): Promise<ScrapedJob[]> {
       }
 
       // BuiltIn frequently renders links directly in HTML without JSON-LD.
-      const urlPattern = /https:\/\/builtin\.com\/job\/[^"]+/gi;
+      const urlPattern = /https:\/\/builtin\.com\/job\/[^"<\s]+/gi;
       for (const match of html.matchAll(urlPattern)) {
         const sourceUrl = (match[0] || '').trim();
         if (!sourceUrl) {
@@ -98,6 +138,29 @@ async function fetchBuiltInPageJobs(): Promise<ScrapedJob[]> {
         pageRows.push({
           title: slugTitle,
           company: 'BuiltIn',
+          location: 'Remote',
+          remote: 'Unknown',
+          type: 'Full-time',
+          sourceUrl,
+          description: '',
+          tags: ['BuiltIn'],
+        });
+      }
+
+      const cardPattern =
+        /<a[^>]*data-id="company-title"[^>]*>\s*<span>([^<]+)<\/span>[\s\S]*?<a[^>]*data-id="job-card-title"[^>]*data-alias="([^"]+)"[^>]*>([^<]+)<\/a>/gi;
+      for (const match of html.matchAll(cardPattern)) {
+        const company = (match[1] || '').trim();
+        const alias = (match[2] || '').trim();
+        const title = (match[3] || '').trim();
+        if (!company || !alias) {
+          continue;
+        }
+
+        const sourceUrl = alias.startsWith('http') ? alias : `https://builtin.com${alias}`;
+        pageRows.push({
+          title: title || 'BuiltIn Job',
+          company,
           location: 'Remote',
           remote: 'Unknown',
           type: 'Full-time',
@@ -132,7 +195,22 @@ async function fetchBuiltInPageJobs(): Promise<ScrapedJob[]> {
 
     const dedup = new Map<string, NormalizedPortalJob>();
     for (const row of normalized) {
-      dedup.set(row.sourceUrl, row);
+      const existing = dedup.get(row.sourceUrl);
+      if (!existing) {
+        dedup.set(row.sourceUrl, row);
+        continue;
+      }
+
+      const mergedCompany =
+        isGenericBuiltInCompany(existing.company) && !isGenericBuiltInCompany(row.company)
+          ? row.company
+          : existing.company;
+
+      dedup.set(row.sourceUrl, {
+        ...existing,
+        ...row,
+        company: mergedCompany,
+      });
     }
     return normalizeJobsWithCoordinates('BuiltIn', Array.from(dedup.values()));
   } catch {

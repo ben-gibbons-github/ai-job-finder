@@ -1,6 +1,7 @@
 import path from 'node:path';
 import { promises as fs } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import { repairGenericCachedJobTitles } from './CacheJobTitleRepair.js';
 import { CacheHandler } from '../utils/CacheHandler.js';
 const CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const moduleDir = path.dirname(fileURLToPath(import.meta.url));
@@ -34,7 +35,11 @@ export async function readFreshCache(componentName) {
         if (!Array.isArray(parsed) || parsed.length === 0) {
             return null;
         }
-        return parsed;
+        const repaired = repairGenericCachedJobTitles(componentName, parsed);
+        if (repaired.correctedCount > 0) {
+            console.log(`[CacheRepair] ${componentName}: corrected ${repaired.correctedCount} generic cached job titles`);
+        }
+        return repaired.jobs;
     }
     catch {
         return null;
@@ -47,7 +52,11 @@ export async function readAnyCache(componentName) {
         if (!Array.isArray(parsed) || parsed.length === 0) {
             return null;
         }
-        return parsed;
+        const repaired = repairGenericCachedJobTitles(componentName, parsed);
+        if (repaired.correctedCount > 0) {
+            console.log(`[CacheRepair] ${componentName}: corrected ${repaired.correctedCount} generic cached job titles`);
+        }
+        return repaired.jobs;
     }
     catch {
         return null;

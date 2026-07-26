@@ -6,10 +6,11 @@ interface SearchTextEntryProps {
   className?: string;
   resultCount?: number;
   highlight?: boolean;
+  initialQuery?: string;
 }
 
-const SearchTextEntry: React.FC<SearchTextEntryProps> = ({ onSearch, className = '', resultCount = 0, highlight = false }) => {
-  const [searchQuery, setSearchQuery] = useState('');
+const SearchTextEntry: React.FC<SearchTextEntryProps> = ({ onSearch, className = '', resultCount = 0, highlight = false, initialQuery = '' }) => {
+  const [searchQuery, setSearchQuery] = useState(initialQuery);
   const [isSearchHovered, setIsSearchHovered] = useState(false);
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [isSuggestionsOpen, setIsSuggestionsOpen] = useState(false);
@@ -18,6 +19,12 @@ const SearchTextEntry: React.FC<SearchTextEntryProps> = ({ onSearch, className =
   const debounceTimerRef = React.useRef<number | null>(null);
   const requestIdRef = React.useRef(0);
   const skipNextSuggestionLookupRef = React.useRef(false);
+
+  React.useEffect(() => {
+    skipNextSuggestionLookupRef.current = true;
+    setSearchQuery(initialQuery);
+    setIsSuggestionsOpen(false);
+  }, [initialQuery]);
 
   React.useEffect(() => {
     if (debounceTimerRef.current !== null) {

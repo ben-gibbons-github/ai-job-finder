@@ -1,6 +1,7 @@
 import type { ScrapedJob } from './ScrapedJob.js';
 import { normalizeJobsWithCoordinates, type NormalizedPortalJob } from './PortalIngestionUtils.js';
 import { collectPaginatedHtmlJobs, stripHtmlTags } from './PaginatedHtmlScrapeUtils.js';
+import { deriveDescriptionFromContext } from './ScrapeDescriptionUtils.js';
 
 const FACS_SURGERY_CAREER_BASE_URL = 'https://surgeonjobs.facs.org/jobs/';
 const MAX_FACS_SURGERY_CAREER_PAGES = 500;
@@ -44,6 +45,7 @@ function parseFacsSurgeryJobs(html: string): NormalizedPortalJob[] {
 
     const from = match.index ?? 0;
     const context = html.slice(Math.max(0, from - 350), from + 1600);
+    const description = deriveDescriptionFromContext(context, title);
 
     jobs.push({
       title,
@@ -52,7 +54,7 @@ function parseFacsSurgeryJobs(html: string): NormalizedPortalJob[] {
       remote: /\bremote\b|\bhybrid\b|work from home/i.test(context) ? 'Remote' : 'Unknown',
       type: 'Unknown',
       sourceUrl,
-      description: '',
+      description,
       tags: ['Medical', 'Surgery', 'Healthcare'],
     });
   }

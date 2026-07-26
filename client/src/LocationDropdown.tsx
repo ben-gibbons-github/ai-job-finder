@@ -15,20 +15,28 @@ interface LocationDropdownProps {
   onSelectLocation: (location: LocationOption) => void;
   placeholder?: string;
   className?: string;
+  initialQuery?: string;
 }
 
 const LocationDropdown: React.FC<LocationDropdownProps> = ({
   onSelectLocation,
   placeholder = "Enter location...",
-  className = ""
+  className = "",
+  initialQuery = "",
 }) => {
-  const [query, setQuery] = useState('');
+  const [query, setQuery] = useState(initialQuery);
   const [options, setOptions] = useState<LocationOption[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
   const debounceTimerRef = useRef<number | null>(null);
   const requestIdRef = useRef(0);
   const skipNextSearchRef = useRef(false);
+
+  useEffect(() => {
+    skipNextSearchRef.current = true;
+    setQuery(initialQuery);
+    setIsOpen(false);
+  }, [initialQuery]);
 
   useEffect(() => {
     if (debounceTimerRef.current !== null) {

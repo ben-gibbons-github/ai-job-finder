@@ -1,6 +1,7 @@
 import type { ScrapedJob } from './ScrapedJob.js';
 import { normalizeJobsWithCoordinates, type NormalizedPortalJob } from './PortalIngestionUtils.js';
 import { collectPaginatedHtmlJobs, stripHtmlTags } from './PaginatedHtmlScrapeUtils.js';
+import { deriveDescriptionFromContext } from './ScrapeDescriptionUtils.js';
 
 const BIOTALENT_JOBS_BASE_URL = 'https://www.biotalent.com/jobs';
 const MAX_BIOTALENT_JOBS_PAGES = 500;
@@ -41,6 +42,7 @@ function parseBioTalentJobs(html: string): NormalizedPortalJob[] {
 
     const from = match.index ?? 0;
     const context = html.slice(Math.max(0, from - 320), from + 1400);
+    const description = deriveDescriptionFromContext(context, title);
 
     jobs.push({
       title,
@@ -49,7 +51,7 @@ function parseBioTalentJobs(html: string): NormalizedPortalJob[] {
       remote: /\bremote\b|\bhybrid\b|work from home/i.test(context) ? 'Remote' : 'Unknown',
       type: 'Unknown',
       sourceUrl,
-      description: '',
+      description,
       tags: ['Biotech', 'Medical', 'Engineering'],
     });
   }

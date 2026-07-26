@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from 'react'
 
-export type InsightsPopoverKey = 'distribution' | 'weights' | 'actions'
+export type InsightsPopoverKey = 'distribution' | 'weights' | 'actions' | 'userNotes'
 
 export interface PinnedHoverPopoverState {
   containerRef: React.RefObject<HTMLDivElement | null>

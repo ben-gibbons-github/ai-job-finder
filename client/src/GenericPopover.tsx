@@ -7,6 +7,8 @@ interface GenericPopoverProps {
   children: React.ReactNode;
   className?: string;
   headerActions?: React.ReactNode;
+  contentRef?: React.RefObject<HTMLDivElement | null>;
+  onContentScroll?: React.UIEventHandler<HTMLDivElement>;
 }
 
 const GenericPopover: React.FC<GenericPopoverProps> = ({
@@ -16,6 +18,8 @@ const GenericPopover: React.FC<GenericPopoverProps> = ({
   children,
   className,
   headerActions,
+  contentRef,
+  onContentScroll,
 }) => {
   useEffect(() => {
     if (!isOpen) {
@@ -65,7 +69,7 @@ const GenericPopover: React.FC<GenericPopoverProps> = ({
             </button>
           </div>
         </div>
-        <div className="generic-popover-content">{children}</div>
+        <div className="generic-popover-content" ref={contentRef} onScroll={onContentScroll}>{children}</div>
       </div>
     </div>
   );
