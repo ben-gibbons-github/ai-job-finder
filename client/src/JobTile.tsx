@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import ReactDOM from 'react-dom';
 import JobTileDropdown from './JobTileDropdown';
 import JobTileStatsPopover from './JobTileStatsPopover';
-import type { CompanyTagColor, UserJobNote } from './ClientSaveLoad';
+import type { CompanyTagColor, JobStatus, JobStatusRecord, UserJobNote } from './ClientSaveLoad';
 
 interface JobScores {
   resume: number;
@@ -93,6 +93,10 @@ interface JobTileProps {
   qualityOfLifeResultOverride?: QualityOfLifeResult;
   onHideJob?: (jobUrl?: string) => void;
   onHideCompany?: (companyName?: string) => void;
+  isHighlighted?: boolean;
+  onToggleHighlightJob?: (jobUrl?: string) => void;
+  jobStatusRecord?: JobStatusRecord;
+  onSetJobStatus?: (nextStatus: JobStatus) => void;
   jobUserNote?: UserJobNote;
   companyUserNote?: UserJobNote;
   onSaveUserNote?: (note: UserJobNote) => void;
@@ -206,6 +210,10 @@ const JobTile: React.FC<JobTileProps> = ({
   qualityOfLifeResultOverride,
   onHideJob,
   onHideCompany,
+  isHighlighted,
+  onToggleHighlightJob,
+  jobStatusRecord,
+  onSetJobStatus,
   jobUserNote,
   companyUserNote,
   onSaveUserNote,
@@ -222,6 +230,7 @@ const JobTile: React.FC<JobTileProps> = ({
   const scores = wrapper?.scores;
   const totalScore = wrapper?.totalScore;
   const aiPayload = wrapper?.aiPayload;
+  const currentJobStatus = jobStatusRecord?.currentStatus ?? 'none';
   const payloadAuditHasData = Boolean(aiPayload?.audit?.hasData);
   const payloadImpactHasData = Boolean(aiPayload?.impact?.hasData);
   const payloadQualityOfLifeHasData = Boolean(aiPayload?.qualityOfLife?.hasData);
@@ -416,7 +425,7 @@ const JobTile: React.FC<JobTileProps> = ({
 
   return (
     <div
-      className={`job-tile${isUserCreatedJob ? ' job-tile--user-created' : ''}`}
+      className={`job-tile${isUserCreatedJob ? ' job-tile--user-created' : ''}${isHighlighted ? ' job-tile--highlighted' : ''}${currentJobStatus === 'applied' ? ' job-tile--applied' : ''}`}
       onClick={handleTileClick}
       role="button"
       tabIndex={0}
@@ -468,6 +477,8 @@ const JobTile: React.FC<JobTileProps> = ({
             auditMenuLabel={auditLoading ? 'Running audit…' : isAuditComplete ? 'Audit complete' : auditNeedsRetry ? 'Retry audit' : 'Run audit'}
             onHideJob={onHideJob}
             onHideCompany={onHideCompany}
+            isHighlighted={Boolean(isHighlighted)}
+            onToggleHighlightJob={() => onToggleHighlightJob?.(job?.source_url)}
           />
         </div>
 
@@ -667,6 +678,7 @@ const JobTile: React.FC<JobTileProps> = ({
           locationScore={scores?.location}
           freshScore={scores?.fresh}
           auditScore={displayedAuditScore}
+          jobStatusRecord={jobStatusRecord}
           impactSummary={resolvedImpactSummary}
           qualityOfLifeSummary={resolvedQualityOfLifeSummary}
           fullAuditText={getFullAuditText()}
@@ -678,6 +690,7 @@ const JobTile: React.FC<JobTileProps> = ({
           onSaveCompanyUserNote={onSaveCompanyUserNote}
           onClearCompanyUserNote={onClearCompanyUserNote}
           onSetCompanyTagColors={onSetCompanyTagColors}
+          onSetJobStatus={onSetJobStatus}
           onAwardReadCompletion={onAwardReadCompletion}
           onSaveUserCreatedJobDetails={
             job?.source_url && onSaveUserCreatedJobDetails

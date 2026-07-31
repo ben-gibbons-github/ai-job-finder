@@ -18,6 +18,7 @@ import {
   loadAddedJobs,
   saveAddedJobs,
   loadAllUserNotes,
+  loadJobStatusesByUrl,
   loadUserNotesDailyActivity,
   loadJobsViewedDailyActivity,
   loadCommentsWrittenDailyActivity,
@@ -36,13 +37,19 @@ import {
   incrementCommentsWrittenToday,
   incrementUserCreatedJobsToday,
   loadCompanyColorTagsByCompany,
+  loadHighlightedJobUrl,
   type AddedJobDraft,
   type AddedLocalJob,
   type CompanyTagColor,
   type DailyScoreBreakdownByDay,
+  type JobStatus,
+  type JobStatusesByUrl,
   type UserJobNote,
   type UserRatingMode,
   saveCompanyColorTags,
+  saveHighlightedJobUrl,
+  saveJobStatusesByUrl,
+  setJobStatusByUrl,
 } from './ClientSaveLoad'
 
 type SearchCommand = 'AIAuditAllJobsInThisSearch'
@@ -151,10 +158,12 @@ function App() {
   const [qualityOfLifeResults, setQualityOfLifeResults] = useState<Record<string, { employeeQualityOfLifeScore: number; employeeQualityOfLifeSummary: string; error?: string }>>({})
   const [hiddenJobUrls, setHiddenJobUrls] = useState<string[]>(() => readStringArrayCache(HIDDEN_JOBS_CACHE_KEY))
   const [hiddenCompanies, setHiddenCompanies] = useState<string[]>(() => readStringArrayCache(HIDDEN_COMPANIES_CACHE_KEY))
+  const [highlightedJobUrl, setHighlightedJobUrl] = useState<string>(() => loadHighlightedJobUrl())
   const [readBonusAwardedJobUrls, setReadBonusAwardedJobUrls] = useState<string[]>(() => readStringArrayCache(READ_BONUS_AWARDED_JOBS_CACHE_KEY))
   const [userNotesByJob, setUserNotesByJob] = useState<Record<string, UserJobNote>>(() => loadAllUserNotes().perJob)
   const [userNotesByCompany, setUserNotesByCompany] = useState<Record<string, UserJobNote>>(() => loadAllUserNotes().perCompany)
   const [companyColorTagsByCompany, setCompanyColorTagsByCompany] = useState<Record<string, CompanyTagColor[]>>(() => loadCompanyColorTagsByCompany())
+  const [jobStatusesByUrl, setJobStatusesByUrl] = useState<JobStatusesByUrl>(() => loadJobStatusesByUrl())
   const [addedJobs, setAddedJobs] = useState<AddedLocalJob[]>(() => loadAddedJobs())
   const [dailyNoteAddsByDay, setDailyNoteAddsByDay] = useState<Record<string, number>>(() => loadUserNotesDailyActivity())
   const [jobsViewedByDay, setJobsViewedByDay] = useState<Record<string, number>>(() => loadJobsViewedDailyActivity())
@@ -259,6 +268,14 @@ function App() {
   useEffect(() => {
     writeStringArrayCache(HIDDEN_COMPANIES_CACHE_KEY, hiddenCompanies)
   }, [hiddenCompanies])
+
+  useEffect(() => {
+    saveJobStatusesByUrl(jobStatusesByUrl)
+  }, [jobStatusesByUrl])
+
+  useEffect(() => {
+    saveHighlightedJobUrl(highlightedJobUrl)
+  }, [highlightedJobUrl])
 
   useEffect(() => {
     writeStringArrayCache(READ_BONUS_AWARDED_JOBS_CACHE_KEY, readBonusAwardedJobUrls)
@@ -493,6 +510,8 @@ function App() {
     setUserNotesByJob(importedNotes.perJob)
     setUserNotesByCompany(importedNotes.perCompany)
     setCompanyColorTagsByCompany(loadCompanyColorTagsByCompany())
+    setJobStatusesByUrl(loadJobStatusesByUrl())
+    setHighlightedJobUrl(loadHighlightedJobUrl())
     setAddedJobs(loadAddedJobs())
     setDailyNoteAddsByDay(loadUserNotesDailyActivity())
     setJobsViewedByDay(loadJobsViewedDailyActivity())
@@ -622,6 +641,7 @@ function App() {
     }
 
     setHiddenJobUrls((prev) => (prev.includes(normalized) ? prev : [...prev, normalized]))
+    setHighlightedJobUrl((prev) => (prev === normalized ? '' : prev))
   }
 
   const handleHideCompany = (companyName?: string) => {
@@ -631,6 +651,34 @@ function App() {
     }
 
     setHiddenCompanies((prev) => (prev.includes(normalized) ? prev : [...prev, normalized]))
+
+    if (highlightedJobUrl) {
+      const highlightedWrapper = jobs.find(
+        (wrapper) => String(wrapper?.job?.source_url ?? '').trim() === highlightedJobUrl,
+      )
+      const highlightedCompanyName = normalizeCompanyName(highlightedWrapper?.job?.company_name)
+      if (highlightedCompanyName && highlightedCompanyName === normalized) {
+        setHighlightedJobUrl('')
+      }
+    }
+  }
+
+  const handleSetJobStatus = (sourceUrl?: string, nextStatus?: JobStatus) => {
+    const normalizedSourceUrl = String(sourceUrl ?? '').trim()
+    if (!normalizedSourceUrl || !nextStatus) {
+      return
+    }
+
+    setJobStatusesByUrl((prev) => setJobStatusByUrl(prev, normalizedSourceUrl, nextStatus))
+  }
+
+  const handleToggleHighlightJob = (jobUrl?: string) => {
+    const normalized = String(jobUrl ?? '').trim()
+    if (!normalized) {
+      return
+    }
+
+    setHighlightedJobUrl((prev) => (prev === normalized ? '' : normalized))
   }
 
   const awardDailyScore = (points: number) => {
@@ -872,6 +920,8 @@ function App() {
                 qualityOfLifeResultOverride={wrapper.job?.source_url ? qualityOfLifeResults[wrapper.job.source_url] : undefined}
                 onHideJob={handleHideJob}
                 onHideCompany={handleHideCompany}
+                isHighlighted={Boolean(wrapper.job?.source_url && String(wrapper.job.source_url).trim() === highlightedJobUrl)}
+                onToggleHighlightJob={handleToggleHighlightJob}
                 jobUserNote={wrapper.job?.source_url ? userNotesByJob[wrapper.job.source_url] : undefined}
                 companyUserNote={normalizeCompanyName(wrapper.job?.company_name) ? userNotesByCompany[normalizeCompanyName(wrapper.job?.company_name)] : undefined}
                 companyTagColors={normalizeCompanyName(wrapper.job?.company_name) ? companyColorTagsByCompany[normalizeCompanyName(wrapper.job?.company_name)] : undefined}
@@ -883,6 +933,8 @@ function App() {
                 onAwardReadCompletion={wrapper.job?.source_url ? () => handleAwardReadCompletion(wrapper.job!.source_url) : undefined}
                 hasReadCompletionAwarded={Boolean(wrapper.job?.source_url && readBonusAwardedJobUrls.includes(wrapper.job.source_url))}
                 onSaveUserCreatedJobDetails={handleSaveUserCreatedJobDetails}
+                jobStatusRecord={wrapper.job?.source_url ? jobStatusesByUrl[wrapper.job.source_url] : undefined}
+                onSetJobStatus={wrapper.job?.source_url ? (nextStatus) => handleSetJobStatus(wrapper.job!.source_url, nextStatus) : undefined}
               />
             ))}
           </div>

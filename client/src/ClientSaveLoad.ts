@@ -64,6 +64,21 @@ export interface AddedLocalJob extends AddedJobDraft {
   posted: string;
 }
 
+export type JobStatus = 'none' | 'applied' | 'interviewing' | 'accepted' | 'rejected';
+
+export interface JobStatusHistoryEntry {
+  changedAt: string;
+  beforeStatus: JobStatus;
+  afterStatus: JobStatus;
+}
+
+export interface JobStatusRecord {
+  currentStatus: JobStatus;
+  history: JobStatusHistoryEntry[];
+}
+
+export type JobStatusesByUrl = Record<string, JobStatusRecord>;
+
 const LEGACY_USER_NOTES_KEY = 'jobFinder_userNotes_v1';
 const USER_JOB_NOTES_KEY = 'jobFinder_userJobNotes_v2';
 const USER_COMPANY_NOTES_KEY = 'jobFinder_userCompanyNotes_v1';
@@ -81,8 +96,16 @@ const ADDED_JOBS_COOKIE_KEY = 'jobFinder_addedJobs_v1';
 const ADDED_JOBS_LOCAL_STORAGE_KEY = 'jobFinder_addedJobs_v1';
 const ADDED_JOBS_MAX_ITEMS = 24;
 const ADDED_JOBS_COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 365;
+const HIGHLIGHTED_JOB_URL_COOKIE_KEY = 'jobFinder_highlightedJobUrl_v1';
+const HIGHLIGHTED_JOB_URL_LOCAL_STORAGE_KEY = 'jobFinder_highlightedJobUrl_v1';
+const HIGHLIGHTED_JOB_URL_COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 365;
+const JOB_STATUSES_COOKIE_KEY = 'jobFinder_jobStatuses_v1';
+const JOB_STATUSES_LOCAL_STORAGE_KEY = 'jobFinder_jobStatuses_v1';
+const JOB_STATUSES_COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 365;
 const COMPANY_COLOR_TAGS_COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 365;
 const COMPANY_TAG_COLORS: CompanyTagColor[] = ['red', 'orange', 'yellow', 'green', 'blue', 'purple'];
+
+const JOB_STATUS_VALUES: JobStatus[] = ['none', 'applied', 'interviewing', 'accepted', 'rejected'];
 
 const DEFAULT_CLIENT_SEARCH_SETTINGS: ClientSearchSettings = {
   query: '',
@@ -286,6 +309,227 @@ function setCookie(name: string, value: string, maxAgeSeconds: number): void {
   const encodedName = encodeURIComponent(name);
   const encodedValue = encodeURIComponent(value);
   document.cookie = `${encodedName}=${encodedValue}; path=/; max-age=${maxAgeSeconds}; samesite=lax`;
+}
+
+function normalizeHighlightedJobUrl(value: unknown): string {
+  return String(value ?? '').trim();
+}
+
+function normalizeJobStatus(value: unknown): JobStatus {
+  const normalized = String(value ?? '').trim().toLowerCase();
+  return JOB_STATUS_VALUES.includes(normalized as JobStatus) ? (normalized as JobStatus) : 'none';
+}
+
+function normalizeJobStatusHistoryEntry(value: unknown): JobStatusHistoryEntry | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return null;
+  }
+
+  const raw = value as Record<string, unknown>;
+  const changedAt = String(raw.changedAt ?? '').trim();
+  const beforeStatus = normalizeJobStatus(raw.beforeStatus);
+  const afterStatus = normalizeJobStatus(raw.afterStatus);
+
+  if (!changedAt) {
+    return null;
+  }
+
+  return {
+    changedAt,
+    beforeStatus,
+    afterStatus,
+  };
+}
+
+function normalizeJobStatusRecord(value: unknown): JobStatusRecord | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return null;
+  }
+
+  const raw = value as Record<string, unknown>;
+  const currentStatus = normalizeJobStatus(raw.currentStatus ?? raw.status);
+  const history = Array.isArray(raw.history)
+    ? raw.history.map((entry) => normalizeJobStatusHistoryEntry(entry)).filter((entry): entry is JobStatusHistoryEntry => entry !== null)
+    : [];
+
+  return {
+    currentStatus,
+    history,
+  };
+}
+
+function normalizeJobStatusesByUrl(input: unknown): JobStatusesByUrl {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) {
+    return {};
+  }
+
+  const normalized: JobStatusesByUrl = {};
+  for (const [sourceUrl, value] of Object.entries(input as Record<string, unknown>)) {
+    const key = String(sourceUrl ?? '').trim();
+    if (!key) {
+      continue;
+    }
+
+    const record = normalizeJobStatusRecord(value);
+    if (!record) {
+      continue;
+    }
+
+    if (record.currentStatus === 'none' && record.history.length === 0) {
+      continue;
+    }
+
+    normalized[key] = record;
+  }
+
+  return normalized;
+}
+
+export function loadHighlightedJobUrl(): string {
+  try {
+    const cookieValue = getCookie(HIGHLIGHTED_JOB_URL_COOKIE_KEY);
+    const fromCookie = normalizeHighlightedJobUrl(cookieValue ? decodeURIComponent(cookieValue) : '');
+    if (fromCookie) {
+      return fromCookie;
+    }
+  } catch {
+    // Fall through to localStorage.
+  }
+
+  if (typeof window === 'undefined') {
+    return '';
+  }
+
+  try {
+    const raw = window.localStorage.getItem(HIGHLIGHTED_JOB_URL_LOCAL_STORAGE_KEY);
+    return normalizeHighlightedJobUrl(raw);
+  } catch {
+    return '';
+  }
+}
+
+export function saveHighlightedJobUrl(sourceUrl?: string | null): string {
+  const normalized = normalizeHighlightedJobUrl(sourceUrl);
+
+  if (typeof window !== 'undefined') {
+    try {
+      if (normalized) {
+        window.localStorage.setItem(HIGHLIGHTED_JOB_URL_LOCAL_STORAGE_KEY, normalized);
+      } else {
+        window.localStorage.removeItem(HIGHLIGHTED_JOB_URL_LOCAL_STORAGE_KEY);
+      }
+    } catch {
+      // Local storage unavailable.
+    }
+  }
+
+  try {
+    if (normalized) {
+      setCookie(HIGHLIGHTED_JOB_URL_COOKIE_KEY, normalized, HIGHLIGHTED_JOB_URL_COOKIE_MAX_AGE_SECONDS);
+    } else {
+      setCookie(HIGHLIGHTED_JOB_URL_COOKIE_KEY, '', 0);
+    }
+  } catch {
+    // Cookie write may fail.
+  }
+
+  return normalized;
+}
+
+function readJobStatusesFromCookie(): JobStatusesByUrl {
+  try {
+    const cookieValue = getCookie(JOB_STATUSES_COOKIE_KEY);
+    if (!cookieValue) {
+      return {}
+    }
+
+    return normalizeJobStatusesByUrl(JSON.parse(decodeURIComponent(cookieValue)) as unknown);
+  } catch {
+    return {};
+  }
+}
+
+function readJobStatusesFromLocalStorage(): JobStatusesByUrl {
+  if (typeof window === 'undefined') {
+    return {};
+  }
+
+  try {
+    const raw = window.localStorage.getItem(JOB_STATUSES_LOCAL_STORAGE_KEY);
+    if (!raw) {
+      return {};
+    }
+
+    return normalizeJobStatusesByUrl(JSON.parse(raw) as unknown);
+  } catch {
+    return {};
+  }
+}
+
+export function loadJobStatusesByUrl(): JobStatusesByUrl {
+  const fromCookie = readJobStatusesFromCookie();
+  if (Object.keys(fromCookie).length > 0) {
+    return fromCookie;
+  }
+
+  return readJobStatusesFromLocalStorage();
+}
+
+export function saveJobStatusesByUrl(data: JobStatusesByUrl): JobStatusesByUrl {
+  const normalized = normalizeJobStatusesByUrl(data);
+  const serialized = JSON.stringify(normalized);
+
+  if (typeof window !== 'undefined') {
+    try {
+      window.localStorage.setItem(JOB_STATUSES_LOCAL_STORAGE_KEY, serialized);
+    } catch {
+      // Local storage unavailable; continue with cookie attempt.
+    }
+  }
+
+  try {
+    setCookie(JOB_STATUSES_COOKIE_KEY, serialized, JOB_STATUSES_COOKIE_MAX_AGE_SECONDS);
+  } catch {
+    // Cookie write may fail when payload exceeds browser limits.
+  }
+
+  return normalized;
+}
+
+export function setJobStatusByUrl(
+  current: JobStatusesByUrl,
+  sourceUrl: string,
+  nextStatus: JobStatus,
+): JobStatusesByUrl {
+  const normalizedSourceUrl = String(sourceUrl ?? '').trim();
+  if (!normalizedSourceUrl) {
+    return current;
+  }
+
+  const normalizedNextStatus = normalizeJobStatus(nextStatus);
+  const existing = current[normalizedSourceUrl] ?? { currentStatus: 'none', history: [] };
+  if (existing.currentStatus === normalizedNextStatus) {
+    return current;
+  }
+
+  const nextRecord: JobStatusRecord = {
+    currentStatus: normalizedNextStatus,
+    history: [
+      ...existing.history,
+      {
+        changedAt: new Date().toISOString(),
+        beforeStatus: existing.currentStatus,
+        afterStatus: normalizedNextStatus,
+      },
+    ],
+  };
+
+  const updated = {
+    ...current,
+    [normalizedSourceUrl]: nextRecord,
+  };
+
+  return saveJobStatusesByUrl(updated);
 }
 
 function readCompanyColorTagsFromCookie(): CompanyColorTagsByCompany {
@@ -980,6 +1224,8 @@ function normalizeDayKey(value: string | null | undefined): string {
 
 export function exportAllLocalDataAsXml(): string {
   const settings = loadClientSearchSettings();
+  const highlightedJobUrl = loadHighlightedJobUrl();
+  const jobStatusesByUrl = loadJobStatusesByUrl();
   const notes = loadAllUserNotes();
   const companyColorTagsByCompany = loadCompanyColorTagsByCompany();
   const dailyPointsByDay = loadUserNotesDailyActivity();
@@ -1001,6 +1247,22 @@ export function exportAllLocalDataAsXml(): string {
     `    <scoreWeights resume="${settings.scoreWeights.resume}" impact="${settings.scoreWeights.impact}" location="${settings.scoreWeights.location}" fresh="${settings.scoreWeights.fresh}" audit="${settings.scoreWeights.audit}" qualityOfLife="${settings.scoreWeights.qualityOfLife}" />`,
   );
   lines.push('  </searchSettings>');
+
+  lines.push(`  <highlightedJob sourceUrl="${xmlEscape(highlightedJobUrl)}" />`);
+
+  lines.push('  <jobStatuses>');
+  for (const [sourceUrl, record] of Object.entries(jobStatusesByUrl)) {
+    lines.push(
+      `    <job sourceUrl="${xmlEscape(sourceUrl)}" currentStatus="${xmlEscape(record.currentStatus)}">`,
+    );
+    for (const entry of record.history) {
+      lines.push(
+        `      <entry changedAt="${xmlEscape(entry.changedAt)}" beforeStatus="${xmlEscape(entry.beforeStatus)}" afterStatus="${xmlEscape(entry.afterStatus)}" />`,
+      );
+    }
+    lines.push('    </job>');
+  }
+  lines.push('  </jobStatuses>');
 
   lines.push('  <userNotes>');
   lines.push('    <jobNotes>');
@@ -1119,6 +1381,35 @@ export function importAllLocalDataFromXml(xmlText: string): { ok: boolean; messa
         qualityOfLife: toFiniteOrFallback(scoreWeightsNode?.getAttribute('qualityOfLife'), currentSettings.scoreWeights.qualityOfLife),
       },
     };
+
+    const highlightedJobNode = root.querySelector('highlightedJob');
+    const importedHighlightedJobUrl = normalizeHighlightedJobUrl(highlightedJobNode?.getAttribute('sourceUrl'));
+
+    const importedJobStatusesByUrl: JobStatusesByUrl = {};
+    for (const jobNode of Array.from(root.querySelectorAll('jobStatuses > job'))) {
+      const sourceUrl = String(jobNode.getAttribute('sourceUrl') ?? '').trim();
+      if (!sourceUrl) {
+        continue;
+      }
+
+      const currentStatus = normalizeJobStatus(jobNode.getAttribute('currentStatus'));
+      const history = Array.from(jobNode.querySelectorAll('entry'))
+        .map((entryNode) => normalizeJobStatusHistoryEntry({
+          changedAt: entryNode.getAttribute('changedAt'),
+          beforeStatus: entryNode.getAttribute('beforeStatus'),
+          afterStatus: entryNode.getAttribute('afterStatus'),
+        }))
+        .filter((entry): entry is JobStatusHistoryEntry => entry !== null);
+
+      if (currentStatus === 'none' && history.length === 0) {
+        continue;
+      }
+
+      importedJobStatusesByUrl[sourceUrl] = {
+        currentStatus,
+        history,
+      };
+    }
 
     const importedJobNotes: Record<string, UserJobNote> = {};
     for (const noteNode of Array.from(root.querySelectorAll('userNotes > jobNotes > note'))) {
@@ -1252,10 +1543,12 @@ export function importAllLocalDataFromXml(xmlText: string): { ok: boolean; messa
     saveDailyActivityToLocalStorage(USER_CREATED_JOBS_DAILY_ACTIVITY_KEY, importedUserCreatedJobsByDay);
     saveDailyScoreBreakdown(importedBreakdownByDay);
     saveAddedJobs(importedAddedJobs);
+    saveHighlightedJobUrl(importedHighlightedJobUrl);
+    saveJobStatusesByUrl(importedJobStatusesByUrl);
 
     return {
       ok: true,
-      message: `Imported XML backup successfully (${Object.keys(importedJobNotes).length} job notes, ${Object.keys(importedCompanyNotes).length} company notes, ${Object.keys(importedCompanyColorTagsByCompany).length} tagged companies, ${importedAddedJobs.length} added jobs).`,
+      message: `Imported XML backup successfully (${Object.keys(importedJobNotes).length} job notes, ${Object.keys(importedCompanyNotes).length} company notes, ${Object.keys(importedCompanyColorTagsByCompany).length} tagged companies, ${importedAddedJobs.length} added jobs, ${Object.keys(importedJobStatusesByUrl).length} job statuses).`,
     };
   } catch (error) {
     return {

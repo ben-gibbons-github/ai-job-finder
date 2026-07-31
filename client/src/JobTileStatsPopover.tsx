@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import GenericPopover from './GenericPopover';
-import type { CompanyTagColor, UserJobNote } from './ClientSaveLoad';
+import type { CompanyTagColor, JobStatus, JobStatusRecord, UserJobNote } from './ClientSaveLoad';
 
 interface JobTileStatsPopoverProps {
   isOpen: boolean;
@@ -21,6 +21,7 @@ interface JobTileStatsPopoverProps {
   locationScore?: number;
   freshScore?: number;
   auditScore?: number;
+  jobStatusRecord?: JobStatusRecord;
   impactSummary?: string;
   qualityOfLifeSummary?: string;
   fullAuditText: string;
@@ -32,6 +33,7 @@ interface JobTileStatsPopoverProps {
   onSaveCompanyUserNote?: (note: UserJobNote) => void;
   onClearCompanyUserNote?: () => void;
   onSetCompanyTagColors?: (colors: CompanyTagColor[]) => void;
+  onSetJobStatus?: (nextStatus: JobStatus) => void;
   onAwardReadCompletion?: () => void;
   onSaveUserCreatedJobDetails?: (updates: {
     name: string;
@@ -223,6 +225,7 @@ const JobTileStatsPopover: React.FC<JobTileStatsPopoverProps> = ({
   locationScore,
   freshScore,
   auditScore,
+  jobStatusRecord,
   impactSummary,
   qualityOfLifeSummary,
   fullAuditText,
@@ -234,6 +237,7 @@ const JobTileStatsPopover: React.FC<JobTileStatsPopoverProps> = ({
   onSaveCompanyUserNote,
   onClearCompanyUserNote,
   onSetCompanyTagColors,
+  onSetJobStatus,
   onAwardReadCompletion,
   onSaveUserCreatedJobDetails,
 }) => {
@@ -254,6 +258,7 @@ const JobTileStatsPopover: React.FC<JobTileStatsPopoverProps> = ({
   const [editableRemote, setEditableRemote] = useState(remote ?? '');
   const [editableType, setEditableType] = useState(jobType ?? '');
   const [editableDescription, setEditableDescription] = useState(jobDescription ?? '');
+  const [selectedJobStatus, setSelectedJobStatus] = useState<JobStatus>(jobStatusRecord?.currentStatus ?? 'none');
   const [isCompanyTagDropdownOpen, setIsCompanyTagDropdownOpen] = useState(false);
   const companyTagDropdownRef = useRef<HTMLDivElement>(null);
 
@@ -271,6 +276,7 @@ const JobTileStatsPopover: React.FC<JobTileStatsPopoverProps> = ({
       setEditableRemote(remote ?? '');
       setEditableType(jobType ?? '');
       setEditableDescription(jobDescription ?? '');
+      setSelectedJobStatus(jobStatusRecord?.currentStatus ?? 'none');
       setIsCompanyTagDropdownOpen(false);
 
       window.requestAnimationFrame(() => {
@@ -285,7 +291,7 @@ const JobTileStatsPopover: React.FC<JobTileStatsPopoverProps> = ({
         }
       });
     }
-  }, [isOpen, jobUserNote, companyUserNote, onAwardReadCompletion, jobName, companyName, location, remote, jobType, jobDescription]);
+  }, [isOpen, jobUserNote, companyUserNote, onAwardReadCompletion, jobName, companyName, location, remote, jobType, jobDescription, jobStatusRecord]);
 
   useEffect(() => {
     if (!isCompanyTagDropdownOpen) {
@@ -324,6 +330,13 @@ const JobTileStatsPopover: React.FC<JobTileStatsPopoverProps> = ({
       description: editableDescription.trim(),
     });
   };
+
+  const handleJobStatusChange = (nextStatus: JobStatus) => {
+    setSelectedJobStatus(nextStatus);
+    onSetJobStatus?.(nextStatus);
+  };
+
+  const jobStatusHistory = jobStatusRecord?.history ?? [];
 
   const handleContentScroll = () => {
     const container = contentRef.current;
@@ -543,6 +556,44 @@ const JobTileStatsPopover: React.FC<JobTileStatsPopoverProps> = ({
             <RichTextBlock text={jobDescription} fallback="No job description available." />
           )}
           {jobSummary && <RichTextBlock text={jobSummary} fallback="" />}
+        </section>
+
+        <section className="job-stats-section">
+          <h3>Job status</h3>
+          <div className="job-stats-status-editor">
+            <label className="job-stats-user-notes-label" htmlFor="job-status-select">
+              Current status
+            </label>
+            <select
+              id="job-status-select"
+              className="job-stats-status-select"
+              value={selectedJobStatus}
+              onChange={(event) => handleJobStatusChange(event.target.value as JobStatus)}
+            >
+              <option value="none">none</option>
+              <option value="applied">applied</option>
+              <option value="interviewing">interviewing</option>
+              <option value="accepted">accepted</option>
+              <option value="rejected">rejected</option>
+            </select>
+          </div>
+          <div className="job-stats-status-history">
+            <div className="job-stats-status-history__label">History</div>
+            {jobStatusHistory.length > 0 ? (
+              <ul className="job-stats-status-history__list">
+                {jobStatusHistory.slice().reverse().map((entry) => (
+                  <li key={`${entry.changedAt}-${entry.beforeStatus}-${entry.afterStatus}`} className="job-stats-status-history__item">
+                    <span className="job-stats-status-history__time">{entry.changedAt}</span>
+                    <span className="job-stats-status-history__change">
+                      {entry.beforeStatus} → {entry.afterStatus}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="job-stats-status-history__empty">No status changes yet.</p>
+            )}
+          </div>
         </section>
 
         <section className="job-stats-section">

@@ -1,5 +1,7 @@
 # AI Job Search
 
+Live app: [https://job-finder-super.fly.dev/](https://job-finder-super.fly.dev/)
+
 AI Job Search aggregates jobs from a broad set of public job boards and ranks them against a search query, location, uploaded resume, job freshness, employer impact, quality of life, and audit signals. The application combines a React client with an Express and Socket.IO server, keeping searches and AI enrichment responsive as results arrive.
 
 ![AI Job Search results showing resume, impact, quality-of-life, location, freshness, and audit scores](./Job_Search.png)

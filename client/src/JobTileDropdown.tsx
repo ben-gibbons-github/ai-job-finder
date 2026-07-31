@@ -30,6 +30,8 @@ interface JobTileDropdownProps {
   auditMenuLabel?: string;
   onHideJob?: (jobUrl?: string) => void;
   onHideCompany?: (companyName?: string) => void;
+  isHighlighted?: boolean;
+  onToggleHighlightJob?: () => void;
 }
 
 function getSourceLabel(sourceUrl?: string): string {
@@ -53,6 +55,8 @@ const JobTileDropdown: React.FC<JobTileDropdownProps> = ({
   auditMenuLabel,
   onHideJob,
   onHideCompany,
+  isHighlighted,
+  onToggleHighlightJob,
 }) => {
   const [open, setOpen] = useState(false);
   const [deepResearchPopoverOpen, setDeepResearchPopoverOpen] = useState(false);
@@ -298,6 +302,11 @@ Be specific, direct, and high quality. Treat this as a real application I intend
     setOpen(false);
   };
 
+  const handleToggleHighlight = () => {
+    onToggleHighlightJob?.();
+    setOpen(false);
+  };
+
   const companyName = job?.company_name?.trim() || 'this company';
 
   return (
@@ -348,6 +357,15 @@ Be specific, direct, and high quality. Treat this as a real application I intend
           >
             <span className="dropdown-item-icon">🤖</span>
             <span className="dropdown-item-label">{auditMenuLabel || 'Run audit'}</span>
+          </button>
+
+          <button
+            className="job-tile-dropdown-item"
+            role="menuitem"
+            onClick={handleToggleHighlight}
+          >
+            <span className="dropdown-item-icon">⭐</span>
+            <span className="dropdown-item-label">{isHighlighted ? 'Remove highlighted job' : 'Mark as highlighted job'}</span>
           </button>
 
           <button
