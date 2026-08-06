@@ -81,9 +81,15 @@ export function overlapScore(sourceTokens: string[], targetText: string): number
  * @param resumeText - User's resume text
  * @returns Resume match score between 0 and 1
  */
-export function calculateResumeScore(job: ScrapedJob, resumeText: string, shouldLog = false): number {
-  const resumeTokens = tokenize(resumeText)
+// Per-job resume target token sets — built once per job object lifetime, reused across searches.
+// Invalidated automatically if the job object is replaced (WeakMap semantics).
+const jobTargetTokensCache = new WeakMap<ScrapedJob, Set<string>>()
 
+function getJobTargetTokens(job: ScrapedJob): Set<string> {
+  const cached = jobTargetTokensCache.get(job)
+  if (cached !== undefined) {
+    return cached
+  }
   const resumeTarget = [
     toSafeText(job.name),
     toSafeText(job.company_name),
@@ -96,12 +102,63 @@ export function calculateResumeScore(job: ScrapedJob, resumeText: string, should
     toSafeText(job.scrapedEmployer?.employeeQualityOfLifeSummary || ''),
     job.tags.map((tag) => toSafeText(tag)).join(' '),
   ].join(' ')
+  const tokens = new Set(tokenize(resumeTarget))
+  jobTargetTokensCache.set(job, tokens)
+  return tokens
+}
 
-  const score = overlapScore(resumeTokens, resumeTarget)
+// Resume score cache — populated on the first search with a given resume,
+// then reused for all subsequent searches until the resume changes.
+// Keyed on job.source_url so it survives pagination changes.
+const resumeScoreCache: { fingerprint: string; scores: Map<string, number> } = {
+  fingerprint: '',
+  scores: new Map(),
+}
+
+export function calculateResumeScore(job: ScrapedJob, resumeText: string, shouldLog = false, precomputedTokens?: string[]): number {
+  // precomputedTokens should already be deduplicated by the caller (e.g. Array.from(new Set(...)))
+  const sourceTokens = precomputedTokens ?? Array.from(new Set(tokenize(resumeText)))
+  if (sourceTokens.length === 0) {
+    return 0
+  }
+
+  // Detect resume changes via a cheap fingerprint and clear the score cache when it differs.
+  const fingerprint = `${sourceTokens.length}|${sourceTokens[0] ?? ''}|${sourceTokens[Math.floor(sourceTokens.length / 2)] ?? ''}|${sourceTokens[sourceTokens.length - 1] ?? ''}`
+  if (fingerprint !== resumeScoreCache.fingerprint) {
+    resumeScoreCache.fingerprint = fingerprint
+    resumeScoreCache.scores.clear()
+  }
+
+  const jobKey = String(job.source_url ?? '')
+  if (jobKey && resumeScoreCache.scores.has(jobKey)) {
+    return resumeScoreCache.scores.get(jobKey)!
+  }
+
+  const targetTokens = getJobTargetTokens(job)
+  if (targetTokens.size === 0) {
+    if (jobKey) resumeScoreCache.scores.set(jobKey, 0)
+    return 0
+  }
+
+  let hits = 0
+  for (const token of sourceTokens) {
+    if (targetTokens.has(token)) {
+      hits += 1
+    }
+  }
+
+  const coverage = hits / sourceTokens.length
+  const hitSaturation = hits / (hits + 5)
+  const score = Math.min(1, coverage * 0.35 + hitSaturation * 0.65) * 2
+
+  if (jobKey) {
+    resumeScoreCache.scores.set(jobKey, score)
+  }
+
   if (shouldLog) {
     console.log('Resume score calculated:', {
       jobName: job.name,
-      resumeTokenCount: resumeTokens.length,
+      resumeTokenCount: sourceTokens.length,
       score,
     })
   }

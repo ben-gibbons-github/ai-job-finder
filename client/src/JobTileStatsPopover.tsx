@@ -35,6 +35,7 @@ interface JobTileStatsPopoverProps {
   onSetCompanyTagColors?: (colors: CompanyTagColor[]) => void;
   onSetJobStatus?: (nextStatus: JobStatus) => void;
   onAwardReadCompletion?: () => void;
+  sectionToScrollTo?: string | null;
   onSaveUserCreatedJobDetails?: (updates: {
     name: string;
     companyName: string;
@@ -229,25 +230,20 @@ const JobTileStatsPopover: React.FC<JobTileStatsPopoverProps> = ({
   impactSummary,
   qualityOfLifeSummary,
   fullAuditText,
-  jobUserNote,
   companyUserNote,
   companyTagColors,
-  onSaveUserNote,
-  onClearUserNote,
   onSaveCompanyUserNote,
   onClearCompanyUserNote,
   onSetCompanyTagColors,
   onSetJobStatus,
   onAwardReadCompletion,
+  sectionToScrollTo,
   onSaveUserCreatedJobDetails,
 }) => {
   const contentRef = useRef<HTMLDivElement>(null);
   const hasAwardedReadBonusRef = useRef(false);
   const hasSeenTopRef = useRef(false);
-  const [jobNotesText, setJobNotesText] = useState(jobUserNote?.notes ?? '');
-  const [jobScoreText, setJobScoreText] = useState(
-    jobUserNote?.userScore != null ? String(jobUserNote.userScore) : '',
-  );
+  const companyNotesDirtyRef = useRef(false);
   const [companyNotesText, setCompanyNotesText] = useState(companyUserNote?.notes ?? '');
   const [companyScoreText, setCompanyScoreText] = useState(
     companyUserNote?.userScore != null ? String(companyUserNote.userScore) : '',
@@ -266,8 +262,7 @@ const JobTileStatsPopover: React.FC<JobTileStatsPopoverProps> = ({
     if (isOpen) {
       hasAwardedReadBonusRef.current = false;
       hasSeenTopRef.current = false;
-      setJobNotesText(jobUserNote?.notes ?? '');
-      setJobScoreText(jobUserNote?.userScore != null ? String(jobUserNote.userScore) : '');
+      companyNotesDirtyRef.current = false;
       setCompanyNotesText(companyUserNote?.notes ?? '');
       setCompanyScoreText(companyUserNote?.userScore != null ? String(companyUserNote.userScore) : '');
       setEditableJobName(jobName ?? '');
@@ -291,7 +286,28 @@ const JobTileStatsPopover: React.FC<JobTileStatsPopoverProps> = ({
         }
       });
     }
-  }, [isOpen, jobUserNote, companyUserNote, onAwardReadCompletion, jobName, companyName, location, remote, jobType, jobDescription, jobStatusRecord]);
+  }, [isOpen, companyUserNote, onAwardReadCompletion, jobName, companyName, location, remote, jobType, jobDescription, jobStatusRecord]);
+
+  // Auto-save company notes after a short debounce whenever the user edits them
+  useEffect(() => {
+    if (!companyNotesDirtyRef.current) return;
+    const timer = setTimeout(() => {
+      const raw = parseInt(companyScoreText, 10);
+      const userScore = Number.isFinite(raw) ? Math.max(0, Math.min(100, raw)) : null;
+      onSaveCompanyUserNote?.({ notes: companyNotesText.trim(), userScore });
+    }, 600);
+    return () => clearTimeout(timer);
+  }, [companyNotesText, companyScoreText, onSaveCompanyUserNote]);
+
+  // Scroll to a specific section when the popover opens with a target
+  useEffect(() => {
+    if (!isOpen || !sectionToScrollTo) return;
+    const timer = setTimeout(() => {
+      const el = contentRef.current?.querySelector(`#stats-section-${sectionToScrollTo}`);
+      el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 120);
+    return () => clearTimeout(timer);
+  }, [isOpen, sectionToScrollTo]);
 
   useEffect(() => {
     if (!isCompanyTagDropdownOpen) {
@@ -355,25 +371,8 @@ const JobTileStatsPopover: React.FC<JobTileStatsPopoverProps> = ({
     }
   };
 
-  const handleSaveJobNotes = () => {
-    const raw = parseInt(jobScoreText, 10);
-    const userScore = Number.isFinite(raw) ? Math.max(0, Math.min(100, raw)) : null;
-    onSaveUserNote?.({ notes: jobNotesText.trim(), userScore });
-  };
-
-  const handleClearJobNotes = () => {
-    setJobNotesText('');
-    setJobScoreText('');
-    onClearUserNote?.();
-  };
-
-  const handleSaveCompanyNotes = () => {
-    const raw = parseInt(companyScoreText, 10);
-    const userScore = Number.isFinite(raw) ? Math.max(0, Math.min(100, raw)) : null;
-    onSaveCompanyUserNote?.({ notes: companyNotesText.trim(), userScore });
-  };
-
   const handleClearCompanyNotes = () => {
+    companyNotesDirtyRef.current = false;
     setCompanyNotesText('');
     setCompanyScoreText('');
     onClearCompanyUserNote?.();
@@ -559,7 +558,44 @@ const JobTileStatsPopover: React.FC<JobTileStatsPopoverProps> = ({
         </section>
 
         <section className="job-stats-section">
-          <h3>Job status</h3>
+          <h3>Score breakdown</h3>
+          <div className="job-stats-score-bubbles">
+            <div className={`job-stats-score-bubble job-stats-score-bubble--${getScoreBand(totalScore)}`}><span>Total</span><strong>{formatPercent(totalScore)}</strong></div>
+            <div className={`job-stats-score-bubble job-stats-score-bubble--${getScoreBand(resumeScore)}`}><span>Resume</span><strong>{formatPercent(resumeScore)}</strong></div>
+            <div className={`job-stats-score-bubble job-stats-score-bubble--impact job-stats-score-bubble--${getScoreBand(impactScore)}`}><span>Impact</span><strong>{formatPercent(impactScore)}</strong></div>
+            <div className={`job-stats-score-bubble job-stats-score-bubble--${getScoreBand(qualityOfLifeScore)}`}><span>QoL</span><strong>{formatPercent(qualityOfLifeScore)}</strong></div>
+            <div className={`job-stats-score-bubble job-stats-score-bubble--${getScoreBand(locationScore)}`}><span>Location</span><strong>{formatPercent(locationScore)}</strong></div>
+            <div className={`job-stats-score-bubble job-stats-score-bubble--${getScoreBand(freshScore)}`}><span>Fresh</span><strong>{formatPercent(freshScore)}</strong></div>
+            <div className={`job-stats-score-bubble job-stats-score-bubble--audit job-stats-score-bubble--${getScoreBand(auditScore)}`}><span>Audit</span><strong>{formatPercent(auditScore)}</strong></div>
+          </div>
+        </section>
+
+        <section id="stats-section-impact" className="job-stats-section">
+          <div className="job-stats-section-heading">
+            <h3>Impact report</h3>
+            <SectionScoreBadge label="Impact" score={impactScore} extraClassName="job-stats-inline-score--impact" />
+          </div>
+          <RichTextBlock text={impactSummary} fallback="No impact report available yet." />
+        </section>
+
+        <section id="stats-section-qol" className="job-stats-section">
+          <div className="job-stats-section-heading">
+            <h3>Quality of life report</h3>
+            <SectionScoreBadge label="QoL" score={qualityOfLifeScore} />
+          </div>
+          <RichTextBlock text={qualityOfLifeSummary} fallback="No quality-of-life report available yet." />
+        </section>
+
+        <section id="stats-section-audit" className="job-stats-section">
+          <div className="job-stats-section-heading">
+            <h3>AI audit report</h3>
+            <SectionScoreBadge label="Audit" score={auditScore} extraClassName="job-stats-inline-score--audit" />
+          </div>
+          <RichTextBlock text={fullAuditText} fallback="No audit report available yet." />
+        </section>
+
+        <section className="job-stats-section job-stats-section--user-notes">
+          <h3>Company notes</h3>
           <div className="job-stats-status-editor">
             <label className="job-stats-user-notes-label" htmlFor="job-status-select">
               Current status
@@ -594,47 +630,6 @@ const JobTileStatsPopover: React.FC<JobTileStatsPopoverProps> = ({
               <p className="job-stats-status-history__empty">No status changes yet.</p>
             )}
           </div>
-        </section>
-
-        <section className="job-stats-section">
-          <h3>Score breakdown</h3>
-          <div className="job-stats-score-bubbles">
-            <div className={`job-stats-score-bubble job-stats-score-bubble--${getScoreBand(totalScore)}`}><span>Total</span><strong>{formatPercent(totalScore)}</strong></div>
-            <div className={`job-stats-score-bubble job-stats-score-bubble--${getScoreBand(resumeScore)}`}><span>Resume</span><strong>{formatPercent(resumeScore)}</strong></div>
-            <div className={`job-stats-score-bubble job-stats-score-bubble--impact job-stats-score-bubble--${getScoreBand(impactScore)}`}><span>Impact</span><strong>{formatPercent(impactScore)}</strong></div>
-            <div className={`job-stats-score-bubble job-stats-score-bubble--${getScoreBand(qualityOfLifeScore)}`}><span>QoL</span><strong>{formatPercent(qualityOfLifeScore)}</strong></div>
-            <div className={`job-stats-score-bubble job-stats-score-bubble--${getScoreBand(locationScore)}`}><span>Location</span><strong>{formatPercent(locationScore)}</strong></div>
-            <div className={`job-stats-score-bubble job-stats-score-bubble--${getScoreBand(freshScore)}`}><span>Fresh</span><strong>{formatPercent(freshScore)}</strong></div>
-            <div className={`job-stats-score-bubble job-stats-score-bubble--audit job-stats-score-bubble--${getScoreBand(auditScore)}`}><span>Audit</span><strong>{formatPercent(auditScore)}</strong></div>
-          </div>
-        </section>
-
-        <section className="job-stats-section">
-          <div className="job-stats-section-heading">
-            <h3>Impact report</h3>
-            <SectionScoreBadge label="Impact" score={impactScore} extraClassName="job-stats-inline-score--impact" />
-          </div>
-          <RichTextBlock text={impactSummary} fallback="No impact report available yet." />
-        </section>
-
-        <section className="job-stats-section">
-          <div className="job-stats-section-heading">
-            <h3>Quality of life report</h3>
-            <SectionScoreBadge label="QoL" score={qualityOfLifeScore} />
-          </div>
-          <RichTextBlock text={qualityOfLifeSummary} fallback="No quality-of-life report available yet." />
-        </section>
-
-        <section className="job-stats-section">
-          <div className="job-stats-section-heading">
-            <h3>AI audit report</h3>
-            <SectionScoreBadge label="Audit" score={auditScore} extraClassName="job-stats-inline-score--audit" />
-          </div>
-          <RichTextBlock text={fullAuditText} fallback="No audit report available yet." />
-        </section>
-
-        <section className="job-stats-section job-stats-section--user-notes">
-          <h3>Company notes</h3>
           <div className="job-stats-user-notes-fields">
             <div className="job-stats-company-tags" ref={companyTagDropdownRef}>
               <span className="job-stats-user-notes-label">Company tags</span>
@@ -687,7 +682,7 @@ const JobTileStatsPopover: React.FC<JobTileStatsPopoverProps> = ({
               max={100}
               className="job-stats-user-notes-score-input"
               value={companyScoreText}
-              onChange={(e) => setCompanyScoreText(e.target.value)}
+              onChange={(e) => { companyNotesDirtyRef.current = true; setCompanyScoreText(e.target.value); }}
               placeholder="—"
             />
             <label className="job-stats-user-notes-label" htmlFor="company-user-notes-text">
@@ -697,19 +692,12 @@ const JobTileStatsPopover: React.FC<JobTileStatsPopoverProps> = ({
               id="company-user-notes-text"
               className="job-stats-user-notes-textarea"
               value={companyNotesText}
-              onChange={(e) => setCompanyNotesText(e.target.value)}
+              onChange={(e) => { companyNotesDirtyRef.current = true; setCompanyNotesText(e.target.value); }}
               placeholder="Add your notes about this company..."
               rows={4}
             />
-            <div className="job-stats-user-notes-actions">
-              <button
-                type="button"
-                className="job-stats-user-notes-save-btn"
-                onClick={handleSaveCompanyNotes}
-              >
-                Save company notes
-              </button>
-              {(companyUserNote?.notes || companyUserNote?.userScore != null) && (
+            {(companyUserNote?.notes || companyUserNote?.userScore != null) && (
+              <div className="job-stats-user-notes-actions">
                 <button
                   type="button"
                   className="job-stats-user-notes-clear-btn"
@@ -717,56 +705,8 @@ const JobTileStatsPopover: React.FC<JobTileStatsPopoverProps> = ({
                 >
                   Clear
                 </button>
-              )}
-            </div>
-          </div>
-        </section>
-
-        <section className="job-stats-section job-stats-section--user-notes">
-          <h3>Job notes</h3>
-          <div className="job-stats-user-notes-fields">
-            <label className="job-stats-user-notes-label" htmlFor="job-user-notes-score">
-              Job score (0-100)
-            </label>
-            <input
-              id="job-user-notes-score"
-              type="number"
-              min={0}
-              max={100}
-              className="job-stats-user-notes-score-input"
-              value={jobScoreText}
-              onChange={(e) => setJobScoreText(e.target.value)}
-              placeholder="—"
-            />
-            <label className="job-stats-user-notes-label" htmlFor="job-user-notes-text">
-              Job notes
-            </label>
-            <textarea
-              id="job-user-notes-text"
-              className="job-stats-user-notes-textarea"
-              value={jobNotesText}
-              onChange={(e) => setJobNotesText(e.target.value)}
-              placeholder="Add your notes about this specific role..."
-              rows={4}
-            />
-            <div className="job-stats-user-notes-actions">
-              <button
-                type="button"
-                className="job-stats-user-notes-save-btn"
-                onClick={handleSaveJobNotes}
-              >
-                Save job notes
-              </button>
-              {(jobUserNote?.notes || jobUserNote?.userScore != null) && (
-                <button
-                  type="button"
-                  className="job-stats-user-notes-clear-btn"
-                  onClick={handleClearJobNotes}
-                >
-                  Clear
-                </button>
-              )}
-            </div>
+              </div>
+            )}
           </div>
         </section>
       </div>

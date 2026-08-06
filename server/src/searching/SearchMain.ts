@@ -11,13 +11,52 @@ import type {
   SearchAiCoverage,
   SearchResultMeta,
   SearchScoreBucket,
+  SearchDebugInfo,
   RankedJobWrapper,
 } from './SearchInterfaces.js'
 import { auditJob } from './SearchAudit.js'
 import { geocodeUserLocation, geocodeJobLocations, isRemoteJob } from './SearchDistance.js'
-import { calculateIndividualScores, jobMatchesQuery } from './SearchUtils.js'
+import { calculateIndividualScores, jobMatchesQuery, type ScoreTimings } from './SearchUtils.js'
+import { tokenize } from './SearchResumeMatch.js'
 
 const SERVER_HIDDEN_EXCLUSIONS_ENABLED = true
+
+// ─── Search result cache ─────────────────────────────────────────────────────
+// Caches full sorted result sets (pre-pagination) keyed on a fingerprint of all
+// search settings EXCEPT start/end. Pagination then slices from the cached list.
+
+const SEARCH_CACHE_MAX_ENTRIES = 10
+
+interface CachedSearch {
+  wrappers: RankedJobWrapper[]
+  size: number
+  /** Meta without debugInfo — timing data is per-search and shouldn't be cached */
+  meta: Omit<SearchResultMeta, 'debugInfo'>
+}
+
+function buildSearchFingerprint(payload: SearchPayload): string {
+  // Fingerprint resumeText cheaply — the full text can be tens of thousands of chars
+  const resumeText = typeof payload.resumeText === 'string' ? payload.resumeText : ''
+  const resumeFingerprint = `${resumeText.length}|${resumeText.slice(0, 64)}|${resumeText.slice(-64)}`
+
+  return JSON.stringify({
+    q: String(payload.query ?? '').trim().toLowerCase(),
+    resume: resumeFingerprint,
+    loc: String(payload.locationText ?? ''),
+    remote: payload.includeRemoteJobs !== false,
+    ratingMode: payload.userRatingMode ?? 'none',
+    weights: payload.scoreWeights ?? null,
+    hiddenUrls: [...(payload.hiddenJobUrls ?? [])].sort(),
+    hiddenCo: [...(payload.hiddenCompanies ?? [])].sort(),
+    ratings: payload.userRatings ?? null,
+    ratingFilter: payload.userRatingFilter ?? null,
+    addedJobs: [...(payload.addedJobs ?? [])]
+      .sort((a, b) => String(a.source_url ?? '').localeCompare(String(b.source_url ?? '')))
+      .map((j) => ({ url: j.source_url, score: j.userScore })),
+  })
+}
+
+// ─── Helper functions ─────────────────────────────────────────────────────────
 
 function normalizeExactUrl(value: unknown): string {
   return String(value ?? '').trim()
@@ -260,7 +299,34 @@ function buildScoreDistribution(wrappers: RankedJobWrapper[]): SearchScoreBucket
 }
 
 class SearchMain {
-  async search(jobs: ScrapedJob[], searchPayload: SearchPayload): Promise<{ matched: RankedJobWrapper[]; size: number; meta: SearchResultMeta }> {
+  // LRU cache: Map preserves insertion order; on access we delete+re-insert to move to end
+  private readonly searchCache = new Map<string, CachedSearch>()
+
+  private getCached(fingerprint: string): CachedSearch | undefined {
+    const entry = this.searchCache.get(fingerprint)
+    if (entry !== undefined) {
+      // Move to end (most-recently-used)
+      this.searchCache.delete(fingerprint)
+      this.searchCache.set(fingerprint, entry)
+    }
+    return entry
+  }
+
+  private setCached(fingerprint: string, result: CachedSearch): void {
+    if (this.searchCache.has(fingerprint)) {
+      this.searchCache.delete(fingerprint)
+    } else if (this.searchCache.size >= SEARCH_CACHE_MAX_ENTRIES) {
+      // Evict least-recently-used (first key in insertion-ordered Map)
+      const lruKey = this.searchCache.keys().next().value
+      if (lruKey !== undefined) {
+        this.searchCache.delete(lruKey)
+      }
+    }
+    this.searchCache.set(fingerprint, result)
+  }
+
+  async search(jobs: ScrapedJob[], searchPayload: SearchPayload, debugEnabled = false): Promise<{ matched: RankedJobWrapper[]; size: number; meta: SearchResultMeta }> {
+    const searchStart = performance.now()
     const logFlags: SearchLogFlags = searchPayload.searchLogFlags ?? {}
     const logSearchMain = logFlags.searchMain === true
     const hiddenExclusionsEnabled = SERVER_HIDDEN_EXCLUSIONS_ENABLED
@@ -273,6 +339,50 @@ class SearchMain {
       .split(/\s+/)
       .map((term) => term.trim())
       .filter((term) => term.length > 0)
+
+    // ─── Cache lookup ────────────────────────────────────────────────────────
+    // Audit commands have side effects and are never cached.
+    const isAuditCommand = searchPayload.command != null
+    const searchFingerprint = isAuditCommand ? null : buildSearchFingerprint(searchPayload)
+
+    if (searchFingerprint !== null) {
+      const cached = this.getCached(searchFingerprint)
+      if (cached !== undefined) {
+        const hitMs = Number((performance.now() - searchStart).toFixed(2))
+        const start = Number.isInteger(searchPayload.start) ? Number(searchPayload.start) : 0
+        const end = Number.isInteger(searchPayload.end) ? Number(searchPayload.end) : cached.size
+        const sliced = (start < 0 || end < 0 || end <= start)
+          ? cached.wrappers
+          : cached.wrappers.slice(start, end)
+        const zeroTimings: SearchDebugInfo['timings'] = {
+          filterMs: 0, queryMatchMs: 0, userGeocodeMs: 0,
+          jobGeocodeMs: 0, jobGeoHadCoords: 0, jobGeoNewlyGeocoded: 0, jobGeoSkipped: cached.size,
+          scoreTotalMs: 0, scoreResumeMs: 0, scoreLocationMs: 0, scoreFreshnessMs: 0,
+          scoreAuditMs: 0, scoreQolMs: 0, scoreImpactMs: 0, scoreSortMs: 0,
+          userRatingSortMs: 0, totalMs: hitMs,
+        }
+        const meta: SearchResultMeta = {
+          ...cached.meta,
+          debugInfo: debugEnabled ? {
+            cacheHit: true,
+            userLat: null, userLon: null,
+            locationText: String(searchPayload.locationText ?? ''),
+            query: rawQuery,
+            totalJobsInput: 0, totalJobsVisible: 0, totalJobsMatched: cached.size,
+            timings: zeroTimings,
+            exclusions: {
+              hiddenByUrl: 0, hiddenByCompany: 0, remoteJobsFiltered: 0,
+              userRatingFiltered: 0,
+              userRatingFilterMode: String(searchPayload.userRatingMode ?? 'none'),
+              queryMismatch: 0,
+            },
+          } : undefined,
+        }
+        console.log(`[SearchMain] cache hit (${hitMs}ms) query="${rawQuery}" returning ${sliced.length}/${cached.size}`)
+        return { matched: sliced, size: cached.size, meta }
+      }
+    }
+    // ────────────────────────────────────────────────────────────────────────
 
     const hiddenJobUrls = hiddenExclusionsEnabled && Array.isArray(searchPayload.hiddenJobUrls)
       ? new Set(
@@ -292,6 +402,7 @@ class SearchMain {
     const addedJobs = sanitizeAddedJobs(searchPayload.addedJobs)
     const jobsForSearch = mergeAddedJobs(jobs, addedJobs)
 
+    const filterStart = performance.now()
     const visibleJobs = jobsForSearch.filter((job) => {
       const sourceUrl = normalizeExactUrl(job.source_url)
       const companyName = normalizeExactCompanyName(job.company_name)
@@ -341,6 +452,7 @@ class SearchMain {
       : userRatingMode === 'hideRated'
         ? remoteFilteredJobs.filter((job) => !hasAnyUserRating(job, ratedJobUrls, ratedCompanies))
         : remoteFilteredJobs
+    const filterMs = performance.now() - filterStart
 
     if (logSearchMain) {
       console.log(
@@ -371,14 +483,17 @@ class SearchMain {
       )
     }
 
+    const queryMatchStart = performance.now()
     const matched = queryTerms.length > 0
       ? ratingFilteredJobs.filter((job) => jobMatchesQuery(job, queryTerms, logFlags.query === true))
       : ratingFilteredJobs // If no query terms, consider all visible jobs as matched (subject to pagination later)
+    const queryMatchMs = performance.now() - queryMatchStart
 
     const resumeText = typeof searchPayload.resumeText === 'string' ? searchPayload.resumeText : ''
     const locationText = typeof searchPayload.locationText === 'string' ? searchPayload.locationText : ''
 
     // Geocode user location
+    const userGeocodeStart = performance.now()
     const userLocCoords = locationText.length > 0 ? await geocodeUserLocation(locationText, logFlags.location === true) : null
     const userLat = userLocCoords?.lat ?? null
     const userLon = userLocCoords?.lon ?? null
@@ -388,6 +503,8 @@ class SearchMain {
       Number.isFinite(userLat) &&
       Number.isFinite(userLon)
 
+    const userGeocodeMs = performance.now() - userGeocodeStart
+
     if (logSearchMain) {
       console.log('User location geocoded to:', userLocCoords, 'for location text:', locationText)
     }
@@ -395,14 +512,35 @@ class SearchMain {
 
     // Geocoding every job location is expensive and only helps when user coordinates exist.
     // For empty/failed location input paths, skip this entirely and rely on text/remote scoring.
-    const jobsWithCoords = hasUsableUserCoords
-      ? await geocodeJobLocations(matched, logFlags.location === true)
-      : matched
+    const hasValidJobCoords = (job: ScrapedJob): boolean => {
+      const lat = job.location_lat
+      const lon = job.location_lon
+      return typeof lat === 'number' && typeof lon === 'number' && !isNaN(lat) && !isNaN(lon) && !(lat === 0 && lon === 0)
+    }
+    const geoCountBefore = debugEnabled && hasUsableUserCoords ? matched.filter(hasValidJobCoords).length : 0
+    const jobGeocodeStart = performance.now()
+    // const jobsWithCoords = hasUsableUserCoords
+    //   ? await geocodeJobLocations(matched, logFlags.location === true)
+    //   : matched
+    const jobsWithCoords = matched
+    const jobGeocodeMs = performance.now() - jobGeocodeStart
+    const geoCountAfter = debugEnabled && hasUsableUserCoords ? jobsWithCoords.filter(hasValidJobCoords).length : 0
+    const jobGeoHadCoords = geoCountBefore
+    const jobGeoNewlyGeocoded = geoCountAfter - geoCountBefore
+    const jobGeoSkipped = hasUsableUserCoords ? matched.length - geoCountAfter : matched.length
 
     // Calculate scores for each job and create wrappers
-    const rankedWrappers = jobsWithCoords
+    const scoreRankStart = performance.now()
+    // Pre-tokenize AND deduplicate the resume once — passed to each job scorer so neither
+    // tokenize() nor Set-dedup runs per job.
+    const precomputedResumeTokens = resumeText.length > 0 ? Array.from(new Set(tokenize(resumeText))) : []
+    const scoringTimings: ScoreTimings | undefined = debugEnabled
+      ? { resumeMs: 0, locationMs: 0, freshnessMs: 0, auditMs: 0, qolMs: 0, impactMs: 0 }
+      : undefined
+    const scoreMapStart = performance.now()
+    const unsortedWrappers = jobsWithCoords
       .map((job) => {
-        const scores = calculateIndividualScores(job, resumeText, locationText, userLat, userLon, logFlags)
+        const scores = calculateIndividualScores(job, resumeText, locationText, userLat, userLon, logFlags, precomputedResumeTokens, scoringTimings)
         const addedJobBonus = job.source === 'AddedByUser'
           ? Math.max(0.45, Number.isFinite(job.audit_number) ? Number(job.audit_number) / 100 : 0.45)
           : 0
@@ -412,19 +550,27 @@ class SearchMain {
           (scores.impact ?? 0) * (searchPayload.scoreWeights?.impact ?? 1) +
           (scores.location ?? 0) * (searchPayload.scoreWeights?.location ?? 1) +
           (scores.fresh ?? 0) * (searchPayload.scoreWeights?.fresh ?? 1) +
-          (scores.audit ?? 0) * (searchPayload.scoreWeights?.audit ?? 1) + 
+          (scores.audit ?? 0) * (searchPayload.scoreWeights?.audit ?? 1) +
           (scores.qualityOfLife ?? 0) * (searchPayload.scoreWeights?.qualityOfLife ?? 1) +
-          addedJobBonus;
-          
+          addedJobBonus
+
         return {
           job,
           scores,
           totalScore,
           aiPayload: buildJobAiPayload(job),
+          debugInfo: debugEnabled
+            ? { lat: typeof job.location_lat === 'number' ? job.location_lat : null, lon: typeof job.location_lon === 'number' ? job.location_lon : null }
+            : undefined,
         }
       })
-      .sort((a, b) => b.totalScore - a.totalScore)
+    const scoreTotalMs = performance.now() - scoreMapStart
+    const scoreSortStart = performance.now()
+    const rankedWrappers = unsortedWrappers.sort((a, b) => b.totalScore - a.totalScore)
+    const scoreSortMs = performance.now() - scoreSortStart
+    const scoreRankMs = performance.now() - scoreRankStart
 
+    const userRatingSortStart = performance.now()
     const sortedByUserRatingWrappers = userRatingMode === 'none'
       ? rankedWrappers
       : rankedWrappers
@@ -456,9 +602,11 @@ class SearchMain {
             return a.originalIndex - b.originalIndex
           })
           .map((entry) => entry.wrapper)
+    const userRatingSortMs = performance.now() - userRatingSortStart
 
     const start = Number.isInteger(searchPayload.start) ? Number(searchPayload.start) : 0
     const end = Number.isInteger(searchPayload.end) ? Number(searchPayload.end) : sortedByUserRatingWrappers.length
+    const totalMs = performance.now() - searchStart
     const meta: SearchResultMeta = {
       aiCoverage: buildSearchAiCoverage(sortedByUserRatingWrappers),
       scoreDistribution: buildScoreDistribution(sortedByUserRatingWrappers),
@@ -466,11 +614,64 @@ class SearchMain {
         includeRemoteJobs,
         userRatingMode,
       },
+      debugInfo: debugEnabled ? (() => {
+        let hiddenByUrl = 0
+        let hiddenByCompany = 0
+        for (const job of jobsForSearch) {
+          const sourceUrl = normalizeExactUrl(job.source_url)
+          const companyName = normalizeExactCompanyName(job.company_name)
+          if (sourceUrl && hiddenJobUrls.has(sourceUrl)) {
+            hiddenByUrl++
+          } else if (companyName && hiddenCompanies.has(companyName)) {
+            hiddenByCompany++
+          }
+        }
+        return {
+          userLat,
+          userLon,
+          locationText,
+          query: rawQuery,
+          totalJobsInput: jobs.length,
+          totalJobsVisible: visibleJobs.length,
+          totalJobsMatched: matched.length,
+          timings: {
+            filterMs: Number(filterMs.toFixed(2)),
+            queryMatchMs: Number(queryMatchMs.toFixed(2)),
+            userGeocodeMs: Number(userGeocodeMs.toFixed(2)),
+            jobGeocodeMs: Number(jobGeocodeMs.toFixed(2)),
+            jobGeoHadCoords,
+            jobGeoNewlyGeocoded,
+            jobGeoSkipped,
+            scoreTotalMs: Number(scoreTotalMs.toFixed(2)),
+            scoreResumeMs: Number((scoringTimings?.resumeMs ?? 0).toFixed(2)),
+            scoreLocationMs: Number((scoringTimings?.locationMs ?? 0).toFixed(2)),
+            scoreFreshnessMs: Number((scoringTimings?.freshnessMs ?? 0).toFixed(2)),
+            scoreAuditMs: Number((scoringTimings?.auditMs ?? 0).toFixed(2)),
+            scoreQolMs: Number((scoringTimings?.qolMs ?? 0).toFixed(2)),
+            scoreImpactMs: Number((scoringTimings?.impactMs ?? 0).toFixed(2)),
+            scoreSortMs: Number(scoreSortMs.toFixed(2)),
+            userRatingSortMs: Number(userRatingSortMs.toFixed(2)),
+            totalMs: Number(totalMs.toFixed(2)),
+          },
+          exclusions: {
+            hiddenByUrl,
+            hiddenByCompany,
+            remoteJobsFiltered: visibleJobs.length - remoteFilteredJobs.length,
+            userRatingFiltered: remoteFilteredJobs.length - ratingFilteredJobs.length,
+            userRatingFilterMode: userRatingMode,
+            queryMismatch: ratingFilteredJobs.length - matched.length,
+          },
+        }
+      })() : undefined,
     }
 
     if (start < 0 || end < 0 || end <= start) {
       return { matched: sortedByUserRatingWrappers, size: sortedByUserRatingWrappers.length, meta }
     }
+
+    console.log(
+      `[SearchMain] phases (ms): filter=${filterMs.toFixed(1)} queryMatch=${queryMatchMs.toFixed(1)} userGeocode=${userGeocodeMs.toFixed(1)} jobGeocode=${jobGeocodeMs.toFixed(1)} scoreRank=${scoreRankMs.toFixed(1)} userRatingSort=${userRatingSortMs.toFixed(1)} | total=${totalMs.toFixed(1)} | input=${jobs.length} visible=${visibleJobs.length} matched=${matched.length} query="${rawQuery}"`,
+    )
 
     if (logSearchMain) {
       console.log(sortedByUserRatingWrappers.length, 'jobs matched the query. Returning ranked slice from', start, 'to', end)
@@ -482,6 +683,16 @@ class SearchMain {
     //   const shouldLaunch = true
     //   wrapper.scores.audit = Math.min(auditJob(wrapper.job, logFlags.audit === true, shouldLaunch) / 100, 1.0)
     // })
+
+    // Store in cache (exclude debugInfo — timing data is not stable across requests)
+    if (searchFingerprint !== null) {
+      this.setCached(searchFingerprint, {
+        wrappers: sortedByUserRatingWrappers,
+        size: sortedByUserRatingWrappers.length,
+        meta: { aiCoverage: meta.aiCoverage, scoreDistribution: meta.scoreDistribution, appliedFilters: meta.appliedFilters },
+      })
+    }
+
     return { matched: sliced, size: sortedByUserRatingWrappers.length, meta }
   }
 }

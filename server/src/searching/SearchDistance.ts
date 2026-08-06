@@ -1,5 +1,6 @@
 import type { ScrapedJob } from '../scraping/ScrapedJob.js'
 import { nameToLonLat } from '../utils/NameToLonLat.js'
+import { lookupCityFallback } from '../utils/CityFallbackLookup.js'
 
 /**
  * Distance and location-based scoring functionality
@@ -231,6 +232,16 @@ export function calculateLocationScore(
       console.log(`Calculating location score for job "${job.name}" at "${job.location}" with user location "${locationText} ${userLat}, ${userLon} job.location_lat: ${job.location_lat} job.location_lon: ${job.location_lon}"`)
     }
 
+    const latDelta = Math.abs(job.location_lat - userLat)
+    const rawLonDelta = Math.abs(job.location_lon - userLon)
+    const lonDelta = Math.min(rawLonDelta, 360 - rawLonDelta)
+    if (latDelta >= 100 || lonDelta >= 100) {
+      if (shouldLog) {
+        console.log(`Location score hard-zero for job "${job.name}": lat delta ${latDelta.toFixed(2)}° lon delta ${lonDelta.toFixed(2)}° (wrap-adjusted) exceed 12° threshold`)
+      }
+      return 0
+    }
+
     const distanceKm = haversineDistance(userLat, userLon, job.location_lat, job.location_lon)
     
     // Clamp to keep location score in [0, 1]
@@ -278,14 +289,45 @@ export async function geocodeUserLocation(
     return null
   }
 
+  // Race the real geocoder against a 5-second timeout.
+  // If the geocoder wins → use its result (it also self-caches to disk).
+  // If the timeout wins → use the city fallback table as a temporary
+  // substitute for this search only (NOT cached to disk).
+  const GEOCODE_TIMEOUT_MS = 5000
+
+  const timeoutPromise = new Promise<'timeout'>((resolve) =>
+    setTimeout(() => resolve('timeout'), GEOCODE_TIMEOUT_MS),
+  )
+
   try {
-    const userLoc = await nameToLonLat(locationText)
-    if (shouldLog) {
-      console.log('Geocoding user location:', locationText, '->', userLoc)
+    const result = await Promise.race([nameToLonLat(locationText), timeoutPromise])
+
+    if (result === 'timeout') {
+      // Primary geocoder stalled — try city fallback without caching
+      const fallback = lookupCityFallback(locationText)
+      if (fallback) {
+        if (shouldLog) {
+          console.warn(`[geocodeUserLocation] Geocoder timed out for "${locationText}", using city fallback: ${JSON.stringify(fallback)}`)
+        }
+        return fallback
+      }
+      console.warn(`[geocodeUserLocation] Geocoder timed out for "${locationText}" and no city fallback found`)
+      return null
     }
-    return { lat: userLoc.lat, lon: userLoc.lon }
+
+    if (shouldLog) {
+      console.log('Geocoding user location:', locationText, '->', result)
+    }
+    return { lat: result.lat, lon: result.lon }
   } catch (e) {
-    // console.warn('Failed to geocode user location:', locationText, e)
+    // Geocoder threw — try city fallback without caching
+    const fallback = lookupCityFallback(locationText)
+    if (fallback) {
+      if (shouldLog) {
+        console.warn(`[geocodeUserLocation] Geocoder failed for "${locationText}", using city fallback: ${JSON.stringify(fallback)}`)
+      }
+      return fallback
+    }
     return null
   }
 }
@@ -303,6 +345,11 @@ export async function geocodeJobLocations(jobs: ScrapedJob[], shouldLog = false)
 
   const normalizeLocationKey = (value: string): string => String(value).trim().toLowerCase()
 
+  const hasValidCoords = (job: ScrapedJob): boolean => {
+    const { location_lat: lat, location_lon: lon } = job
+    return typeof lat === 'number' && typeof lon === 'number' && !isNaN(lat) && !isNaN(lon) && !(lat === 0 && lon === 0)
+  }
+
   const shouldSkipGeocodeForJob = (job: ScrapedJob): boolean => {
     if (!job.location) {
       return true
@@ -314,42 +361,29 @@ export async function geocodeJobLocations(jobs: ScrapedJob[], shouldLog = false)
     return false
   }
 
+  // Filter to only jobs that actually need geocoding — avoids creating async
+  // closures for the (majority of) jobs that already have valid coordinates.
+  const jobsNeedingGeocode = jobs.filter((job) => !hasValidCoords(job) && !shouldSkipGeocodeForJob(job))
+
+  if (jobsNeedingGeocode.length === 0) {
+    return jobs
+  }
+
   await Promise.all(
-    jobs.map(async (job) => {
-      let lat = job.location_lat
-      let lon = job.location_lon
-      
-      // Check if coordinates are missing or invalid
-      if (
-        (typeof lat !== 'number' ||
-          typeof lon !== 'number' ||
-          isNaN(lat) ||
-          isNaN(lon) ||
-          (lat === 0 && lon === 0))
-      ) {
-        if (shouldSkipGeocodeForJob(job)) {
-            return
+    jobsNeedingGeocode.map(async (job) => {
+      const locationKey = normalizeLocationKey(job.location)
+      try {
+        if (!inFlightByLocation.has(locationKey)) {
+          inFlightByLocation.set(locationKey, nameToLonLat(job.location))
         }
-
-        const locationKey = normalizeLocationKey(job.location)
-
-        try {
-          if (!inFlightByLocation.has(locationKey)) {
-            inFlightByLocation.set(locationKey, nameToLonLat(job.location))
-          }
-          const loc = await inFlightByLocation.get(locationKey)!
-          lat = loc.lat
-          lon = loc.lon
-        } catch (e) {
-          lat = NaN
-          lon = NaN
-          // console.warn('Failed to geocode job location:', job.location, 'for job:', job.name, e)
-        }
+        const loc = await inFlightByLocation.get(locationKey)!
+        job.location_lat = loc.lat
+        job.location_lon = loc.lon
+      } catch {
+        job.location_lat = NaN
+        job.location_lon = NaN
       }
-
-      job.location_lat = lat
-      job.location_lon = lon
-    })
+    }),
   )
 
   return jobs

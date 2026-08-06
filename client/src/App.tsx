@@ -14,6 +14,7 @@ import SearchLoadingBar from './SearchLoadingBar'
 import InsightsHoverPopovers from './InsightsHoverPopovers'
 import DailyScoreHud from './DailyScoreHud'
 import { socket } from './socket'
+import { type TagCloudEntry } from './TagCloudPanel'
 import {
   loadAddedJobs,
   saveAddedJobs,
@@ -172,7 +173,45 @@ function App() {
   const [dailyScoreBreakdownByDay, setDailyScoreBreakdownByDay] = useState<DailyScoreBreakdownByDay>(() => loadDailyScoreBreakdownByDay())
   const [userRatingMode, setUserRatingMode] = useState<UserRatingMode>(savedSettings.userRatingMode)
   const [includeRemoteJobs, setIncludeRemoteJobs] = useState(savedSettings.includeRemoteJobs)
+  const [searchDebugInfo, setSearchDebugInfo] = useState<{
+    cacheHit?: boolean
+    userLat: number | null
+    userLon: number | null
+    locationText: string
+    query: string
+    totalJobsInput: number
+    totalJobsVisible: number
+    totalJobsMatched: number
+    timings?: {
+      filterMs: number
+      queryMatchMs: number
+      userGeocodeMs: number
+      jobGeocodeMs: number
+      jobGeoHadCoords: number
+      jobGeoNewlyGeocoded: number
+      jobGeoSkipped: number
+      scoreTotalMs: number
+      scoreResumeMs: number
+      scoreLocationMs: number
+      scoreFreshnessMs: number
+      scoreAuditMs: number
+      scoreQolMs: number
+      scoreImpactMs: number
+      scoreSortMs: number
+      userRatingSortMs: number
+      totalMs: number
+    }
+    exclusions?: {
+      hiddenByUrl: number
+      hiddenByCompany: number
+      remoteJobsFiltered: number
+      userRatingFiltered: number
+      userRatingFilterMode: string
+      queryMismatch: number
+    }
+  } | null>(null)
   const [, setClockTick] = useState(0)
+  const [tagCloud, setTagCloud] = useState<TagCloudEntry[]>([])
   const [isResumeLoading, setIsResumeLoading] = useState(false)
   const hasSentInitialSearchRef = useRef(false)
   const initialSearchTimerRef = useRef<number | null>(null)
@@ -201,6 +240,13 @@ function App() {
         return
       }
 
+      // Ignore empty result sets — they can arrive out-of-order and would wipe
+      // a valid results list that is already displayed.
+      if (!response?.results || response.results.length === 0) {
+        setIsSearching(false)
+        return
+      }
+
       setIsSearching(false)
       if (response?.results) {
         console.log('Received search results:', response.results)
@@ -208,6 +254,7 @@ function App() {
         setJobs(response.results)
         setTotalItems(typeof response.total === 'number' ? response.total : response.results.length)
         setSearchMeta(response.meta ?? null)
+        setSearchDebugInfo(response.meta?.debugInfo ?? null)
       }
     }
 
@@ -252,12 +299,18 @@ function App() {
     socket.on('job:audit:result', onAuditResult)
     socket.on('job:impact:result', onImpactResult)
     socket.on('job:qualityOfLife:result', onQualityOfLifeResult)
+    socket.on('server:tagCloud', (entries: TagCloudEntry[]) => {
+      if (Array.isArray(entries) && entries.length > 0) {
+        setTagCloud(entries)
+      }
+    })
 
     return () => {
       socket.off('search:results', onSearchResults)
       socket.off('job:audit:result', onAuditResult)
       socket.off('job:impact:result', onImpactResult)
       socket.off('job:qualityOfLife:result', onQualityOfLifeResult)
+      socket.off('server:tagCloud')
     }
   }, [])
 
@@ -484,6 +537,100 @@ function App() {
     const anchor = document.createElement('a')
     anchor.href = objectUrl
     anchor.download = `job_finder_backup_${getLocalDateKey()}.xml`
+    anchor.click()
+
+    URL.revokeObjectURL(objectUrl)
+  }
+
+  const handleExportPageAsCsv = () => {
+    const csvCell = (value: unknown): string => {
+      const str = String(value ?? '')
+      // Wrap in quotes and escape internal quotes per RFC 4180
+      return `"${str.replace(/"/g, '""')}"`
+    }
+
+    const headers = [
+      'Title', 'Company', 'Location', 'Remote', 'Type', 'Source URL', 'Posted',
+      'Job Status', 'Status Changed At',
+      'Company Tags',
+      'Total Score',
+      'Score: Resume', 'Score: Impact', 'Score: Location', 'Score: Freshness', 'Score: Audit', 'Score: Quality of Life',
+      'User Rating (Job)', 'User Notes (Job)',
+      'Company Rating', 'Company Notes',
+      'AI Audit Score', 'AI Audit Red Flag Score', 'AI Audit Summary', 'AI Audit Red Flag Summary',
+      'AI Impact Score', 'AI Impact Summary',
+      'AI QoL Score', 'AI QoL Summary',
+      'Description',
+    ]
+
+    const rows = visibleJobs.map((wrapper) => {
+      const job = wrapper?.job ?? {}
+      const scores = wrapper?.scores ?? {}
+      const aiPayload = wrapper?.aiPayload ?? {}
+      const sourceUrl = String(job.source_url ?? '').trim()
+      const companyKey = normalizeCompanyName(job.company_name)
+
+      const jobNote = sourceUrl ? userNotesByJob[sourceUrl] : undefined
+      const companyNote = companyKey ? userNotesByCompany[companyKey] : undefined
+      const tagColors = companyKey ? (companyColorTagsByCompany[companyKey] ?? []) : []
+      const statusRecord = sourceUrl ? jobStatusesByUrl[sourceUrl] : undefined
+      const auditOverride = sourceUrl ? auditResults[sourceUrl] : undefined
+      const impactOverride = sourceUrl ? impactResults[sourceUrl] : undefined
+      const qolOverride = sourceUrl ? qualityOfLifeResults[sourceUrl] : undefined
+
+      const auditScore = auditOverride?.auditScore ?? aiPayload.audit?.score ?? ''
+      const auditRedFlagScore = aiPayload.audit?.redFlagScore ?? ''
+      const auditSummary = auditOverride?.auditText ?? aiPayload.audit?.summary ?? ''
+      const auditRedFlagSummary = aiPayload.audit?.redFlagSummary ?? ''
+      const impactScore = impactOverride?.ai_impact_score ?? aiPayload.impact?.score ?? ''
+      const impactSummary = impactOverride?.ai_impact_summary ?? aiPayload.impact?.summary ?? ''
+      const qolScore = qolOverride?.employeeQualityOfLifeScore ?? aiPayload.qualityOfLife?.score ?? ''
+      const qolSummary = qolOverride?.employeeQualityOfLifeSummary ?? aiPayload.qualityOfLife?.summary ?? ''
+
+      const totalScoreDisplay = typeof wrapper.totalScore === 'number' ? wrapper.totalScore.toFixed(4) : ''
+      const fmtScore = (v: unknown) => (typeof v === 'number' ? v.toFixed(4) : '')
+
+      return [
+        csvCell(job.name),
+        csvCell(job.company_name),
+        csvCell(job.location),
+        csvCell(job.remote),
+        csvCell(job.type),
+        csvCell(sourceUrl),
+        csvCell(job.posted),
+        csvCell(statusRecord?.currentStatus ?? 'none'),
+        csvCell(statusRecord?.history?.at(-1)?.changedAt ?? ''),
+        csvCell(tagColors.join(', ')),
+        csvCell(totalScoreDisplay),
+        csvCell(fmtScore(scores.resume)),
+        csvCell(fmtScore(scores.impact)),
+        csvCell(fmtScore(scores.location)),
+        csvCell(fmtScore(scores.fresh)),
+        csvCell(fmtScore(scores.audit)),
+        csvCell(fmtScore(scores.qualityOfLife)),
+        csvCell(jobNote?.userScore ?? ''),
+        csvCell(jobNote?.notes ?? ''),
+        csvCell(companyNote?.userScore ?? ''),
+        csvCell(companyNote?.notes ?? ''),
+        csvCell(auditScore),
+        csvCell(auditRedFlagScore),
+        csvCell(auditSummary),
+        csvCell(auditRedFlagSummary),
+        csvCell(impactScore),
+        csvCell(impactSummary),
+        csvCell(qolScore),
+        csvCell(qolSummary),
+        csvCell(job.description),
+      ].join(',')
+    })
+
+    const csvContent = [headers.map((h) => `"${h}"`).join(','), ...rows].join('\n')
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8' })
+    const objectUrl = URL.createObjectURL(blob)
+
+    const anchor = document.createElement('a')
+    anchor.href = objectUrl
+    anchor.download = `job_finder_page_${getLocalDateKey()}.csv`
     anchor.click()
 
     URL.revokeObjectURL(objectUrl)
@@ -837,6 +984,7 @@ function App() {
         onRunAuditAllInSearch={handleRunAuditAllInSearch}
         onAddJob={handleAddJob}
         onExportAllData={handleExportAllData}
+        onExportPageAsCsv={handleExportPageAsCsv}
         onImportAllData={handleImportAllData}
         userRatingMode={userRatingMode}
         onUserRatingModeChange={setUserRatingMode}
@@ -848,6 +996,8 @@ function App() {
         userScoreValues={userScoreValues}
         dailyNoteAddsByDay={dailyNoteAddsByDay}
         dailyScoreBreakdownByDay={dailyScoreBreakdownByDay}
+        tagCloud={tagCloud}
+        onTagCloudWordClick={(word) => setQuery(word)}
         isEnabled={hasVisibleResults}
         hasSearched={hasTextQuery}
       />
@@ -904,6 +1054,89 @@ function App() {
 
       {!isSearching && (
         <>
+          {searchDebugInfo !== null && (() => {
+            const exc = searchDebugInfo.exclusions
+            const t = searchDebugInfo.timings
+            return (
+              <div className="search-debug-panel" aria-label="Search debug info">
+                <span className="search-debug-panel__badge">DEBUG</span>
+                {searchDebugInfo.cacheHit && (
+                  <span className="search-debug-panel__badge search-debug-panel__badge--cached">⚡ CACHED</span>
+                )}
+                <span className="search-debug-panel__item">
+                  user: {searchDebugInfo.userLat !== null ? `lat ${searchDebugInfo.userLat.toFixed(4)}` : 'lat —'}{', '}
+                  {searchDebugInfo.userLon !== null ? `lon ${searchDebugInfo.userLon.toFixed(4)}` : 'lon —'}
+                </span>
+                <span className="search-debug-panel__sep">|</span>
+                <span className="search-debug-panel__item">query: &quot;{searchDebugInfo.query}&quot;</span>
+                <span className="search-debug-panel__sep">|</span>
+                <span className="search-debug-panel__item">location: &quot;{searchDebugInfo.locationText || '—'}&quot;</span>
+                <span className="search-debug-panel__sep">|</span>
+                <span className="search-debug-panel__item">input: {searchDebugInfo.totalJobsInput}</span>
+                <span className="search-debug-panel__sep">|</span>
+                <span className="search-debug-panel__item">visible: {searchDebugInfo.totalJobsVisible}</span>
+                <span className="search-debug-panel__sep">|</span>
+                <span className="search-debug-panel__item">matched: {searchDebugInfo.totalJobsMatched}</span>
+                {t && (
+                  <>
+                    <span className="search-debug-panel__sep search-debug-panel__sep--section">/</span>
+                    <span className="search-debug-panel__section-label">timings (ms):</span>
+                    <span className="search-debug-panel__timing" title="Hidden/remote/rating filters">filter: {t.filterMs}</span>
+                    <span className="search-debug-panel__timing" title="Text query matching">query: {t.queryMatchMs}</span>
+                    <span className="search-debug-panel__timing" title="Geocoding user location">user-geo: {t.userGeocodeMs}</span>
+                    <span className="search-debug-panel__timing" title={`Geocoding job locations — had coords: ${t.jobGeoHadCoords}, newly geocoded: ${t.jobGeoNewlyGeocoded}, skipped: ${t.jobGeoSkipped}`}>job-geo: {t.jobGeocodeMs}</span>
+                    <span className="search-debug-panel__timing search-debug-panel__timing--geo-detail" title="Jobs that already had valid coordinates">geo-had: {t.jobGeoHadCoords}</span>
+                    <span className="search-debug-panel__timing search-debug-panel__timing--geo-detail" title="Jobs that were newly geocoded this search">geo-new: {t.jobGeoNewlyGeocoded}</span>
+                    <span className="search-debug-panel__timing search-debug-panel__timing--geo-detail" title="Jobs skipped for geocoding (remote / no location / no user coords)">geo-skip: {t.jobGeoSkipped}</span>
+                    <span className="search-debug-panel__timing" title="Total time scoring all jobs (excludes sort)">score: {t.scoreTotalMs}</span>
+                    <span className="search-debug-panel__timing search-debug-panel__timing--score-detail" title="Resume match scoring">s-resume: {t.scoreResumeMs}</span>
+                    <span className="search-debug-panel__timing search-debug-panel__timing--score-detail" title="Location/distance scoring">s-loc: {t.scoreLocationMs}</span>
+                    <span className="search-debug-panel__timing search-debug-panel__timing--score-detail" title="Freshness scoring">s-fresh: {t.scoreFreshnessMs}</span>
+                    <span className="search-debug-panel__timing search-debug-panel__timing--score-detail" title="Audit scoring">s-audit: {t.scoreAuditMs}</span>
+                    <span className="search-debug-panel__timing search-debug-panel__timing--score-detail" title="Quality of life scoring">s-qol: {t.scoreQolMs}</span>
+                    <span className="search-debug-panel__timing search-debug-panel__timing--score-detail" title="Impact scoring">s-impact: {t.scoreImpactMs}</span>
+                    <span className="search-debug-panel__timing" title="Sorting scored jobs by total score">score-sort: {t.scoreSortMs}</span>
+                    <span className="search-debug-panel__timing" title="Re-sort by user ratings">rating-sort: {t.userRatingSortMs}</span>
+                    <span className="search-debug-panel__timing search-debug-panel__timing--total" title="Total search time">total: {t.totalMs}</span>
+                  </>
+                )}
+                {exc && (
+                  <>
+                    <span className="search-debug-panel__sep search-debug-panel__sep--section">/</span>
+                    <span className="search-debug-panel__section-label">excluded:</span>
+                    {exc.hiddenByUrl > 0 && (
+                      <span className="search-debug-panel__exclusion" title="Removed: job URL is in your hidden list">
+                        hidden-url: {exc.hiddenByUrl}
+                      </span>
+                    )}
+                    {exc.hiddenByCompany > 0 && (
+                      <span className="search-debug-panel__exclusion" title="Removed: company is in your hidden list">
+                        hidden-co: {exc.hiddenByCompany}
+                      </span>
+                    )}
+                    {exc.remoteJobsFiltered > 0 && (
+                      <span className="search-debug-panel__exclusion" title="Removed: include-remote-jobs is off">
+                        remote-off: {exc.remoteJobsFiltered}
+                      </span>
+                    )}
+                    {exc.userRatingFiltered > 0 && (
+                      <span className="search-debug-panel__exclusion" title={`Removed by user-rating mode: ${exc.userRatingFilterMode}`}>
+                        rating ({exc.userRatingFilterMode}): {exc.userRatingFiltered}
+                      </span>
+                    )}
+                    {exc.queryMismatch > 0 && (
+                      <span className="search-debug-panel__exclusion" title="Removed: text did not match query terms">
+                        query-miss: {exc.queryMismatch}
+                      </span>
+                    )}
+                    {exc.hiddenByUrl === 0 && exc.hiddenByCompany === 0 && exc.remoteJobsFiltered === 0 && exc.userRatingFiltered === 0 && exc.queryMismatch === 0 && (
+                      <span className="search-debug-panel__item">none</span>
+                    )}
+                  </>
+                )}
+              </div>
+            )
+          })()}
           <div className="job-list">
             {visibleJobs.map((wrapper) => (
               <JobTile
@@ -917,6 +1150,7 @@ function App() {
                 onAuditRequest={handleAuditRequest}
                 auditResultOverride={wrapper.job?.source_url ? auditResults[wrapper.job.source_url] : undefined}
                 impactResultOverride={wrapper.job?.source_url ? impactResults[wrapper.job.source_url] : undefined}
+                scoreWeights={scoreWeights}
                 qualityOfLifeResultOverride={wrapper.job?.source_url ? qualityOfLifeResults[wrapper.job.source_url] : undefined}
                 onHideJob={handleHideJob}
                 onHideCompany={handleHideCompany}
@@ -954,6 +1188,17 @@ function App() {
         commentsWrittenToday={todayCommentsWritten}
         userCreatedJobsToday={todayUserCreatedJobs}
       />
+
+      <a
+        className="app-github-link"
+        href="https://github.com/ben-gibbons-github/ai-job-finder"
+        target="_blank"
+        rel="noopener noreferrer"
+        aria-label="Open GitHub repository"
+        title="GitHub"
+      >
+        GitHub
+      </a>
 
     </main>
   )

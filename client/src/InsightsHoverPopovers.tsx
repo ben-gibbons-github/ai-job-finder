@@ -5,6 +5,7 @@ import { usePinnedHoverPopover, type InsightsPopoverKey } from './usePinnedHover
 import ActionsMenu from './ActionsMenu'
 import { type AddedJobDraft, type DailyScoreBreakdownByDay, type UserRatingMode } from './ClientSaveLoad'
 import UserNotesStatsPanel from './UserNotesStatsPanel'
+import TagCloudPanel, { type TagCloudEntry } from './TagCloudPanel'
 
 interface InsightsHoverPopoversProps {
   searchMeta: JobDistributionMeta | null
@@ -14,6 +15,7 @@ interface InsightsHoverPopoversProps {
   onRunAuditAllInSearch: () => void
   onAddJob: (draft: AddedJobDraft) => void
   onExportAllData: () => void
+  onExportPageAsCsv: () => void
   onImportAllData: (xmlText: string) => void | Promise<void>
   userRatingMode: UserRatingMode
   onUserRatingModeChange: (value: UserRatingMode) => void
@@ -25,6 +27,8 @@ interface InsightsHoverPopoversProps {
   userScoreValues: number[]
   dailyNoteAddsByDay: Record<string, number>
   dailyScoreBreakdownByDay: DailyScoreBreakdownByDay
+  tagCloud: TagCloudEntry[]
+  onTagCloudWordClick: (word: string) => void
   isEnabled: boolean
   hasSearched: boolean
 }
@@ -37,6 +41,7 @@ export default function InsightsHoverPopovers({
   onRunAuditAllInSearch,
   onAddJob,
   onExportAllData,
+  onExportPageAsCsv,
   onImportAllData,
   userRatingMode,
   onUserRatingModeChange,
@@ -48,16 +53,20 @@ export default function InsightsHoverPopovers({
   userScoreValues,
   dailyNoteAddsByDay,
   dailyScoreBreakdownByDay,
+  tagCloud,
+  onTagCloudWordClick,
   isEnabled,
   hasSearched,
 }: InsightsHoverPopoversProps) {
   const [isExpanded, setIsExpanded] = useState(false)
   const [panelShiftX, setPanelShiftX] = useState<Record<InsightsPopoverKey, number>>({
+    tagCloud: 0,
     distribution: 0,
     weights: 0,
     actions: 0,
     userNotes: 0,
   })
+  const tagCloudPanelRef = useRef<HTMLDivElement | null>(null)
   const distributionPanelRef = useRef<HTMLDivElement | null>(null)
   const weightsPanelRef = useRef<HTMLDivElement | null>(null)
   const actionsPanelRef = useRef<HTMLDivElement | null>(null)
@@ -71,7 +80,9 @@ export default function InsightsHoverPopovers({
 
   const clampPanelToViewport = useCallback((key: InsightsPopoverKey) => {
     const panel =
-      key === 'distribution'
+      key === 'tagCloud'
+        ? tagCloudPanelRef.current
+        : key === 'distribution'
         ? distributionPanelRef.current
         : key === 'weights'
           ? weightsPanelRef.current
@@ -164,6 +175,26 @@ export default function InsightsHoverPopovers({
         >
       <div
         className="app-insights-actions__item"
+        onMouseEnter={() => setHoverPopover('tagCloud')}
+      >
+        <button
+          type="button"
+          className={`app-insights-actions__button ${visiblePopover === 'tagCloud' ? 'app-insights-actions__button--active' : ''}`}
+        >
+          Tag cloud
+        </button>
+        <div
+          className={`app-insights-hover-panel app-insights-hover-panel--tag-cloud ${visiblePopover === 'tagCloud' ? 'app-insights-hover-panel--open' : ''}`}
+          ref={tagCloudPanelRef}
+          style={panelStyle('tagCloud')}
+          onMouseEnter={() => setHoverPopover('tagCloud')}
+        >
+          <TagCloudPanel entries={tagCloud} onWordClick={onTagCloudWordClick} />
+        </div>
+      </div>
+
+      <div
+        className="app-insights-actions__item"
         onMouseEnter={() => {
           if (isEnabled) {
             setHoverPopover('distribution')
@@ -222,6 +253,7 @@ export default function InsightsHoverPopovers({
         onRunAuditAllInSearch={onRunAuditAllInSearch}
         onAddJob={onAddJob}
         onExportAllData={onExportAllData}
+        onExportPageAsCsv={onExportPageAsCsv}
         onImportAllData={onImportAllData}
         userRatingMode={userRatingMode}
         onUserRatingModeChange={onUserRatingModeChange}

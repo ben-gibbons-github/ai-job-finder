@@ -15,6 +15,43 @@ export interface JobDistributionMeta {
     totalMatched: number
   }
   scoreDistribution: JobDistributionBucket[]
+  debugInfo?: {
+    cacheHit?: boolean
+    userLat: number | null
+    userLon: number | null
+    locationText: string
+    query: string
+    totalJobsInput: number
+    totalJobsVisible: number
+    totalJobsMatched: number
+    timings?: {
+      filterMs: number
+      queryMatchMs: number
+      userGeocodeMs: number
+      jobGeocodeMs: number
+      jobGeoHadCoords: number
+      jobGeoNewlyGeocoded: number
+      jobGeoSkipped: number
+      scoreTotalMs: number
+      scoreResumeMs: number
+      scoreLocationMs: number
+      scoreFreshnessMs: number
+      scoreAuditMs: number
+      scoreQolMs: number
+      scoreImpactMs: number
+      scoreSortMs: number
+      userRatingSortMs: number
+      totalMs: number
+    }
+    exclusions?: {
+      hiddenByUrl: number
+      hiddenByCompany: number
+      remoteJobsFiltered: number
+      userRatingFiltered: number
+      userRatingFilterMode: string
+      queryMismatch: number
+    }
+  }
 }
 
 interface JobDistributionGraphProps {

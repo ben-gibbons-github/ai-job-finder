@@ -319,7 +319,11 @@ Be specific, direct, and high quality. Treat this as a real application I intend
         aria-expanded={open}
         aria-haspopup="true"
       >
-        ⋯
+        <svg viewBox="0 0 4 16" width="4" height="16" fill="currentColor" aria-hidden="true">
+          <circle cx="2" cy="2" r="1.5"/>
+          <circle cx="2" cy="8" r="1.5"/>
+          <circle cx="2" cy="14" r="1.5"/>
+        </svg>
       </button>
 
       {open && (

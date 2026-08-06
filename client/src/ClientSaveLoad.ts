@@ -256,11 +256,11 @@ function readAddedJobsFromLocalStorage(): AddedLocalJob[] {
 }
 
 export function loadAddedJobs(): AddedLocalJob[] {
-  const cookieJobs = readAddedJobsFromCookie();
-  if (cookieJobs.length > 0) {
-    return cookieJobs;
+  const fromLocalStorage = readAddedJobsFromLocalStorage();
+  if (fromLocalStorage.length > 0) {
+    return fromLocalStorage;
   }
-  return readAddedJobsFromLocalStorage();
+  return readAddedJobsFromCookie();
 }
 
 export function saveAddedJobs(jobs: AddedLocalJob[]): AddedLocalJob[] {
@@ -386,23 +386,21 @@ function normalizeJobStatusesByUrl(input: unknown): JobStatusesByUrl {
 }
 
 export function loadHighlightedJobUrl(): string {
+  if (typeof window !== 'undefined') {
+    try {
+      const raw = window.localStorage.getItem(HIGHLIGHTED_JOB_URL_LOCAL_STORAGE_KEY);
+      const fromLocalStorage = normalizeHighlightedJobUrl(raw);
+      if (fromLocalStorage) {
+        return fromLocalStorage;
+      }
+    } catch {
+      // Fall through to cookie.
+    }
+  }
+
   try {
     const cookieValue = getCookie(HIGHLIGHTED_JOB_URL_COOKIE_KEY);
-    const fromCookie = normalizeHighlightedJobUrl(cookieValue ? decodeURIComponent(cookieValue) : '');
-    if (fromCookie) {
-      return fromCookie;
-    }
-  } catch {
-    // Fall through to localStorage.
-  }
-
-  if (typeof window === 'undefined') {
-    return '';
-  }
-
-  try {
-    const raw = window.localStorage.getItem(HIGHLIGHTED_JOB_URL_LOCAL_STORAGE_KEY);
-    return normalizeHighlightedJobUrl(raw);
+    return normalizeHighlightedJobUrl(cookieValue ? decodeURIComponent(cookieValue) : '');
   } catch {
     return '';
   }
@@ -467,12 +465,12 @@ function readJobStatusesFromLocalStorage(): JobStatusesByUrl {
 }
 
 export function loadJobStatusesByUrl(): JobStatusesByUrl {
-  const fromCookie = readJobStatusesFromCookie();
-  if (Object.keys(fromCookie).length > 0) {
-    return fromCookie;
+  const fromLocalStorage = readJobStatusesFromLocalStorage();
+  if (Object.keys(fromLocalStorage).length > 0) {
+    return fromLocalStorage;
   }
 
-  return readJobStatusesFromLocalStorage();
+  return readJobStatusesFromCookie();
 }
 
 export function saveJobStatusesByUrl(data: JobStatusesByUrl): JobStatusesByUrl {
@@ -563,12 +561,12 @@ function readCompanyColorTagsFromLocalStorage(): CompanyColorTagsByCompany {
 }
 
 export function loadCompanyColorTagsByCompany(): CompanyColorTagsByCompany {
-  const fromCookie = readCompanyColorTagsFromCookie();
-  if (Object.keys(fromCookie).length > 0) {
-    return fromCookie;
+  const fromLocalStorage = readCompanyColorTagsFromLocalStorage();
+  if (Object.keys(fromLocalStorage).length > 0) {
+    return fromLocalStorage;
   }
 
-  return readCompanyColorTagsFromLocalStorage();
+  return readCompanyColorTagsFromCookie();
 }
 
 export function saveCompanyColorTagsByCompany(data: CompanyColorTagsByCompany): CompanyColorTagsByCompany {

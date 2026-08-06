@@ -12,6 +12,7 @@ interface ActionsMenuProps {
   onRunAuditAllInSearch: () => void
   onAddJob: (draft: AddedJobDraft) => void
   onExportAllData: () => void
+  onExportPageAsCsv: () => void
   onImportAllData: (xmlText: string) => void | Promise<void>
   userRatingMode: UserRatingMode
   onUserRatingModeChange: (value: UserRatingMode) => void
@@ -29,6 +30,7 @@ export default function ActionsMenu({
   onRunAuditAllInSearch,
   onAddJob,
   onExportAllData,
+  onExportPageAsCsv,
   onImportAllData,
   userRatingMode,
   onUserRatingModeChange,
@@ -265,6 +267,9 @@ export default function ActionsMenu({
           </button>
           <button type="button" className="insights-actions-menu__item" onClick={() => setIsAddJobDialogOpen(true)}>
             Add job
+          </button>
+          <button type="button" className="insights-actions-menu__item" onClick={onExportPageAsCsv}>
+            Export page as CSV (Google Sheets)
           </button>
           <button type="button" className="insights-actions-menu__item" onClick={onExportAllData}>
             Export all data as XML

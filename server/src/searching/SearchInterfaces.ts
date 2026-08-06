@@ -130,6 +130,48 @@ export interface SearchResultMeta {
     includeRemoteJobs: boolean
     userRatingMode: UserRatingMode
   }
+  debugInfo?: SearchDebugInfo
+}
+
+export interface SearchDebugInfo {
+  cacheHit?: boolean
+  userLat: number | null
+  userLon: number | null
+  locationText: string
+  query: string
+  totalJobsInput: number
+  totalJobsVisible: number
+  totalJobsMatched: number
+  timings: {
+    filterMs: number
+    queryMatchMs: number
+    userGeocodeMs: number
+    // geocoding
+    jobGeocodeMs: number
+    jobGeoHadCoords: number
+    jobGeoNewlyGeocoded: number
+    jobGeoSkipped: number
+    // scoring breakdown
+    scoreTotalMs: number
+    scoreResumeMs: number
+    scoreLocationMs: number
+    scoreFreshnessMs: number
+    scoreAuditMs: number
+    scoreQolMs: number
+    scoreImpactMs: number
+    scoreSortMs: number
+    // other
+    userRatingSortMs: number
+    totalMs: number
+  }
+  exclusions: {
+    hiddenByUrl: number
+    hiddenByCompany: number
+    remoteJobsFiltered: number
+    userRatingFiltered: number
+    userRatingFilterMode: string
+    queryMismatch: number
+  }
 }
 
 /**
@@ -140,4 +182,5 @@ export interface RankedJobWrapper {
   scores: JobScores
   totalScore: number
   aiPayload?: JobAiPayload
+  debugInfo?: { lat: number | null; lon: number | null }
 }

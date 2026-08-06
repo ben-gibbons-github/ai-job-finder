@@ -12,6 +12,7 @@ import { scrapeJobsMain } from './scraping/ScrapeJobMain.js'
 import { searchLocationsOpenStreetMap, type LocationOption } from './searching/LocationSearch.js'
 import { getSearchSuggestionCount, getSearchSuggestions, rebuildSearchSuggestions } from './searching/SearchSuggestion.js'
 import SearchMain, { type SearchPayload, type RankedJobWrapper, type SearchResultMeta } from './searching/SearchMain.js'
+import { warmJobHaystachCache } from './searching/SearchUtils.js'
 import { Top100Search } from './searching/Top100Search.js'
 import { auditJobAsync, type AuditResult } from './searching/SearchAudit.js'
 import { impactJobAIAsync, type ImpactAIResult } from './searching/SearchImpactAI.js'
@@ -25,6 +26,7 @@ import {
 
 const AI_AUDIT_ALL_COMMAND = 'AIAuditAllJobsInThisSearch' as const
 const IS_PRODUCTION = process.env.NODE_ENV === 'production'
+const SEARCH_DEBUG_ENABLED = process.env.SEARCH_DEBUG_ENABLED === 'true'
 const AUDIT_ALL_MAX_CONCURRENCY = Math.max(1, Number(process.env.AUDIT_ALL_MAX_CONCURRENCY ?? 4))
 const AUDIT_ALL_MAX_JOBS = Math.max(1, Number(process.env.AUDIT_ALL_MAX_JOBS ?? 250))
 const SHUTDOWN_TIMEOUT_MS = Math.max(1000, Number(process.env.SHUTDOWN_TIMEOUT_MS ?? 10000))
@@ -34,6 +36,58 @@ const MEMORY_HEARTBEAT_MS = 5000
 let JOBS: ScrapedJob[] = []
 const searchMain = new SearchMain()
 const top100Search = new Top100Search(searchMain)
+
+// ─── Tag cloud ───────────────────────────────────────────────────────────────
+
+interface TagCloudEntry { word: string; count: number }
+let cachedTagCloud: TagCloudEntry[] = []
+
+const TAG_CLOUD_STOP_WORDS = new Set([
+  'the','a','an','and','or','in','to','of','for','with','as','is','are','was',
+  'were','be','been','being','you','your','our','we','us','their','they','it',
+  'its','this','that','these','those','will','can','may','must','should',
+  'would','could','have','has','had','do','does','did','not','no','by','at',
+  'on','up','out','if','so','all','also','any','new','one','two','more','other',
+  'work','working','job','role','position','team','company','opportunity',
+  'years','experience','ability','skills','strong','including','related',
+  'within','across','provide','ensure','support','manage','develop','build',
+  'using','from','into','about','such','well','both','each','than','then',
+  'when','where','which','who','how','what','their','them','through','over',
+  'under','between','during','while','after','before','based','required',
+  'looking','join','help','make','take','use','get','set','go','per','etc',
+  // scraper fallback values
+  'unknown','none','na',
+  // html entity artifacts
+  'nbsp','amp','quot','apos','lt','gt','ndash','mdash','lsquo','rsquo',
+])
+
+function buildTagCloud(jobs: ScrapedJob[], topN = 150): TagCloudEntry[] {
+  const counts = new Map<string, number>()
+
+  for (const job of jobs) {
+    const rawText = `${job.name ?? ''} ${job.description ?? ''} ${job.type ?? ''}`
+    // Strip HTML tags and decode/discard HTML entities before tokenizing
+    const text = rawText
+      .replace(/<[^>]*>/g, ' ')
+      .replace(/&[a-z#][a-z0-9]{0,6};/gi, ' ')
+    const tokens = text
+      .toLowerCase()
+      .replace(/[^a-z0-9\s]/g, ' ')
+      .split(/\s+/)
+
+    for (const token of tokens) {
+      if (token.length < 3 || token.length > 24) continue
+      if (TAG_CLOUD_STOP_WORDS.has(token)) continue
+      if (/^\d+$/.test(token)) continue
+      counts.set(token, (counts.get(token) ?? 0) + 1)
+    }
+  }
+
+  return Array.from(counts.entries())
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, topN)
+    .map(([word, count]) => ({ word, count }))
+}
 
 ;(async () => {
   try {
@@ -53,6 +107,13 @@ const top100Search = new Top100Search(searchMain)
     console.log(`Loaded ${JOBS.length} jobs at startup.`)
     rebuildSearchSuggestions(JOBS)
     console.log(`Built search suggestion index with ${getSearchSuggestionCount()} unique terms.`)
+    // Pre-warm the query haystack token cache in the background so the first search is fast
+    setImmediate(() => {
+      warmJobHaystachCache(JOBS)
+      console.log(`[Startup] Job query haystack cache warmed for ${JOBS.length} jobs.`)
+    })
+    cachedTagCloud = buildTagCloud(JOBS, 500)
+    console.log(`Built tag cloud with ${cachedTagCloud.length} entries.`)
     const cached = await top100Search.refresh(JOBS)
     console.log(`Built default cached search results: ${cached.results.length}/${cached.total}`)
   } catch (err) {
@@ -145,6 +206,10 @@ io.on('connection', (socket) => {
 
   socket.emit('server:hello', 'Hello from Socket.IO server!')
 
+  if (cachedTagCloud.length > 0) {
+    socket.emit('server:tagCloud', cachedTagCloud)
+  }
+
   const cachedDefaultSearchResponse = top100Search.getCached()
   if (cachedDefaultSearchResponse) {
     socket.emit('search:results', { ...cachedDefaultSearchResponse, isInitialResponse: true })
@@ -192,7 +257,7 @@ io.on('connection', (socket) => {
       }
 
       try {
-        const results = await searchMain.search(JOBS, payload)
+        const results = await searchMain.search(JOBS, payload, SEARCH_DEBUG_ENABLED)
         const response = {
           results: results.matched,
           total: results.size,
@@ -208,7 +273,7 @@ io.on('connection', (socket) => {
             start: -1,
             end: -1,
           }
-          const fullResults = await searchMain.search(JOBS, fullSearchPayload)
+          const fullResults = await searchMain.search(JOBS, fullSearchPayload, SEARCH_DEBUG_ENABLED)
           const jobsToAudit = fullResults.matched.map((wrapper) => wrapper.job)
           const cappedJobs = jobsToAudit.slice(0, AUDIT_ALL_MAX_JOBS)
 

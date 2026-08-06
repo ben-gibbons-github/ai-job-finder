@@ -47,6 +47,7 @@ interface RankedJobWrapper {
   scores?: JobScores;
   totalScore?: number;
   aiPayload?: JobAiPayload;
+  debugInfo?: { lat: number | null; lon: number | null };
 }
 
 interface ResumeCatalogEntry {
@@ -115,6 +116,14 @@ interface JobTileProps {
     type: string;
     description: string;
   }) => void;
+  scoreWeights?: {
+    resume: number;
+    impact: number;
+    location: number;
+    fresh: number;
+    audit: number;
+    qualityOfLife: number;
+  };
 }
 
 const formatScore = (score: number): string => {
@@ -178,22 +187,19 @@ const getSourceHost = (sourceUrl?: string): string => {
   }
 };
 
-type ScoreBand = 'blue' | 'green' | 'yellow' | 'red';
+type ScoreBand = 'very-high' | 'high' | 'mid-high' | 'mid-low' | 'low' | 'very-low';
 
 const getScoreBand = (score?: number): ScoreBand => {
   if (!Number.isFinite(score)) {
-    return 'red';
+    return 'very-low';
   }
-  if ((score as number) >= 0.85) {
-    return 'blue';
-  }
-  if ((score as number) >= 0.65) {
-    return 'green';
-  }
-  if ((score as number) >= 0.4) {
-    return 'yellow';
-  }
-  return 'red';
+  const s = score as number;
+  if (s >= 1.0)  return 'very-high';
+  if (s >= 0.8)  return 'high';
+  if (s >= 0.6)  return 'mid-high';
+  if (s >= 0.4)  return 'mid-low';
+  if (s >= 0.2)  return 'low';
+  return 'very-low';
 };
 
 const JobTile: React.FC<JobTileProps> = ({
@@ -225,11 +231,23 @@ const JobTile: React.FC<JobTileProps> = ({
   onAwardReadCompletion,
   hasReadCompletionAwarded,
   onSaveUserCreatedJobDetails,
+  scoreWeights,
 }) => {
   const job = wrapper?.job;
   const scores = wrapper?.scores;
   const totalScore = wrapper?.totalScore;
   const aiPayload = wrapper?.aiPayload;
+  const debugInfo = wrapper?.debugInfo;
+
+  // Normalise the total score to 0–100% of the maximum achievable score
+  // (max = sum of all weights × 1.0 per category)
+  const sumOfWeights = scoreWeights
+    ? scoreWeights.resume + scoreWeights.impact + scoreWeights.location +
+      scoreWeights.fresh + scoreWeights.audit + scoreWeights.qualityOfLife
+    : 6
+  const normalizedTotalScore = (totalScore !== undefined && sumOfWeights > 0)
+    ? (totalScore / sumOfWeights) * 100
+    : undefined
   const currentJobStatus = jobStatusRecord?.currentStatus ?? 'none';
   const payloadAuditHasData = Boolean(aiPayload?.audit?.hasData);
   const payloadImpactHasData = Boolean(aiPayload?.impact?.hasData);
@@ -240,12 +258,13 @@ const JobTile: React.FC<JobTileProps> = ({
   const [auditText, setAuditText] = useState<string | null>(null);
   const [auditError, setAuditError] = useState<string | null>(null);
   const [isStatsPopoverOpen, setIsStatsPopoverOpen] = useState(false);
+  const [sectionToScrollTo, setSectionToScrollTo] = useState<string | null>(null);
 
   const hasJobUserNotes = Boolean(
     jobUserNote && (jobUserNote.notes.length > 0 || jobUserNote.userScore !== null),
   );
   const hasCompanyUserNotes = Boolean(
-    companyUserNote && (companyUserNote.notes.length > 0 || companyUserNote.userScore !== null),
+    companyUserNote && companyUserNote.notes.length > 0,
   );
 
   // auditResultOverride comes from the App-level job:audit:result listener;
@@ -293,11 +312,9 @@ const JobTile: React.FC<JobTileProps> = ({
   const resolvedQualityOfLifeSummary = (qualityOfLifeResultOverride?.employeeQualityOfLifeSummary ?? aiPayload?.qualityOfLife?.summary ?? '').trim();
   const normalizedAuditText = String(resolvedAuditText ?? '').trim().toLowerCase();
   const normalizedImpactSummary = resolvedImpactSummary.trim().toLowerCase();
-  const normalizedQualityOfLifeSummary = resolvedQualityOfLifeSummary.trim().toLowerCase();
 
   const auditFailed = Boolean(resolvedAuditError) || normalizedAuditText.includes('searchaudit failed');
   const impactFailed = Boolean(impactResultOverride?.error) || normalizedImpactSummary.includes('searchimpactai failed');
-  const qualityOfLifeFailed = Boolean(qualityOfLifeResultOverride?.error) || normalizedQualityOfLifeSummary.includes('searchqualityoflife failed');
 
   const hasResolvedAudit = !auditFailed && (
     resolvedAuditScore !== null ||
@@ -313,16 +330,6 @@ const JobTile: React.FC<JobTileProps> = ({
   );
   const isAuditComplete = hasResolvedAudit && hasResolvedImpact;
   const auditNeedsRetry = (auditFailed || impactFailed) && !auditLoading;
-
-  const hasAiImpact = !impactFailed && Boolean(
-    resolvedImpactSummary.length > 0 || payloadImpactHasData || impactResultOverride
-  );
-  const hasAiQualityOfLife = !qualityOfLifeFailed && Boolean(
-    resolvedQualityOfLifeSummary.length > 0 || payloadQualityOfLifeHasData || qualityOfLifeResultOverride
-  );
-  const hasAiAudit = !auditFailed && Boolean(
-    (resolvedAuditText && resolvedAuditText.trim().length > 0) || payloadAuditHasData
-  );
 
   const resumeTooltip = resumeText?.trim().length
     ? `Resume relevance from uploaded resume text: ${getPreview(resumeText, 140)}`
@@ -392,7 +399,8 @@ const JobTile: React.FC<JobTileProps> = ({
     }
   };
 
-  const openStatsPopover = () => {
+  const openStatsPopover = (section?: string) => {
+    setSectionToScrollTo(section ?? null);
     setIsStatsPopoverOpen(true);
   };
 
@@ -425,45 +433,48 @@ const JobTile: React.FC<JobTileProps> = ({
 
   return (
     <div
-      className={`job-tile${isUserCreatedJob ? ' job-tile--user-created' : ''}${isHighlighted ? ' job-tile--highlighted' : ''}${currentJobStatus === 'applied' ? ' job-tile--applied' : ''}`}
+      className={`job-tile${isHighlighted ? ' job-tile--highlighted' : ''}`}
       onClick={handleTileClick}
       role="button"
       tabIndex={0}
       onKeyDown={handleTileKeyDown}
       aria-label={`Open details for ${job?.name ?? 'job'}`}
     >
+      {debugInfo !== undefined && (
+        <div className="job-debug-icon" onClick={(e) => e.stopPropagation()} role="presentation">
+          <svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true" focusable="false" fill="currentColor">
+            <path d="M8 1a7 7 0 1 0 0 14A7 7 0 0 0 8 1zm.75 10.5h-1.5v-5h1.5v5zm0-6.5h-1.5V3.5h1.5V5z"/>
+          </svg>
+          <div className="job-debug-icon__tooltip">
+            <div className="job-debug-icon__row"><span>lat</span><span>{typeof debugInfo.lat === 'number' ? debugInfo.lat.toFixed(5) : '—'}</span></div>
+            <div className="job-debug-icon__row"><span>lon</span><span>{typeof debugInfo.lon === 'number' ? debugInfo.lon.toFixed(5) : '—'}</span></div>
+          </div>
+        </div>
+      )}
+      {(isUserCreatedJob || currentJobStatus !== 'none' || (Array.isArray(companyTagColors) && companyTagColors.length > 0)) && (
+        <div className="job-tile-flags" aria-hidden="true">
+          {isUserCreatedJob && (
+            <span className="job-tile-status-badge job-tile-status-badge--user-created">user created</span>
+          )}
+          {currentJobStatus !== 'none' && (
+            <span className={`job-tile-status-badge job-tile-status-badge--${currentJobStatus}`}>
+              {currentJobStatus}
+            </span>
+          )}
+          {Array.isArray(companyTagColors) && companyTagColors.map((color) => (
+            <span key={color} className={`job-tile-flag job-tile-flag--${color}`} />
+          ))}
+        </div>
+      )}
+      {typeof companyUserNote?.userScore === 'number' && (
+        <div className={`job-tile-score-flag job-tile-score-flag--${getUserScoreBand(companyUserNote.userScore)}`} aria-label={`Company score: ${companyUserNote.userScore}`}>
+          {companyUserNote.userScore}
+        </div>
+      )}
       <div className="job-tile-fixed-layout">
         <div className="job-tile-header">
           <div className="job-title-row">
-            <h2 className="job-title">{job?.name || 'Job Title'}</h2>
-            {isUserCreatedJob && (
-              <span
-                className="job-user-created-badge"
-                title="This job was added by you"
-                aria-label="User created job"
-              >
-                User Created
-              </span>
-            )}
-            {hasReadCompletionAwarded && (
-              <span
-                className="job-read-badge"
-                title="Read bonus already claimed for this job"
-                aria-label="Read bonus already claimed"
-              >
-                <svg viewBox="0 0 24 24" width="13" height="13" aria-hidden="true" focusable="false">
-                  <path
-                    d="M1.8 12s3.8-6.7 10.2-6.7S22.2 12 22.2 12s-3.8 6.7-10.2 6.7S1.8 12 1.8 12z"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="1.8"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                  <circle cx="12" cy="12" r="3.2" fill="currentColor" />
-                </svg>
-              </span>
-            )}
+            <h2 className={`job-title${hasReadCompletionAwarded ? ' job-title--viewed' : ''}`}>{job?.name || 'Job Title'}</h2>
           </div>
           <JobTileDropdown
             job={job}
@@ -484,15 +495,6 @@ const JobTile: React.FC<JobTileProps> = ({
 
         <div className="job-meta">
           <p className="job-company"><strong>Company:</strong> {job?.company_name || 'Company Name'}</p>
-          {Array.isArray(companyTagColors) && companyTagColors.length > 0 && (
-            <div className="job-company-tags" aria-label="Company tags">
-              {companyTagColors.map((color) => (
-                <span key={color} className={`job-company-tag job-company-tag--${color}`}>
-                  {color}
-                </span>
-              ))}
-            </div>
-          )}
           <p className="job-location"><strong>Location:</strong> {job?.location || 'Location'}</p>
           <p className="job-type"><strong>Type:</strong> {job?.type || 'Full-time'}</p>
           {job?.remote && <p className="job-remote"><strong>Remote:</strong> {job.remote}</p>}
@@ -509,11 +511,6 @@ const JobTile: React.FC<JobTileProps> = ({
               title={companyNoteLink ? `Open link: ${companyNoteLink}` : undefined}
             >
               <p className="job-user-notes-kind">Company notes</p>
-              {companyUserNote?.userScore !== null && companyUserNote?.userScore !== undefined && (
-                <span className={`job-user-score-badge job-user-score-badge--${getUserScoreBand(companyUserNote.userScore)}`}>
-                  Company score: {companyUserNote.userScore}/100
-                </span>
-              )}
               {companyUserNote?.notes && (
                 <p className="job-user-notes-text">{companyUserNote.notes}</p>
               )}
@@ -548,10 +545,11 @@ const JobTile: React.FC<JobTileProps> = ({
           <div className="job-scores">
             <div className="scores-header">
               <strong>Match Scores:</strong>
-              {totalScore !== undefined && <span className="total-score">Total: {formatScore(totalScore)}%</span>}
+              {normalizedTotalScore !== undefined && <span className="total-score">Total: {normalizedTotalScore.toFixed(1)}%</span>}
             </div>
 
             <div className="score-bubbles-row">
+              {String(resumeText ?? '').trim().length > 0 && (
               <div
                 className={`score-bubble score-bubble--${resumeBand}`}
               >
@@ -559,35 +557,22 @@ const JobTile: React.FC<JobTileProps> = ({
                 <span className="score-bubble-value">{formatScore(scores.resume)}%</span>
                 <span className="score-bubble-tooltip">{resumeTooltip}</span>
               </div>
+              )}
 
               <div
                 className={`score-bubble score-bubble--impact score-bubble--${impactBand}`}
+                onClick={(e) => { e.stopPropagation(); openStatsPopover('impact'); }}
               >
-                <span className="score-bubble-label">
-                  Impact
-                  {(hasAiImpact || impactFailed) && (
-                    <span className="score-ai-indicator" title="Impact score from AI impact analysis">
-                      <span className={`score-ai-dot score-ai-dot--impact ${impactFailed ? 'score-ai-dot--failed' : 'score-ai-dot--ok'}`} />
-                      <span className="score-ai-icon">{impactFailed ? '⚠' : '✨'}</span>
-                    </span>
-                  )}
-                </span>
+                <span className="score-bubble-label">Impact</span>
                 <span className="score-bubble-value">{displayedImpactScore !== undefined ? formatScore(displayedImpactScore) + '%' : '—'}</span>
                 <span className="score-bubble-tooltip">{impactTooltip}</span>
               </div>
 
               <div
                 className={`score-bubble score-bubble--${qualityOfLifeBand}`}
+                onClick={(e) => { e.stopPropagation(); openStatsPopover('qol'); }}
               >
-                <span className="score-bubble-label">
-                  QoL
-                  {(hasAiQualityOfLife || qualityOfLifeFailed) && (
-                    <span className="score-ai-indicator" title="Quality-of-life score from AI quality-of-life analysis">
-                      <span className={`score-ai-dot ${qualityOfLifeFailed ? 'score-ai-dot--failed' : 'score-ai-dot--ok'}`} />
-                      <span className="score-ai-icon">{qualityOfLifeFailed ? '⚠' : '🧭'}</span>
-                    </span>
-                  )}
-                </span>
+                <span className="score-bubble-label">QoL</span>
                 <span className="score-bubble-value">{displayedQualityOfLifeScore !== undefined ? formatScore(displayedQualityOfLifeScore) + '%' : '—'}</span>
                 <span className="score-bubble-tooltip">{qualityOfLifeTooltip}</span>
               </div>
@@ -610,18 +595,11 @@ const JobTile: React.FC<JobTileProps> = ({
 
               <div
                 className={`score-bubble score-bubble--audit score-bubble--${auditBand}`}
+                onClick={(e) => { e.stopPropagation(); openStatsPopover('audit'); }}
               >
-                <span className="score-bubble-label">
-                  Audit
-                  {(hasAiAudit || auditFailed) && (
-                    <span className="score-ai-indicator" title="Audit score from AI audit analysis">
-                      <span className={`score-ai-dot score-ai-dot--audit ${auditFailed ? 'score-ai-dot--failed' : 'score-ai-dot--ok'}`} />
-                      <span className="score-ai-icon">{auditFailed ? '⚠' : '🤖'}</span>
-                    </span>
-                  )}
-                </span>
+                <span className="score-bubble-label">Audit</span>
                 <span className="score-bubble-value">
-                  {auditLoading ? '⏳ Running…' : displayedAuditScore !== undefined ? formatScore(displayedAuditScore) + '%' : '—'}
+                  {auditLoading ? '⏳…' : displayedAuditScore !== undefined ? formatScore(displayedAuditScore) + '%' : '—'}
                 </span>
                 <span className="score-bubble-tooltip">{auditTooltip}</span>
               </div>
@@ -661,7 +639,8 @@ const JobTile: React.FC<JobTileProps> = ({
       {ReactDOM.createPortal(
         <JobTileStatsPopover
           isOpen={isStatsPopoverOpen}
-          onClose={() => setIsStatsPopoverOpen(false)}
+          onClose={() => { setIsStatsPopoverOpen(false); setSectionToScrollTo(null); }}
+          sectionToScrollTo={sectionToScrollTo}
           isUserCreatedJob={isUserCreatedJob}
           jobName={job?.name}
           jobSourceUrl={job?.source_url}
