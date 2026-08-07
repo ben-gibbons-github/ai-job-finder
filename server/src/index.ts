@@ -28,6 +28,7 @@ const AI_AUDIT_ALL_COMMAND = 'AIAuditAllJobsInThisSearch' as const
 const IS_PRODUCTION = process.env.NODE_ENV === 'production'
 const SEARCH_DEBUG_ENABLED = process.env.SEARCH_DEBUG_ENABLED === 'true'
 const AUDIT_ENABLED = process.env.AUDIT_ENABLED === 'true'
+const HAYSTACK_WARMUP_ENABLED = process.env.HAYSTACK_WARMUP_ENABLED === 'true'
 const AUDIT_ALL_MAX_CONCURRENCY = Math.max(1, Number(process.env.AUDIT_ALL_MAX_CONCURRENCY ?? 4))
 const AUDIT_ALL_MAX_JOBS = Math.max(1, Number(process.env.AUDIT_ALL_MAX_JOBS ?? 250))
 const SHUTDOWN_TIMEOUT_MS = Math.max(1000, Number(process.env.SHUTDOWN_TIMEOUT_MS ?? 10000))
@@ -157,27 +158,28 @@ function buildTagCloud(jobs: ScrapedJob[], topN = 150): TagCloudEntry[] {
 
     // Pre-warm the query haystack token cache in small async chunks so the
     // event loop stays free and the server stays responsive during warmup.
-    const warmupTotal = JOBS.length
+    if (HAYSTACK_WARMUP_ENABLED) {
+      const warmupTotal = JOBS.length
 
-    // ── Pre-scan: find the worst offenders before warmup begins ──────────────
-    const PRE_SCAN_FIELD_WARN = 5_000   // bytes — flag fields larger than this
-    const topLargeJobs: Array<{ idx: number; descLen: number; label: string }> = []
-    for (let idx = 0; idx < JOBS.length; idx++) {
-      const job = JOBS[idx]
-      const descLen = String(job.description ?? '').length
-      if (descLen > PRE_SCAN_FIELD_WARN) {
-        topLargeJobs.push({ idx, descLen, label: `${String(job.company_name ?? '?')} | ${String(job.name ?? '?')}` })
+      // ── Pre-scan: find the worst offenders before warmup begins ──────────────
+      const PRE_SCAN_FIELD_WARN = 5_000   // bytes — flag fields larger than this
+      const topLargeJobs: Array<{ idx: number; descLen: number; label: string }> = []
+      for (let idx = 0; idx < JOBS.length; idx++) {
+        const job = JOBS[idx]
+        const descLen = String(job.description ?? '').length
+        if (descLen > PRE_SCAN_FIELD_WARN) {
+          topLargeJobs.push({ idx, descLen, label: `${String(job.company_name ?? '?')} | ${String(job.name ?? '?')}` })
+        }
       }
-    }
-    topLargeJobs.sort((a, b) => b.descLen - a.descLen)
-    const topN = topLargeJobs.slice(0, 20)
-    console.log(`[Haystack] Pre-scan: ${topLargeJobs.length} jobs with description > ${PRE_SCAN_FIELD_WARN} chars`)
-    if (topN.length > 0) {
-      console.log(`[Haystack] Top ${topN.length} largest descriptions:`)
-      for (const { idx, descLen, label } of topN) {
-        console.log(`  job[${idx}] ${descLen.toLocaleString()} chars — ${label}`)
+      topLargeJobs.sort((a, b) => b.descLen - a.descLen)
+      const topN = topLargeJobs.slice(0, 20)
+      console.log(`[Haystack] Pre-scan: ${topLargeJobs.length} jobs with description > ${PRE_SCAN_FIELD_WARN} chars`)
+      if (topN.length > 0) {
+        console.log(`[Haystack] Top ${topN.length} largest descriptions:`)
+        for (const { idx, descLen, label } of topN) {
+          console.log(`  job[${idx}] ${descLen.toLocaleString()} chars — ${label}`)
+        }
       }
-    }
 
     ;(async () => {
       const CHUNK = 100  // smaller chunks = finer-grained blocking detection
@@ -242,6 +244,9 @@ function buildTagCloud(jobs: ScrapedJob[], topN = 150): TagCloudEntry[] {
       }
       console.log(`[Timer] 🟢 Haystack warmup → ${(performance.now() - t0).toFixed(0)}ms total`)
     })().catch((err) => console.warn('[Startup] Haystack warmup failed:', err))
+    } else {
+      console.log('[Haystack] Warmup skipped (HAYSTACK_WARMUP_ENABLED not set) — cache will build lazily on first search.')
+    }
 
     const doneTagCloud = startTimer(`buildTagCloud (${JOBS.length} jobs, top 500)`)
     cachedTagCloud = buildTagCloud(JOBS, 500)
