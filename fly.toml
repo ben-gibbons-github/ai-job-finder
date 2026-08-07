@@ -14,7 +14,7 @@ primary_region = 'dfw'
   CACHE_SEED_MODE = 'overwrite'
   NODE_ENV = 'production'
   PORT = '8080'
-  HAYSTACK_WARMUP_ENABLED = 'false'
+  HAYSTACK_WARMUP_ENABLED = 'true'
 
 [[mounts]]
   source = 'cache_data'

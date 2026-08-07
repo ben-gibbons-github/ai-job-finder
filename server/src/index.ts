@@ -182,7 +182,7 @@ function buildTagCloud(jobs: ScrapedJob[], topN = 150): TagCloudEntry[] {
       }
 
     ;(async () => {
-      const CHUNK = 100  // smaller chunks = finer-grained blocking detection
+      const CHUNK = 10  // tiny chunks so event loop stays responsive during warmup
       const SLOW_CHUNK_MS = 50  // warn if a chunk takes longer than this
       const SLOW_JOB_MS = 5    // within a slow chunk, flag individual slow jobs
       const FIELD_WARN_LEN = 2_000  // report field lengths for slow jobs above this

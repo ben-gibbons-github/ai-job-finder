@@ -509,7 +509,7 @@ class SearchMain {
     const queryMatchStart = performance.now()
     setActiveOperation(`search:queryMatch (${ratingFilteredJobs.length} jobs, terms=${queryTerms.length})`)
     const matched = queryTerms.length > 0
-      ? await asyncFilter(ratingFilteredJobs, (job) => jobMatchesQuery(job, queryTerms, logFlags.query === true))
+      ? await asyncFilter(ratingFilteredJobs, (job) => jobMatchesQuery(job, queryTerms, logFlags.query === true), 500)
       : ratingFilteredJobs // If no query terms, consider all visible jobs as matched (subject to pagination later)
     const queryMatchMs = performance.now() - queryMatchStart
     clearActiveOperation('search:queryMatch')
