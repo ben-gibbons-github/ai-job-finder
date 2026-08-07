@@ -1,5 +1,6 @@
 import type { ScrapedJob } from '../scraping/ScrapedJob.js';
 import { geocodeJobLocations } from '../searching/SearchDistance.js';
+import { setActiveOperation, clearActiveOperation } from './ServerActivityTracker.js';
 
 function isMissingCoordinates(job: ScrapedJob): boolean {
   return (
@@ -15,7 +16,14 @@ export function startBackgroundGeocodeJobs(jobs: ScrapedJob[]): void {
   const startedAtMs = Date.now();
   console.log(`[BackgroundGeocode] Triggered for ${jobs.length} jobs.`);
 
-  const missingCoordinatesCount = jobs.filter(isMissingCoordinates).length;
+  // ── Count missing coords (sync scan — tag it so the monitor sees it) ──────
+  setActiveOperation('BackgroundGeocode: counting missing coords')
+  const missingIndices: number[] = []
+  for (let i = 0; i < jobs.length; i++) {
+    if (isMissingCoordinates(jobs[i])) missingIndices.push(i)
+  }
+  const missingCoordinatesCount = missingIndices.length
+  clearActiveOperation('BackgroundGeocode: counting missing coords')
 
   if (missingCoordinatesCount === 0) {
     console.log('[BackgroundGeocode] Skipping: no jobs are missing coordinates.');
@@ -30,17 +38,38 @@ export function startBackgroundGeocodeJobs(jobs: ScrapedJob[]): void {
   void (async () => {
     try {
       console.log('[BackgroundGeocode] Worker started (non-blocking).');
-      const geocodedJobs = await geocodeJobLocations(jobs, true);
+
+      // Only pass jobs that are missing coords — skips the 347k regex scan
+      // for jobs that already have valid coordinates.
+      const jobsMissingCoords = missingIndices.map((i) => jobs[i])
+      setActiveOperation(`BackgroundGeocode: geocoding ${jobsMissingCoords.length} jobs`)
+      const geocodedSubset = await geocodeJobLocations(jobsMissingCoords, true);
+      clearActiveOperation('BackgroundGeocode: geocoding')
+
       console.log('[BackgroundGeocode] Geocode lookup pass completed. Merging coordinates into in-memory jobs...');
 
-      // Merge geocoded coordinates back into in-memory job objects.
-      for (let i = 0; i < jobs.length; i += 1) {
-        jobs[i].location_lat = geocodedJobs[i].location_lat;
-        jobs[i].location_lon = geocodedJobs[i].location_lon;
+      // Merge results back in chunks so the event loop stays free.
+      setActiveOperation('BackgroundGeocode: merging results')
+      const MERGE_CHUNK = 5_000
+      for (let ci = 0; ci < geocodedSubset.length; ci += MERGE_CHUNK) {
+        for (let j = ci; j < Math.min(ci + MERGE_CHUNK, geocodedSubset.length); j++) {
+          const originalIndex = missingIndices[j]
+          jobs[originalIndex].location_lat = geocodedSubset[j].location_lat;
+          jobs[originalIndex].location_lon = geocodedSubset[j].location_lon;
+        }
+        await new Promise<void>(resolve => setImmediate(resolve))
       }
+      clearActiveOperation('BackgroundGeocode: merging results')
 
-      const remainingMissingCoordinatesCount = jobs.filter(isMissingCoordinates).length;
-      const geocodedCount = Math.max(0, missingCoordinatesCount - remainingMissingCoordinatesCount);
+      // Count remaining without a full scan — subtract resolved from known missing
+      setActiveOperation('BackgroundGeocode: counting remaining')
+      let geocodedCount = 0
+      for (let j = 0; j < geocodedSubset.length; j++) {
+        if (!isMissingCoordinates(geocodedSubset[j])) geocodedCount++
+      }
+      clearActiveOperation('BackgroundGeocode: counting remaining')
+
+      const remainingMissingCoordinatesCount = missingCoordinatesCount - geocodedCount;
       const resolvedPct = missingCoordinatesCount > 0
         ? ((geocodedCount / missingCoordinatesCount) * 100).toFixed(1)
         : '0.0';
@@ -50,6 +79,7 @@ export function startBackgroundGeocodeJobs(jobs: ScrapedJob[]): void {
         `[BackgroundGeocode] Startup geocoding complete: resolved ${geocodedCount}/${missingCoordinatesCount} missing job coordinates (${resolvedPct}%). Remaining missing: ${remainingMissingCoordinatesCount}. Took ${durationMs}ms.`
       );
     } catch (error) {
+      clearActiveOperation('BackgroundGeocode')
       const message = error instanceof Error ? error.message : String(error);
       const durationMs = Date.now() - startedAtMs;
       console.error(`[BackgroundGeocode] Startup geocoding failed after ${durationMs}ms: ${message}`);

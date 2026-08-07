@@ -1,6 +1,7 @@
 import type { ScrapedJob } from '../scraping/ScrapedJob.js'
 import scrapedEmployerCache, { getOrCreateEmployer } from '../scraping/ScrapedEmployerCache.js'
 import { askGeminiWithSearch } from '../llms/AskLLM.js'
+import { setActiveOperation, clearActiveOperation } from '../utils/ServerActivityTracker.js'
 
 const inFlightQualityOfLife = new Set<string>()
 
@@ -220,11 +221,13 @@ export function qualityOfLifeJob(job: ScrapedJob, shouldLog = false, shouldLaunc
         if (shouldLog) {
           console.log(`[SearchQualityOfLife] Asking Gemini with search for ${job.name}`)
         }
-
+        const qolLabel = `gemini:qol ${String(job.company_name ?? '?')} | ${job.name}`
+        setActiveOperation(qolLabel)
         const [result] = await askGeminiWithSearch([question], {
           systemInstruction:
             'You are a strict workplace quality-of-life analyst. Output compact JSON only.',
         })
+        clearActiveOperation(qolLabel)
 
         const parsed = parseQualityOfLifeRatings(result.answer)
         if (!parsed) {

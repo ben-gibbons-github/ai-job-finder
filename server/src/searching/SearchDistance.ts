@@ -1,6 +1,7 @@
 import type { ScrapedJob } from '../scraping/ScrapedJob.js'
 import { nameToLonLat } from '../utils/NameToLonLat.js'
 import { lookupCityFallback } from '../utils/CityFallbackLookup.js'
+import { setActiveOperation, clearActiveOperation } from '../utils/ServerActivityTracker.js'
 
 /**
  * Distance and location-based scoring functionality
@@ -300,7 +301,10 @@ export async function geocodeUserLocation(
   )
 
   try {
+    const geoLabel = `geocode:userLocation "${locationText}"`
+    setActiveOperation(geoLabel)
     const result = await Promise.race([nameToLonLat(locationText), timeoutPromise])
+    clearActiveOperation(geoLabel)
 
     if (result === 'timeout') {
       // Primary geocoder stalled — try city fallback without caching
@@ -363,12 +367,15 @@ export async function geocodeJobLocations(jobs: ScrapedJob[], shouldLog = false)
 
   // Filter to only jobs that actually need geocoding — avoids creating async
   // closures for the (majority of) jobs that already have valid coordinates.
+  setActiveOperation(`geocode:filterNeeding (${jobs.length} jobs)`)
   const jobsNeedingGeocode = jobs.filter((job) => !hasValidCoords(job) && !shouldSkipGeocodeForJob(job))
+  clearActiveOperation('geocode:filterNeeding')
 
   if (jobsNeedingGeocode.length === 0) {
     return jobs
   }
 
+  setActiveOperation(`geocode:lookupLocations (${jobsNeedingGeocode.length} jobs)`)
   await Promise.all(
     jobsNeedingGeocode.map(async (job) => {
       const locationKey = normalizeLocationKey(job.location)
@@ -385,6 +392,7 @@ export async function geocodeJobLocations(jobs: ScrapedJob[], shouldLog = false)
       }
     }),
   )
+  clearActiveOperation('geocode:lookupLocations')
 
   return jobs
 }

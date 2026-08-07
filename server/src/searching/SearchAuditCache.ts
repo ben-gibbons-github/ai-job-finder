@@ -76,12 +76,13 @@ class SearchAuditCache {
   }
 
   private saveToFile(): void {
-    try {
+    setImmediate(() => {
       const obj = Object.fromEntries(this.cache)
-      cacheHandler.saveSync(JSON.stringify(obj, null, 2))
-    } catch (error) {
-      console.error(`[SearchAuditCache] Failed to save cache to ${CACHE_FILE}:`, error)
-    }
+      const payload = JSON.stringify(obj)
+      cacheHandler.save(payload).catch((error) => {
+        console.error(`[SearchAuditCache] Failed to save cache to ${CACHE_FILE}:`, error)
+      })
+    })
   }
 }
 

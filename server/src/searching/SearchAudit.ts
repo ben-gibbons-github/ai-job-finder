@@ -2,6 +2,7 @@ import type { ScrapedEmployer } from '../scraping/ScrapedEmployer.js'
 import type { ScrapedJob } from '../scraping/ScrapedJob.js'
 import scrapedEmployerCache, { getOrCreateEmployer } from '../scraping/ScrapedEmployerCache.js'
 import { askGeminiWithSearch } from '../llms/AskLLM.js'
+import { setActiveOperation, clearActiveOperation } from '../utils/ServerActivityTracker.js'
 
 const inFlightAudits = new Set<string>()
 
@@ -274,11 +275,13 @@ export function auditJob(job: ScrapedJob, shouldLog = false, shouldLaunch = fals
     void (async () => {
       try {
         console.log(`[SearchAudit] Asking Gemini with search for ${job.name}`)
-
+        const auditLabel = `gemini:audit ${String(job.company_name ?? '?')} | ${job.name}`
+        setActiveOperation(auditLabel)
         const [result] = await askGeminiWithSearch([question], {
           systemInstruction:
             'You are a strict job-posting auditor. Keep output compact and produce JSON only.',
         })
+        clearActiveOperation(auditLabel)
 
         const parsed = parseAuditRatings(result.answer)
         if (!parsed) {

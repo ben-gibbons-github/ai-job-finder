@@ -1,6 +1,7 @@
 import type { ScrapedJob } from '../scraping/ScrapedJob.js'
 import scrapedEmployerCache, { getOrCreateEmployer } from '../scraping/ScrapedEmployerCache.js'
 import { askGeminiWithSearch } from '../llms/AskLLM.js'
+import { setActiveOperation, clearActiveOperation } from '../utils/ServerActivityTracker.js'
 import console from 'node:console'
 
 const inFlightImpacts = new Set<string>()
@@ -351,10 +352,13 @@ export function impactJobAI(job: ScrapedJob, shouldLog = false, shouldLaunch = f
   runWithLlmConcurrencyCap(() => {
     void (async () => {
       try {
+        const impactLabel = `gemini:impact ${String(job.company_name ?? '?')} | ${job.name}`
+        setActiveOperation(impactLabel)
         const [result] = await askGeminiWithSearch([question], {
           systemInstruction:
             'You are a strict impact due-diligence analyst. Use web evidence and output compact JSON only.',
         })
+        clearActiveOperation(impactLabel)
 
         const parsed = parseImpactRatings(result.answer)
         if (!parsed) {

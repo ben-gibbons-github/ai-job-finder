@@ -10,23 +10,37 @@ import { getOrCreateEmployer } from '../scraping/ScrapedEmployerCache.js'
 // Using a Set<string> of tokens gives O(1) per-term lookup vs O(haystack_length) string.includes().
 const jobHaystackCache = new WeakMap<ScrapedJob, Set<string>>()
 
+// Caps applied to RAW strings BEFORE any toLowerCase / regex processing.
+// This is critical: toSafeText().toLowerCase() on a 500 KB string takes seconds.
+const HAYSTACK_FIELD_CAP = 800    // max raw chars from any single field
+const HAYSTACK_TOTAL_CAP = 4000   // max raw chars fed to tokenize() in total
+
+/** Slice a raw (un-lowercased) string before processing. */
+function capRaw(value: unknown): string {
+  const s = String(value ?? '')
+  return s.length > HAYSTACK_FIELD_CAP ? s.slice(0, HAYSTACK_FIELD_CAP) : s
+}
+
 function getJobHaystackTokens(job: ScrapedJob): Set<string> {
   const cached = jobHaystackCache.get(job)
   if (cached !== undefined) {
     return cached
   }
+  // Cap each field BEFORE lowercasing/regex — avoids O(n) cost on huge descriptions.
   const raw = [
-    toSafeText(job.name),
-    toSafeText(job.company_name),
-    toSafeText(job.location),
-    toSafeText(job.description),
-    toSafeText(job.type),
-    toSafeText(job.source),
-    toSafeText(job.source_url),
-    toSafeText(job.posted),
-    job.tags.map((tag) => toSafeText(tag)).join(' '),
+    capRaw(job.name),
+    capRaw(job.company_name),
+    capRaw(job.location),
+    capRaw(job.description),
+    capRaw(job.type),
+    capRaw(job.source),
+    capRaw(job.source_url),
+    capRaw(job.posted),
+    job.tags.map((tag) => capRaw(tag)).join(' '),
   ].join(' ')
-  const tokens = new Set(tokenize(raw))
+  // Final cap on the total to bound tokenize() input regardless of field count.
+  const bounded = raw.length > HAYSTACK_TOTAL_CAP ? raw.slice(0, HAYSTACK_TOTAL_CAP) : raw
+  const tokens = new Set(tokenize(bounded))
   jobHaystackCache.set(job, tokens)
   return tokens
 }

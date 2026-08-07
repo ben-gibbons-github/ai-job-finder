@@ -36,8 +36,19 @@ async function ensureCacheLoaded(): Promise<void> {
   return loadPromise
 }
 
-function persistCache(): Promise<void> {
-  return cacheHandler.save(JSON.stringify(cache, null, 2)).catch(() => undefined)
+// Debounce cache writes so compression+disk-I/O only fires once per window,
+// even when dozens of AI jobs complete in quick succession.
+const SAVE_DEBOUNCE_MS = 10_000
+let saveDebounceTimer: ReturnType<typeof setTimeout> | null = null
+
+function persistCache(): void {
+  if (saveDebounceTimer !== null) return  // a save is already scheduled
+  saveDebounceTimer = setTimeout(() => {
+    saveDebounceTimer = null
+    setImmediate(() => {
+      cacheHandler.save(JSON.stringify(cache)).catch(() => undefined)
+    })
+  }, SAVE_DEBOUNCE_MS)
 }
 
 export async function getCachedAnswer(question: string): Promise<string | null> {
@@ -59,5 +70,5 @@ export async function setCachedAnswer(question: string, answer: string): Promise
 
   await ensureCacheLoaded()
   cache[key] = value
-  await persistCache()
+  persistCache()
 }

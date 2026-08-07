@@ -32,6 +32,49 @@ const AUDIT_ALL_MAX_JOBS = Math.max(1, Number(process.env.AUDIT_ALL_MAX_JOBS ?? 
 const SHUTDOWN_TIMEOUT_MS = Math.max(1000, Number(process.env.SHUTDOWN_TIMEOUT_MS ?? 10000))
 const MEMORY_HEARTBEAT_MS = 5000
 
+import {
+  setActiveOperation,
+  clearActiveOperation,
+  getActiveOperation,
+  getLastCompletedOp,
+  getLastCompletedAt,
+} from './utils/ServerActivityTracker.js'
+
+// ─── Event loop lag monitor ─────────────────────────────────────────────────────
+const EL_INTERVAL_MS = 100
+const EL_WARN_THRESHOLD_MS = 150
+let elLastTick = Date.now()
+const eventLoopMonitor = setInterval(() => {
+  const now = Date.now()
+  const lag = now - elLastTick - EL_INTERVAL_MS
+  if (lag > EL_WARN_THRESHOLD_MS) {
+    const active = getActiveOperation()
+    let blame: string
+    if (active !== 'idle') {
+      blame = `active: "${active}"`
+    } else {
+      const msSinceEnd = now - getLastCompletedAt()
+      blame = `recently finished: "${getLastCompletedOp()}" (ended ~${msSinceEnd}ms ago)`
+    }
+    console.warn(`[EventLoop] ⚠️  Blocked for ~${lag + EL_INTERVAL_MS}ms — ${blame}`)
+  }
+  elLastTick = now
+}, EL_INTERVAL_MS)
+eventLoopMonitor.unref()
+
+// ─── Timing helper ───────────────────────────────────────────────────────────
+function startTimer(label: string): () => void {
+  setActiveOperation(label)
+  const t0 = performance.now()
+  console.log(`[Timer] ▶ ${label}`)
+  return () => {
+    clearActiveOperation(label)
+    const ms = (performance.now() - t0).toFixed(0)
+    const icon = Number(ms) > 2000 ? '🔴' : Number(ms) > 500 ? '🟡' : '🟢'
+    console.log(`[Timer] ${icon} ${label} → ${ms}ms`)
+  }
+}
+
 // Global job list
 let JOBS: ScrapedJob[] = []
 const searchMain = new SearchMain()
@@ -105,16 +148,108 @@ function buildTagCloud(jobs: ScrapedJob[], topN = 150): TagCloudEntry[] {
 
     JOBS = await scrapeJobsMain()
     console.log(`Loaded ${JOBS.length} jobs at startup.`)
+
+    const doneSearchSuggestions = startTimer(`rebuildSearchSuggestions (${JOBS.length} jobs)`)
     rebuildSearchSuggestions(JOBS)
+    doneSearchSuggestions()
     console.log(`Built search suggestion index with ${getSearchSuggestionCount()} unique terms.`)
-    // Pre-warm the query haystack token cache in the background so the first search is fast
-    setImmediate(() => {
-      warmJobHaystachCache(JOBS)
-      console.log(`[Startup] Job query haystack cache warmed for ${JOBS.length} jobs.`)
-    })
+
+    // Pre-warm the query haystack token cache in small async chunks so the
+    // event loop stays free and the server stays responsive during warmup.
+    const warmupTotal = JOBS.length
+
+    // ── Pre-scan: find the worst offenders before warmup begins ──────────────
+    const PRE_SCAN_FIELD_WARN = 5_000   // bytes — flag fields larger than this
+    const topLargeJobs: Array<{ idx: number; descLen: number; label: string }> = []
+    for (let idx = 0; idx < JOBS.length; idx++) {
+      const job = JOBS[idx]
+      const descLen = String(job.description ?? '').length
+      if (descLen > PRE_SCAN_FIELD_WARN) {
+        topLargeJobs.push({ idx, descLen, label: `${String(job.company_name ?? '?')} | ${String(job.name ?? '?')}` })
+      }
+    }
+    topLargeJobs.sort((a, b) => b.descLen - a.descLen)
+    const topN = topLargeJobs.slice(0, 20)
+    console.log(`[Haystack] Pre-scan: ${topLargeJobs.length} jobs with description > ${PRE_SCAN_FIELD_WARN} chars`)
+    if (topN.length > 0) {
+      console.log(`[Haystack] Top ${topN.length} largest descriptions:`)
+      for (const { idx, descLen, label } of topN) {
+        console.log(`  job[${idx}] ${descLen.toLocaleString()} chars — ${label}`)
+      }
+    }
+
+    ;(async () => {
+      const CHUNK = 100  // smaller chunks = finer-grained blocking detection
+      const SLOW_CHUNK_MS = 50  // warn if a chunk takes longer than this
+      const SLOW_JOB_MS = 5    // within a slow chunk, flag individual slow jobs
+      const FIELD_WARN_LEN = 2_000  // report field lengths for slow jobs above this
+      let i = 0
+      const t0 = performance.now()
+      while (i < JOBS.length) {
+        const chunkLabel = `haystack-warmup chunk ${Math.floor(i / CHUNK)} (jobs ${i}–${Math.min(i + CHUNK - 1, warmupTotal - 1)})`
+        setActiveOperation(chunkLabel)
+        const chunkStart = performance.now()
+        const chunk = JOBS.slice(i, i + CHUNK)
+
+        for (const job of chunk) {
+          const jobStart = performance.now()
+          const descRaw = String(job.description ?? '')
+          const nameRaw = String(job.name ?? '')
+          const tagsRaw = (job.tags ?? []).join(' ')
+
+          // Time each sub-step to pinpoint which operation blocks
+          const t1 = performance.now()
+          const _ = descRaw.length  // just access length — baseline
+          const tCheck = performance.now() - t1
+
+          warmJobHaystachCache([job])
+          const jobMs = performance.now() - jobStart
+
+          if (jobMs > SLOW_JOB_MS) {
+            const fields = [
+              `desc=${descRaw.length}`,
+              `name=${nameRaw.length}`,
+              `tags=${tagsRaw.length}`,
+              `url=${String(job.source_url ?? '').length}`,
+            ].join(' ')
+            const cappedAt = descRaw.length > 800 ? ' [DESC_CAPPED]' : ''
+            console.warn(
+              `[Haystack] Slow job ${jobMs.toFixed(1)}ms — ` +
+              `${String(job.company_name ?? '?')} | ${nameRaw.slice(0, 60)}${cappedAt}\n` +
+              `  fields: ${fields}  source: ${String(job.source ?? '?')}`,
+            )
+          } else if (descRaw.length > FIELD_WARN_LEN) {
+            console.log(
+              `[Haystack] Large desc (${descRaw.length} chars) but fast (${jobMs.toFixed(1)}ms) — ` +
+              `${String(job.company_name ?? '?')} | ${nameRaw.slice(0, 60)}  [cap working]`,
+            )
+          }
+        }
+
+        const chunkMs = performance.now() - chunkStart
+        clearActiveOperation(chunkLabel)
+        if (chunkMs > SLOW_CHUNK_MS) {
+          console.warn(`[Haystack] Slow chunk ${Math.floor(i / CHUNK)} (jobs ${i}–${i + chunk.length - 1}): ${chunkMs.toFixed(0)}ms for ${chunk.length} jobs — avg ${(chunkMs / chunk.length).toFixed(1)}ms/job`)
+        }
+        i += CHUNK
+        if (i % 25_000 === 0 || i >= JOBS.length) {
+          const elapsed = ((performance.now() - t0) / 1000).toFixed(1)
+          const pct = Math.min(100, Math.round((i / warmupTotal) * 100))
+          console.log(`[Haystack] Warmup ${pct}% — ${Math.min(i, warmupTotal).toLocaleString()}/${warmupTotal.toLocaleString()} jobs — ${elapsed}s elapsed`)
+        }
+        await new Promise<void>(resolve => setImmediate(resolve))
+      }
+      console.log(`[Timer] 🟢 Haystack warmup → ${(performance.now() - t0).toFixed(0)}ms total`)
+    })().catch((err) => console.warn('[Startup] Haystack warmup failed:', err))
+
+    const doneTagCloud = startTimer(`buildTagCloud (${JOBS.length} jobs, top 500)`)
     cachedTagCloud = buildTagCloud(JOBS, 500)
+    doneTagCloud()
     console.log(`Built tag cloud with ${cachedTagCloud.length} entries.`)
+
+    const doneTop100 = startTimer('top100Search.refresh')
     const cached = await top100Search.refresh(JOBS)
+    doneTop100()
     console.log(`Built default cached search results: ${cached.results.length}/${cached.total}`)
   } catch (err) {
     console.error('Failed to scrape jobs on startup:', err)
@@ -169,11 +304,14 @@ async function runWithConcurrency<T>(items: T[], concurrency: number, worker: (i
 }
 
 async function emitJobInsights(socket: Socket, job: ScrapedJob): Promise<void> {
+  const label = `ai-job-processing: ${String(job.company_name ?? '?')} | ${String(job.name ?? '?')}`
+  setActiveOperation(label)
   const [auditResult, qolResult, impactResult] = await Promise.allSettled([
     auditJobAsync(job, true),
     qualityOfLifeJobAsync(job, true),
     impactJobAIAsync(job, true),
   ])
+  clearActiveOperation(label)
 
   if (auditResult.status === 'fulfilled') {
     socket.emit('job:audit:result', { source_url: job.source_url, ...auditResult.value })
@@ -257,7 +395,10 @@ io.on('connection', (socket) => {
       }
 
       try {
+        const searchLabel = `search query="${String(payload?.query ?? '').slice(0, 40)}"`
+        setActiveOperation(searchLabel)
         const results = await searchMain.search(JOBS, payload, SEARCH_DEBUG_ENABLED)
+        clearActiveOperation(searchLabel)
         const response = {
           results: results.matched,
           total: results.size,
@@ -296,9 +437,11 @@ io.on('connection', (socket) => {
         if (IS_PRODUCTION) {
           console.log(`Search completed. results found: ${results.size}`)
         } else {
-          console.log(`Search completed with query: ${payload.query}, results found: ${results.size}`, payload)
+          // console.log(`Search completed with query: ${payload.query}, results found: ${results.size}`, payload)
         }
         socket.emit('search:results', response)
+        // Yield after emit so JSON serialization doesn't block the next request
+        await new Promise<void>((resolve) => setImmediate(resolve))
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error)
         console.error(`Search failed: ${message}`)

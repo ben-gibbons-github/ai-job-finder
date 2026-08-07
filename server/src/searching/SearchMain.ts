@@ -18,8 +18,29 @@ import { auditJob } from './SearchAudit.js'
 import { geocodeUserLocation, geocodeJobLocations, isRemoteJob } from './SearchDistance.js'
 import { calculateIndividualScores, jobMatchesQuery, type ScoreTimings } from './SearchUtils.js'
 import { tokenize } from './SearchResumeMatch.js'
+import { setActiveOperation, clearActiveOperation } from '../utils/ServerActivityTracker.js'
 
 const SERVER_HIDDEN_EXCLUSIONS_ENABLED = true
+
+/** Yield to the event loop between large sync operations. */
+const yieldToEventLoop = (): Promise<void> =>
+  new Promise<void>((resolve) => setImmediate(resolve))
+
+/**
+ * Non-blocking filter: processes `arr` in chunks, yielding between each so
+ * the event loop stays responsive. Each chunk takes <chunkMs ms to process.
+ */
+async function asyncFilter<T>(arr: T[], predicate: (item: T) => boolean, chunkSize = 50_000): Promise<T[]> {
+  const result: T[] = []
+  for (let i = 0; i < arr.length; i += chunkSize) {
+    const end = Math.min(i + chunkSize, arr.length)
+    for (let j = i; j < end; j++) {
+      if (predicate(arr[j])) result.push(arr[j])
+    }
+    if (end < arr.length) await yieldToEventLoop()
+  }
+  return result
+}
 
 // ─── Search result cache ─────────────────────────────────────────────────────
 // Caches full sorted result sets (pre-pagination) keyed on a fingerprint of all
@@ -403,7 +424,8 @@ class SearchMain {
     const jobsForSearch = mergeAddedJobs(jobs, addedJobs)
 
     const filterStart = performance.now()
-    const visibleJobs = jobsForSearch.filter((job) => {
+    setActiveOperation(`search:filter (${jobs.length} jobs, query="${rawQuery}")`)
+    const visibleJobs = await asyncFilter(jobsForSearch, (job) => {
       const sourceUrl = normalizeExactUrl(job.source_url)
       const companyName = normalizeExactCompanyName(job.company_name)
       if (sourceUrl && hiddenJobUrls.has(sourceUrl)) {
@@ -418,7 +440,7 @@ class SearchMain {
     const includeRemoteJobs = searchPayload.includeRemoteJobs !== false
     const remoteFilteredJobs = includeRemoteJobs
       ? visibleJobs
-      : visibleJobs.filter((job) => !isRemoteJob(job))
+      : await asyncFilter(visibleJobs, (job) => !isRemoteJob(job))
 
     const userRatingMode = parseUserRatingMode(searchPayload.userRatingMode)
     const jobRatingMap = userRatingMode !== 'none'
@@ -448,11 +470,12 @@ class SearchMain {
         ])
       : new Set<string>()
     const ratingFilteredJobs = userRatingMode === 'ratedOnly'
-      ? remoteFilteredJobs.filter((job) => hasAnyUserRating(job, ratedJobUrls, ratedCompanies))
+      ? await asyncFilter(remoteFilteredJobs, (job) => hasAnyUserRating(job, ratedJobUrls, ratedCompanies))
       : userRatingMode === 'hideRated'
-        ? remoteFilteredJobs.filter((job) => !hasAnyUserRating(job, ratedJobUrls, ratedCompanies))
+        ? await asyncFilter(remoteFilteredJobs, (job) => !hasAnyUserRating(job, ratedJobUrls, ratedCompanies))
         : remoteFilteredJobs
     const filterMs = performance.now() - filterStart
+    clearActiveOperation('search:filter')
 
     if (logSearchMain) {
       console.log(
@@ -484,16 +507,19 @@ class SearchMain {
     }
 
     const queryMatchStart = performance.now()
+    setActiveOperation(`search:queryMatch (${ratingFilteredJobs.length} jobs, terms=${queryTerms.length})`)
     const matched = queryTerms.length > 0
-      ? ratingFilteredJobs.filter((job) => jobMatchesQuery(job, queryTerms, logFlags.query === true))
+      ? await asyncFilter(ratingFilteredJobs, (job) => jobMatchesQuery(job, queryTerms, logFlags.query === true))
       : ratingFilteredJobs // If no query terms, consider all visible jobs as matched (subject to pagination later)
     const queryMatchMs = performance.now() - queryMatchStart
+    clearActiveOperation('search:queryMatch')
 
     const resumeText = typeof searchPayload.resumeText === 'string' ? searchPayload.resumeText : ''
     const locationText = typeof searchPayload.locationText === 'string' ? searchPayload.locationText : ''
 
     // Geocode user location
     const userGeocodeStart = performance.now()
+    setActiveOperation(`search:userGeocode ("${locationText}")`)
     const userLocCoords = locationText.length > 0 ? await geocodeUserLocation(locationText, logFlags.location === true) : null
     const userLat = userLocCoords?.lat ?? null
     const userLon = userLocCoords?.lon ?? null
@@ -504,6 +530,7 @@ class SearchMain {
       Number.isFinite(userLon)
 
     const userGeocodeMs = performance.now() - userGeocodeStart
+    clearActiveOperation('search:userGeocode')
 
     if (logSearchMain) {
       console.log('User location geocoded to:', userLocCoords, 'for location text:', locationText)
@@ -519,11 +546,10 @@ class SearchMain {
     }
     const geoCountBefore = debugEnabled && hasUsableUserCoords ? matched.filter(hasValidJobCoords).length : 0
     const jobGeocodeStart = performance.now()
-    // const jobsWithCoords = hasUsableUserCoords
-    //   ? await geocodeJobLocations(matched, logFlags.location === true)
-    //   : matched
+    setActiveOperation(`search:jobGeocode (${matched.length} matched)`)
     const jobsWithCoords = matched
     const jobGeocodeMs = performance.now() - jobGeocodeStart
+    clearActiveOperation('search:jobGeocode')
     const geoCountAfter = debugEnabled && hasUsableUserCoords ? jobsWithCoords.filter(hasValidJobCoords).length : 0
     const jobGeoHadCoords = geoCountBefore
     const jobGeoNewlyGeocoded = geoCountAfter - geoCountBefore
@@ -565,12 +591,16 @@ class SearchMain {
         }
       })
     const scoreTotalMs = performance.now() - scoreMapStart
+    clearActiveOperation('search:score')
     const scoreSortStart = performance.now()
+    setActiveOperation(`search:sort (${unsortedWrappers.length} wrappers)`)
     const rankedWrappers = unsortedWrappers.sort((a, b) => b.totalScore - a.totalScore)
     const scoreSortMs = performance.now() - scoreSortStart
+    clearActiveOperation('search:sort')
     const scoreRankMs = performance.now() - scoreRankStart
 
     const userRatingSortStart = performance.now()
+    setActiveOperation('search:ratingSort')
     const sortedByUserRatingWrappers = userRatingMode === 'none'
       ? rankedWrappers
       : rankedWrappers
@@ -603,6 +633,7 @@ class SearchMain {
           })
           .map((entry) => entry.wrapper)
     const userRatingSortMs = performance.now() - userRatingSortStart
+    clearActiveOperation('search:ratingSort')
 
     const start = Number.isInteger(searchPayload.start) ? Number(searchPayload.start) : 0
     const end = Number.isInteger(searchPayload.end) ? Number(searchPayload.end) : sortedByUserRatingWrappers.length

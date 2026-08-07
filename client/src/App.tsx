@@ -975,7 +975,7 @@ function App() {
 
   return (
     <main className="app">
-      <h1 className={`app-title${isSearching ? ' app-title--searching' : ''}`}>AI Job Search</h1>
+      <h1 className={`app-title${isSearching ? ' app-title--searching' : ''}`}>Job Search for Good</h1>
       <InsightsHoverPopovers
         searchMeta={searchMeta}
         scoreWeights={scoreWeights}
