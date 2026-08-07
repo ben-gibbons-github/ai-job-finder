@@ -224,23 +224,31 @@ async function extractTextFromDocx(file: File): Promise<string> {
   return String(result.value ?? '').trim()
 }
 
+/** ~2 pages of text — enough for resume matching without excess memory/token cost */
+const RESUME_MAX_CHARS = 6000
+
+function truncateResume(text: string): string {
+  const trimmed = text.trim()
+  return trimmed.length > RESUME_MAX_CHARS ? trimmed.slice(0, RESUME_MAX_CHARS) : trimmed
+}
+
 export async function extractTextFromFile(file: File): Promise<string> {
   const extension = getFileExtension(file.name)
 
   if (extension === '.txt') {
-    return (await file.text()).trim()
+    return truncateResume(await file.text())
   }
 
   if (extension === '.rtf') {
-    return extractTextFromRtf(await file.text())
+    return truncateResume(extractTextFromRtf(await file.text()))
   }
 
   if (extension === '.pdf') {
-    return extractTextFromPdf(file)
+    return truncateResume(await extractTextFromPdf(file))
   }
 
   if (extension === '.docx') {
-    return extractTextFromDocx(file)
+    return truncateResume(await extractTextFromDocx(file))
   }
 
   throw new Error('Unsupported file type. Please upload .txt, .pdf, .docx, or .rtf')

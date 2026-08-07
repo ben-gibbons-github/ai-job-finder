@@ -115,9 +115,13 @@ const resumeScoreCache: { fingerprint: string; scores: Map<string, number> } = {
   scores: new Map(),
 }
 
+/** ~2 pages — cap applied server-side as a safety net even if client already truncates */
+const RESUME_MAX_CHARS = 6000
+
 export function calculateResumeScore(job: ScrapedJob, resumeText: string, shouldLog = false, precomputedTokens?: string[]): number {
   // precomputedTokens should already be deduplicated by the caller (e.g. Array.from(new Set(...)))
-  const sourceTokens = precomputedTokens ?? Array.from(new Set(tokenize(resumeText)))
+  const cappedResume = resumeText.length > RESUME_MAX_CHARS ? resumeText.slice(0, RESUME_MAX_CHARS) : resumeText
+  const sourceTokens = precomputedTokens ?? Array.from(new Set(tokenize(cappedResume)))
   if (sourceTokens.length === 0) {
     return 0
   }
