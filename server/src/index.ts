@@ -12,7 +12,7 @@ import { scrapeJobsMain } from './scraping/ScrapeJobMain.js'
 import { searchLocationsOpenStreetMap, type LocationOption } from './searching/LocationSearch.js'
 import { getSearchSuggestionCount, getSearchSuggestions, rebuildSearchSuggestions } from './searching/SearchSuggestion.js'
 import SearchMain, { type SearchPayload, type RankedJobWrapper, type SearchResultMeta } from './searching/SearchMain.js'
-import { warmJobHaystachCache } from './searching/SearchUtils.js'
+import { warmJobHaystachCache, getVocabSize } from './searching/SearchUtils.js'
 import { Top100Search } from './searching/Top100Search.js'
 import { auditJobAsync, type AuditResult } from './searching/SearchAudit.js'
 import { impactJobAIAsync, type ImpactAIResult } from './searching/SearchImpactAI.js'
@@ -242,7 +242,7 @@ function buildTagCloud(jobs: ScrapedJob[], topN = 150): TagCloudEntry[] {
         }
         await new Promise<void>(resolve => setImmediate(resolve))
       }
-      console.log(`[Timer] 🟢 Haystack warmup → ${(performance.now() - t0).toFixed(0)}ms total`)
+      console.log(`[Timer] 🟢 Haystack warmup → ${(performance.now() - t0).toFixed(0)}ms total | vocab: ${getVocabSize().toLocaleString()} unique tokens`)
     })().catch((err) => console.warn('[Startup] Haystack warmup failed:', err))
     } else {
       console.log('[Haystack] Warmup skipped (HAYSTACK_WARMUP_ENABLED not set) — cache will build lazily on first search.')

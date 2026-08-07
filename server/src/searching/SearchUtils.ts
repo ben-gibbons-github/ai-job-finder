@@ -7,8 +7,32 @@ import { toSafeText, tokenize, calculateResumeScore } from './SearchResumeMatch.
 import { getOrCreateEmployer } from '../scraping/ScrapedEmployerCache.js'
 
 // Per-job haystack token sets — built once per job object lifetime, reused across searches.
-// Using a Set<string> of tokens gives O(1) per-term lookup vs O(haystack_length) string.includes().
-const jobHaystackCache = new WeakMap<ScrapedJob, Set<string>>()
+// Uses integer token IDs (not strings) to minimize heap usage.
+// A Set<number> of token IDs uses ~4 bytes/entry vs ~50+ bytes/entry for Set<string>.
+const jobHaystackCache = new WeakMap<ScrapedJob, Set<number>>()
+
+// Global vocabulary: maps normalized token string → stable integer ID.
+// Only populated from haystack warmup/build, never shrinks.
+const vocab = new Map<string, number>()
+
+function internToken(token: string): number {
+  let id = vocab.get(token)
+  if (id === undefined) {
+    id = vocab.size
+    vocab.set(token, id)
+  }
+  return id
+}
+
+/** Return the vocab ID for a token, or -1 if it has never been seen. */
+function lookupToken(token: string): number {
+  return vocab.get(token) ?? -1
+}
+
+/** Returns the vocab size (number of unique tokens seen across all jobs). */
+export function getVocabSize(): number {
+  return vocab.size
+}
 
 // Caps applied to RAW strings BEFORE any toLowerCase / regex processing.
 // This is critical: toSafeText().toLowerCase() on a 500 KB string takes seconds.
@@ -21,7 +45,7 @@ function capRaw(value: unknown): string {
   return s.length > HAYSTACK_FIELD_CAP ? s.slice(0, HAYSTACK_FIELD_CAP) : s
 }
 
-function getJobHaystackTokens(job: ScrapedJob): Set<string> {
+function getJobHaystackTokens(job: ScrapedJob): Set<number> {
   const cached = jobHaystackCache.get(job)
   if (cached !== undefined) {
     return cached
@@ -40,9 +64,9 @@ function getJobHaystackTokens(job: ScrapedJob): Set<string> {
   ].join(' ')
   // Final cap on the total to bound tokenize() input regardless of field count.
   const bounded = raw.length > HAYSTACK_TOTAL_CAP ? raw.slice(0, HAYSTACK_TOTAL_CAP) : raw
-  const tokens = new Set(tokenize(bounded))
-  jobHaystackCache.set(job, tokens)
-  return tokens
+  const ids = new Set(tokenize(bounded).map(internToken))
+  jobHaystackCache.set(job, ids)
+  return ids
 }
 
 /**
@@ -154,13 +178,14 @@ export function jobMatchesQuery(job: ScrapedJob, queryTerms: string[], shouldLog
     return false
   }
 
-  const haystackTokens = getJobHaystackTokens(job)
-  // Normalize each query term the same way the tokenizer does (lowercase, strip special chars)
-  // so that multi-word and punctuated queries resolve correctly.
+  const haystackIds = getJobHaystackTokens(job)
+  // Normalize each query term the same way the tokenizer does, then look up its vocab ID.
+  // If the term has never appeared in any job's haystack, its ID is -1 → instant false.
   const matches = queryTerms.every((term) => {
     const normalized = term.toLowerCase().replace(/[^a-z0-9]/g, '')
     if (normalized.length === 0) return true // ignore empty terms after normalization
-    return haystackTokens.has(normalized)
+    const id = lookupToken(normalized)
+    return id !== -1 && haystackIds.has(id)
   })
   if (shouldLog) {
     console.log('Query match check:', {
