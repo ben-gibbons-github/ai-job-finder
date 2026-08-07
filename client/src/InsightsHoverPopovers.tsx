@@ -12,7 +12,7 @@ interface InsightsHoverPopoversProps {
   scoreWeights: ScoreWeights
   onScoreWeightsChange: (weights: ScoreWeights) => void
   onOpenAiCorpus: () => void
-  onRunAuditAllInSearch: () => void
+  onRunAuditAllInSearch?: () => void
   onAddJob: (draft: AddedJobDraft) => void
   onExportAllData: () => void
   onExportPageAsCsv: () => void

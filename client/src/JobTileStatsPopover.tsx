@@ -1,6 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
 import GenericPopover from './GenericPopover';
+import JobTileDropdown from './JobTileDropdown';
 import type { CompanyTagColor, JobStatus, JobStatusRecord, UserJobNote } from './ClientSaveLoad';
+import { getScoreColors } from './scoreColors';
 
 interface JobTileStatsPopoverProps {
   isOpen: boolean;
@@ -36,6 +38,19 @@ interface JobTileStatsPopoverProps {
   onSetJobStatus?: (nextStatus: JobStatus) => void;
   onAwardReadCompletion?: () => void;
   sectionToScrollTo?: string | null;
+  // Dropdown action props
+  resumeId?: string;
+  resumeText?: string;
+  resumeDisplayName?: string;
+  selectedResumeIds?: string[];
+  resumeCatalogById?: Record<string, { displayName?: string; name?: string; id?: string }>;
+  onRunAudit?: () => void;
+  canRunAudit?: boolean;
+  auditMenuLabel?: string;
+  onHideJob?: (jobUrl?: string) => void;
+  onHideCompany?: (companyName?: string) => void;
+  isHighlighted?: boolean;
+  onToggleHighlightJob?: () => void;
   onSaveUserCreatedJobDetails?: (updates: {
     name: string;
     companyName: string;
@@ -58,23 +73,7 @@ const withFallback = (value?: string): string => {
   return normalized || '—';
 };
 
-type ScoreBand = 'blue' | 'green' | 'yellow' | 'red';
-
-const getScoreBand = (score?: number): ScoreBand => {
-  if (!Number.isFinite(score)) {
-    return 'red';
-  }
-  if ((score as number) >= 0.85) {
-    return 'blue';
-  }
-  if ((score as number) >= 0.65) {
-    return 'green';
-  }
-  if ((score as number) >= 0.4) {
-    return 'yellow';
-  }
-  return 'red';
-};
+// Colours are now supplied via getScoreColors() inline styles; no band needed.
 
 const inlineTokenRegex = /\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)|(https?:\/\/[^\s]+)|\*\*([^*]+)\*\*/g;
 
@@ -200,7 +199,7 @@ interface SectionScoreBadgeProps {
 
 const SectionScoreBadge: React.FC<SectionScoreBadgeProps> = ({ label, score, extraClassName }) => {
   return (
-    <span className={`job-stats-inline-score job-stats-inline-score--${getScoreBand(score)} ${extraClassName || ''}`.trim()}>
+    <span className={`job-stats-inline-score ${extraClassName || ''}`.trim()} style={getScoreColors(score)}>
       <span>{label}</span>
       <strong>{formatPercent(score)}</strong>
     </span>
@@ -238,6 +237,18 @@ const JobTileStatsPopover: React.FC<JobTileStatsPopoverProps> = ({
   onSetJobStatus,
   onAwardReadCompletion,
   sectionToScrollTo,
+  resumeId,
+  resumeText,
+  resumeDisplayName,
+  selectedResumeIds,
+  resumeCatalogById,
+  onRunAudit,
+  canRunAudit,
+  auditMenuLabel,
+  onHideJob,
+  onHideCompany,
+  isHighlighted,
+  onToggleHighlightJob,
   onSaveUserCreatedJobDetails,
 }) => {
   const contentRef = useRef<HTMLDivElement>(null);
@@ -408,15 +419,41 @@ const JobTileStatsPopover: React.FC<JobTileStatsPopoverProps> = ({
       contentRef={contentRef}
       onContentScroll={handleContentScroll}
       headerActions={(
-        <button
-          type="button"
-          className="job-stats-open-listing-btn"
-          onClick={openJobListing}
-          disabled={!jobSourceUrl}
-          title={jobSourceUrl ? 'Open source job post' : 'No job URL available'}
-        >
-          View job listing
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <JobTileDropdown
+            className="job-tile-dropdown--inline"
+            job={{
+              name: jobName,
+              company_name: companyName,
+              location,
+              remote,
+              description: jobDescription,
+              type: jobType,
+              source_url: jobSourceUrl,
+            }}
+            resumeId={resumeId}
+            resumeText={resumeText}
+            resumeDisplayName={resumeDisplayName}
+            selectedResumeIds={selectedResumeIds}
+            resumeCatalogById={resumeCatalogById}
+            onRunAudit={onRunAudit}
+            canRunAudit={canRunAudit}
+            auditMenuLabel={auditMenuLabel}
+            onHideJob={onHideJob}
+            onHideCompany={onHideCompany}
+            isHighlighted={isHighlighted}
+            onToggleHighlightJob={onToggleHighlightJob}
+          />
+          <button
+            type="button"
+            className="job-stats-open-listing-btn"
+            onClick={openJobListing}
+            disabled={!jobSourceUrl}
+            title={jobSourceUrl ? 'Open source job post' : 'No job URL available'}
+          >
+            View job listing
+          </button>
+        </div>
       )}
     >
       <div className="job-stats-content">
@@ -490,6 +527,7 @@ const JobTileStatsPopover: React.FC<JobTileStatsPopoverProps> = ({
               </div>
             </div>
           ) : (
+            <>
             <div className="job-stats-meta-grid">
               <div className="job-stats-meta-item">
                 <span className="job-stats-meta-label">Company</span>
@@ -507,22 +545,24 @@ const JobTileStatsPopover: React.FC<JobTileStatsPopoverProps> = ({
                 <span className="job-stats-meta-label">Remote</span>
                 <strong>{withFallback(remote)}</strong>
               </div>
-              <div className="job-stats-meta-item job-stats-meta-item--wide">
-                <span className="job-stats-meta-label">Source URL</span>
-                {jobSourceUrl ? (
-                  <a
-                    href={jobSourceUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="job-stats-link"
-                  >
-                    {jobSourceUrl}
-                  </a>
-                ) : (
-                  <strong>—</strong>
-                )}
-              </div>
+              {jobSourceUrl && (
+                <div className="job-stats-meta-item job-stats-meta-item--wide">
+                  <span className="job-stats-meta-label">Source URL</span>
+                  <a href={jobSourceUrl} target="_blank" rel="noopener noreferrer" className="job-stats-link">{jobSourceUrl}</a>
+                </div>
+              )}
             </div>
+            <div className="job-stats-score-divider" />
+            <div className="job-stats-score-bubbles">
+              <div className="job-stats-score-bubble" style={getScoreColors(totalScore)}><span>Total</span><strong>{formatPercent(totalScore)}</strong></div>
+              <div className="job-stats-score-bubble" style={getScoreColors(resumeScore)}><span>Resume</span><strong>{formatPercent(resumeScore)}</strong></div>
+              <div className="job-stats-score-bubble" style={getScoreColors(impactScore)}><span>Impact</span><strong>{formatPercent(impactScore)}</strong></div>
+              <div className="job-stats-score-bubble" style={getScoreColors(qualityOfLifeScore)}><span>QoL</span><strong>{formatPercent(qualityOfLifeScore)}</strong></div>
+              <div className="job-stats-score-bubble" style={getScoreColors(locationScore)}><span>Location</span><strong>{formatPercent(locationScore)}</strong></div>
+              <div className="job-stats-score-bubble" style={getScoreColors(freshScore)}><span>Fresh</span><strong>{formatPercent(freshScore)}</strong></div>
+              <div className="job-stats-score-bubble" style={getScoreColors(auditScore)}><span>Audit</span><strong>{formatPercent(auditScore)}</strong></div>
+            </div>
+            </>
           )}
         </section>
 
@@ -557,19 +597,6 @@ const JobTileStatsPopover: React.FC<JobTileStatsPopoverProps> = ({
           {jobSummary && <RichTextBlock text={jobSummary} fallback="" />}
         </section>
 
-        <section className="job-stats-section">
-          <h3>Score breakdown</h3>
-          <div className="job-stats-score-bubbles">
-            <div className={`job-stats-score-bubble job-stats-score-bubble--${getScoreBand(totalScore)}`}><span>Total</span><strong>{formatPercent(totalScore)}</strong></div>
-            <div className={`job-stats-score-bubble job-stats-score-bubble--${getScoreBand(resumeScore)}`}><span>Resume</span><strong>{formatPercent(resumeScore)}</strong></div>
-            <div className={`job-stats-score-bubble job-stats-score-bubble--impact job-stats-score-bubble--${getScoreBand(impactScore)}`}><span>Impact</span><strong>{formatPercent(impactScore)}</strong></div>
-            <div className={`job-stats-score-bubble job-stats-score-bubble--${getScoreBand(qualityOfLifeScore)}`}><span>QoL</span><strong>{formatPercent(qualityOfLifeScore)}</strong></div>
-            <div className={`job-stats-score-bubble job-stats-score-bubble--${getScoreBand(locationScore)}`}><span>Location</span><strong>{formatPercent(locationScore)}</strong></div>
-            <div className={`job-stats-score-bubble job-stats-score-bubble--${getScoreBand(freshScore)}`}><span>Fresh</span><strong>{formatPercent(freshScore)}</strong></div>
-            <div className={`job-stats-score-bubble job-stats-score-bubble--audit job-stats-score-bubble--${getScoreBand(auditScore)}`}><span>Audit</span><strong>{formatPercent(auditScore)}</strong></div>
-          </div>
-        </section>
-
         <section id="stats-section-impact" className="job-stats-section">
           <div className="job-stats-section-heading">
             <h3>Impact report</h3>
@@ -596,22 +623,39 @@ const JobTileStatsPopover: React.FC<JobTileStatsPopoverProps> = ({
 
         <section className="job-stats-section job-stats-section--user-notes">
           <h3>Company notes</h3>
-          <div className="job-stats-status-editor">
-            <label className="job-stats-user-notes-label" htmlFor="job-status-select">
-              Current status
-            </label>
-            <select
-              id="job-status-select"
-              className="job-stats-status-select"
-              value={selectedJobStatus}
-              onChange={(event) => handleJobStatusChange(event.target.value as JobStatus)}
-            >
-              <option value="none">none</option>
-              <option value="applied">applied</option>
-              <option value="interviewing">interviewing</option>
-              <option value="accepted">accepted</option>
-              <option value="rejected">rejected</option>
-            </select>
+          <div className="job-stats-status-meta-row">
+            <div>
+              <label className="job-stats-user-notes-label" htmlFor="job-status-select">
+                Current status
+              </label>
+              <select
+                id="job-status-select"
+                className="job-stats-status-select"
+                value={selectedJobStatus}
+                onChange={(event) => handleJobStatusChange(event.target.value as JobStatus)}
+              >
+                <option value="none">none</option>
+                <option value="applied">applied</option>
+                <option value="interviewing">interviewing</option>
+                <option value="accepted">accepted</option>
+                <option value="rejected">rejected</option>
+              </select>
+            </div>
+            <div>
+              <label className="job-stats-user-notes-label" htmlFor="company-user-notes-score">
+                Company score (0-100)
+              </label>
+              <input
+                id="company-user-notes-score"
+                type="number"
+                min={0}
+                max={100}
+                className="job-stats-user-notes-score-input"
+                value={companyScoreText}
+                onChange={(e) => { companyNotesDirtyRef.current = true; setCompanyScoreText(e.target.value); }}
+                placeholder="—"
+              />
+            </div>
           </div>
           <div className="job-stats-status-history">
             <div className="job-stats-status-history__label">History</div>
@@ -672,19 +716,6 @@ const JobTileStatsPopover: React.FC<JobTileStatsPopoverProps> = ({
               )}
             </div>
 
-            <label className="job-stats-user-notes-label" htmlFor="company-user-notes-score">
-              Company score (0-100)
-            </label>
-            <input
-              id="company-user-notes-score"
-              type="number"
-              min={0}
-              max={100}
-              className="job-stats-user-notes-score-input"
-              value={companyScoreText}
-              onChange={(e) => { companyNotesDirtyRef.current = true; setCompanyScoreText(e.target.value); }}
-              placeholder="—"
-            />
             <label className="job-stats-user-notes-label" htmlFor="company-user-notes-text">
               Company notes
             </label>

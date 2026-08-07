@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import './DailyScoreHud.css';
 
 type DailyNoteHudTier = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19;
@@ -137,6 +137,20 @@ export default function DailyScoreHud({
   const tier = getDailyScoreTier(scorePoints);
   const label = getDailyScoreTierLabel(tier);
   const particles = useMemo(() => buildDailyScoreParticles(scorePoints, tier), [scorePoints, tier]);
+  const [collapsed, setCollapsed] = useState(true);
+
+  if (collapsed) {
+    return (
+      <button
+        type="button"
+        className={`daily-note-hud daily-note-hud--collapsed daily-note-hud--tier-${tier} ${className || ''}`.trim()}
+        onClick={() => setCollapsed(false)}
+        aria-label="Expand score tracker"
+      >
+        Tracker
+      </button>
+    );
+  }
 
   return (
     <div
@@ -144,6 +158,8 @@ export default function DailyScoreHud({
       role="status"
       aria-live="polite"
       aria-label={`Score earned today: ${scorePoints} points, jobs viewed: ${jobsViewedToday}, comments written: ${commentsWrittenToday}, user jobs created: ${userCreatedJobsToday}`}
+      onClick={() => setCollapsed(true)}
+      style={{ cursor: 'pointer' }}
     >
       <div className="daily-note-hud__particles" aria-hidden="true">
         {particles.map((particle) => {

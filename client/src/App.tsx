@@ -155,6 +155,7 @@ function App() {
   const [searchEnd, setSearchEnd] = useState(100)
   const [scoreWeights, setScoreWeights] = useState<ScoreWeights>(savedSettings.scoreWeights)
   const [auditResults, setAuditResults] = useState<Record<string, { auditScore: number; auditText: string; error?: string }>>({})
+  const [auditEnabled, setAuditEnabled] = useState(false)
   const [impactResults, setImpactResults] = useState<Record<string, { ai_impact_score: number; ai_impact_summary: string; error?: string }>>({})
   const [qualityOfLifeResults, setQualityOfLifeResults] = useState<Record<string, { employeeQualityOfLifeScore: number; employeeQualityOfLifeSummary: string; error?: string }>>({})
   const [hiddenJobUrls, setHiddenJobUrls] = useState<string[]>(() => readStringArrayCache(HIDDEN_JOBS_CACHE_KEY))
@@ -302,6 +303,11 @@ function App() {
     socket.on('server:tagCloud', (entries: TagCloudEntry[]) => {
       if (Array.isArray(entries) && entries.length > 0) {
         setTagCloud(entries)
+      }
+    })
+    socket.on('server:config', (config: { auditEnabled?: boolean }) => {
+      if (typeof config?.auditEnabled === 'boolean') {
+        setAuditEnabled(config.auditEnabled)
       }
     })
 
@@ -981,7 +987,7 @@ function App() {
         scoreWeights={scoreWeights}
         onScoreWeightsChange={setScoreWeights}
         onOpenAiCorpus={() => setOpenAiCorpusSignal((value) => value + 1)}
-        onRunAuditAllInSearch={handleRunAuditAllInSearch}
+        onRunAuditAllInSearch={auditEnabled ? handleRunAuditAllInSearch : undefined}
         onAddJob={handleAddJob}
         onExportAllData={handleExportAllData}
         onExportPageAsCsv={handleExportPageAsCsv}
@@ -1147,7 +1153,7 @@ function App() {
                 resumeDisplayName={uploadedResumeName}
                 selectedResumeIds={selectedResumeIds}
                 resumeCatalogById={resumeCatalogById}
-                onAuditRequest={handleAuditRequest}
+                onAuditRequest={auditEnabled ? handleAuditRequest : undefined}
                 auditResultOverride={wrapper.job?.source_url ? auditResults[wrapper.job.source_url] : undefined}
                 impactResultOverride={wrapper.job?.source_url ? impactResults[wrapper.job.source_url] : undefined}
                 scoreWeights={scoreWeights}

@@ -27,6 +27,7 @@ import {
 const AI_AUDIT_ALL_COMMAND = 'AIAuditAllJobsInThisSearch' as const
 const IS_PRODUCTION = process.env.NODE_ENV === 'production'
 const SEARCH_DEBUG_ENABLED = process.env.SEARCH_DEBUG_ENABLED === 'true'
+const AUDIT_ENABLED = process.env.AUDIT_ENABLED === 'true'
 const AUDIT_ALL_MAX_CONCURRENCY = Math.max(1, Number(process.env.AUDIT_ALL_MAX_CONCURRENCY ?? 4))
 const AUDIT_ALL_MAX_JOBS = Math.max(1, Number(process.env.AUDIT_ALL_MAX_JOBS ?? 250))
 const SHUTDOWN_TIMEOUT_MS = Math.max(1000, Number(process.env.SHUTDOWN_TIMEOUT_MS ?? 10000))
@@ -343,6 +344,7 @@ io.on('connection', (socket) => {
   console.log(`Socket connected: ${socket.id}`)
 
   socket.emit('server:hello', 'Hello from Socket.IO server!')
+  socket.emit('server:config', { auditEnabled: AUDIT_ENABLED })
 
   if (cachedTagCloud.length > 0) {
     socket.emit('server:tagCloud', cachedTagCloud)
@@ -380,6 +382,11 @@ io.on('connection', (socket) => {
           meta: undefined,
           error: 'Rate limit exceeded for search',
         })
+        return
+      }
+
+      if (payload?.command === AI_AUDIT_ALL_COMMAND && !AUDIT_ENABLED) {
+        callbackRateLimitError(callback, { results: [], total: 0, meta: undefined, error: 'Audit is disabled on this server' })
         return
       }
 
@@ -535,6 +542,10 @@ io.on('connection', (socket) => {
       payload: { source_url?: string; name?: string; company_name?: string },
       callback?: (response: AuditResult & { error?: string }) => void,
     ) => {
+      if (!AUDIT_ENABLED) {
+        callbackRateLimitError(callback, { auditScore: 0, auditText: '', error: 'Audit is disabled on this server' })
+        return
+      }
       if (!consumeLeakyBucket(socket.id, 'job:audit')) {
         emitRateLimitError(socket, 'job:audit')
         callbackRateLimitError(callback, {

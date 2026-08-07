@@ -20,6 +20,7 @@ interface ResumeCatalogEntry {
 
 interface JobTileDropdownProps {
   job?: Job;
+  className?: string;
   resumeId?: string;
   resumeText?: string;
   resumeDisplayName?: string;
@@ -45,6 +46,7 @@ function getSourceLabel(sourceUrl?: string): string {
 
 const JobTileDropdown: React.FC<JobTileDropdownProps> = ({
   job,
+  className,
   resumeId,
   resumeText: uploadedResumeText,
   resumeDisplayName: uploadedResumeName,
@@ -311,19 +313,21 @@ Be specific, direct, and high quality. Treat this as a real application I intend
 
   return (
     <>
-      <div className="job-tile-dropdown" ref={containerRef}>
+      <div className={`job-tile-dropdown${className ? ` ${className}` : ''}`} ref={containerRef}>
       <button
-        className="job-tile-dropdown-trigger"
+        className={`job-tile-dropdown-trigger${className ? ' job-tile-dropdown-trigger--text job-stats-open-listing-btn' : ''}`}
         onClick={() => setOpen((v) => !v)}
         aria-label="Job options"
         aria-expanded={open}
         aria-haspopup="true"
       >
-        <svg viewBox="0 0 4 16" width="4" height="16" fill="currentColor" aria-hidden="true">
-          <circle cx="2" cy="2" r="1.5"/>
-          <circle cx="2" cy="8" r="1.5"/>
-          <circle cx="2" cy="14" r="1.5"/>
-        </svg>
+        {className ? 'Menu' : (
+          <svg viewBox="0 0 4 16" width="4" height="16" fill="currentColor" aria-hidden="true">
+            <circle cx="2" cy="2" r="1.5"/>
+            <circle cx="2" cy="8" r="1.5"/>
+            <circle cx="2" cy="14" r="1.5"/>
+          </svg>
+        )}
       </button>
 
       {open && (
@@ -362,6 +366,8 @@ Be specific, direct, and high quality. Treat this as a real application I intend
             <span className="dropdown-item-icon">🤖</span>
             <span className="dropdown-item-label">{auditMenuLabel || 'Run audit'}</span>
           </button>
+
+          <div className="job-tile-dropdown-divider" role="separator" />
 
           <button
             className="job-tile-dropdown-item"

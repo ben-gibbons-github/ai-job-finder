@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom';
 import JobTileDropdown from './JobTileDropdown';
 import JobTileStatsPopover from './JobTileStatsPopover';
 import type { CompanyTagColor, JobStatus, JobStatusRecord, UserJobNote } from './ClientSaveLoad';
+import { getScoreColors } from './scoreColors';
 
 interface JobScores {
   resume: number;
@@ -187,21 +188,6 @@ const getSourceHost = (sourceUrl?: string): string => {
   }
 };
 
-type ScoreBand = 'very-high' | 'high' | 'mid-high' | 'mid-low' | 'low' | 'very-low';
-
-const getScoreBand = (score?: number): ScoreBand => {
-  if (!Number.isFinite(score)) {
-    return 'very-low';
-  }
-  const s = score as number;
-  if (s >= 1.0)  return 'very-high';
-  if (s >= 0.8)  return 'high';
-  if (s >= 0.6)  return 'mid-high';
-  if (s >= 0.4)  return 'mid-low';
-  if (s >= 0.2)  return 'low';
-  return 'very-low';
-};
-
 const JobTile: React.FC<JobTileProps> = ({
   wrapper,
   isUserCreatedJob,
@@ -346,12 +332,6 @@ const JobTile: React.FC<JobTileProps> = ({
     ? `Audit details: ${getPreview(resolvedAuditText, 170)}`
     : 'No audit report available yet. Run audit to generate score rationale.';
 
-  const resumeBand = getScoreBand(scores?.resume);
-  const impactBand = getScoreBand(displayedImpactScore);
-  const qualityOfLifeBand = getScoreBand(displayedQualityOfLifeScore);
-  const locationBand = getScoreBand(scores?.location);
-  const freshBand = getScoreBand(scores?.fresh);
-  const auditBand = getScoreBand(displayedAuditScore);
   const sourceHost = getSourceHost(job?.source_url);
   const companyNoteLink = getFirstLinkFromNotes(companyUserNote?.notes);
   const jobNoteLink = getFirstLinkFromNotes(jobUserNote?.notes);
@@ -551,7 +531,8 @@ const JobTile: React.FC<JobTileProps> = ({
             <div className="score-bubbles-row">
               {String(resumeText ?? '').trim().length > 0 && (
               <div
-                className={`score-bubble score-bubble--${resumeBand}`}
+                className="score-bubble"
+                style={getScoreColors(scores?.resume)}
               >
                 <span className="score-bubble-label">Resume</span>
                 <span className="score-bubble-value">{formatScore(scores.resume)}%</span>
@@ -560,7 +541,8 @@ const JobTile: React.FC<JobTileProps> = ({
               )}
 
               <div
-                className={`score-bubble score-bubble--impact score-bubble--${impactBand}`}
+                className="score-bubble score-bubble--impact"
+                style={getScoreColors(displayedImpactScore)}
                 onClick={(e) => { e.stopPropagation(); openStatsPopover('impact'); }}
               >
                 <span className="score-bubble-label">Impact</span>
@@ -569,7 +551,8 @@ const JobTile: React.FC<JobTileProps> = ({
               </div>
 
               <div
-                className={`score-bubble score-bubble--${qualityOfLifeBand}`}
+                className="score-bubble"
+                style={getScoreColors(displayedQualityOfLifeScore)}
                 onClick={(e) => { e.stopPropagation(); openStatsPopover('qol'); }}
               >
                 <span className="score-bubble-label">QoL</span>
@@ -578,7 +561,8 @@ const JobTile: React.FC<JobTileProps> = ({
               </div>
 
               <div
-                className={`score-bubble score-bubble--${locationBand}`}
+                className="score-bubble"
+                style={getScoreColors(scores?.location)}
               >
                 <span className="score-bubble-label">Location</span>
                 <span className="score-bubble-value">{formatScore(scores.location)}%</span>
@@ -586,7 +570,8 @@ const JobTile: React.FC<JobTileProps> = ({
               </div>
 
               <div
-                className={`score-bubble score-bubble--${freshBand}`}
+                className="score-bubble"
+                style={getScoreColors(scores?.fresh)}
               >
                 <span className="score-bubble-label">Fresh</span>
                 <span className="score-bubble-value">{formatScore(scores.fresh)}%</span>
@@ -594,7 +579,8 @@ const JobTile: React.FC<JobTileProps> = ({
               </div>
 
               <div
-                className={`score-bubble score-bubble--audit score-bubble--${auditBand}`}
+                className="score-bubble score-bubble--audit"
+                style={getScoreColors(displayedAuditScore)}
                 onClick={(e) => { e.stopPropagation(); openStatsPopover('audit'); }}
               >
                 <span className="score-bubble-label">Audit</span>
@@ -671,6 +657,18 @@ const JobTile: React.FC<JobTileProps> = ({
           onSetCompanyTagColors={onSetCompanyTagColors}
           onSetJobStatus={onSetJobStatus}
           onAwardReadCompletion={onAwardReadCompletion}
+          resumeId={resumeId}
+          resumeText={resumeText}
+          resumeDisplayName={resumeDisplayName}
+          selectedResumeIds={selectedResumeIds}
+          resumeCatalogById={resumeCatalogById}
+          onRunAudit={handleRunAudit}
+          canRunAudit={Boolean(onAuditRequest) && !auditLoading && !isAuditComplete}
+          auditMenuLabel={auditLoading ? 'Running audit…' : isAuditComplete ? 'Audit complete' : auditNeedsRetry ? 'Retry audit' : 'Run audit'}
+          onHideJob={onHideJob}
+          onHideCompany={onHideCompany}
+          isHighlighted={Boolean(isHighlighted)}
+          onToggleHighlightJob={() => onToggleHighlightJob?.(job?.source_url)}
           onSaveUserCreatedJobDetails={
             job?.source_url && onSaveUserCreatedJobDetails
               ? (updates) => onSaveUserCreatedJobDetails(job.source_url!, updates)

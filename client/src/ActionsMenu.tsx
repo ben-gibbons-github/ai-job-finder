@@ -9,7 +9,7 @@ interface ActionsMenuProps {
   panelRef: RefObject<HTMLDivElement | null>
   panelStyle: CSSProperties
   onOpenAiCorpus: () => void
-  onRunAuditAllInSearch: () => void
+  onRunAuditAllInSearch?: () => void
   onAddJob: (draft: AddedJobDraft) => void
   onExportAllData: () => void
   onExportPageAsCsv: () => void
@@ -262,9 +262,11 @@ export default function ActionsMenu({
           <button type="button" className="insights-actions-menu__item" onClick={onOpenAiCorpus}>
             Open AI Resume-vs-Jobs Text
           </button>
-          <button type="button" className="insights-actions-menu__item" onClick={onRunAuditAllInSearch}>
-            Run audit on all jobs in search
-          </button>
+          {onRunAuditAllInSearch && (
+            <button type="button" className="insights-actions-menu__item" onClick={onRunAuditAllInSearch}>
+              Run audit on all jobs in search
+            </button>
+          )}
           <button type="button" className="insights-actions-menu__item" onClick={() => setIsAddJobDialogOpen(true)}>
             Add job
           </button>

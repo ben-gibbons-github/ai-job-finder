@@ -22,10 +22,31 @@
     0 16px 36px rgba(2, 6, 23, 0.42);
   backdrop-filter: blur(10px) saturate(145%);
   -webkit-backdrop-filter: blur(10px) saturate(145%);
-  pointer-events: none;
+  pointer-events: all;
   overflow: hidden;
   isolation: isolate;
   animation: daily-note-hud-float 4.8s ease-in-out infinite;
+}
+
+.daily-note-hud.daily-note-hud--collapsed {
+  min-width: unset;
+  bottom: 0px;
+  right: 0px;
+  padding: 4px 8px;
+  border-radius: 12px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.00em;
+  text-transform: uppercase;
+  color: rgba(33, 74, 208, 0.9);
+  border: 1px solid white;
+  cursor: pointer;
+  animation: none;
+  transition: opacity 120ms ease;
+}
+
+.daily-note-hud.daily-note-hud--collapsed:hover {
+  opacity: 0.85;
 }
 
 .daily-note-hud--tier-0 {
