@@ -205,7 +205,7 @@ const GlobalAIButton: React.FC<GlobalAIButtonProps> = ({ resumeText, jobs, audit
                 <button
                   type="button"
                   className="open-corpus-btn"
-                  style={{ marginTop: 0, background: '#475569', borderColor: '#475569' }}
+                  style={{ marginTop: 0 }}
                   onClick={() => setIsPopoverOpen(false)}
                 >
                   Close
