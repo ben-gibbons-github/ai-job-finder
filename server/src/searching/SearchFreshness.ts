@@ -3,6 +3,29 @@
  * Calculates how recent a job posting is to help with ranking
  */
 
+import type { ScrapedJob } from '../scraping/ScrapedJob.js'
+
+/** Cache freshness per job per UTC day — recomputed once per day when the date rolls over. */
+interface FreshnessEntry { score: number; day: number }
+const freshnessCache = new WeakMap<ScrapedJob, FreshnessEntry>()
+
+/** Returns today's UTC day number (changes at midnight UTC). */
+function utcDay(): number {
+  return Math.floor(Date.now() / 86_400_000)
+}
+
+/** Cached version — pass the ScrapedJob to get O(1) repeated lookups within the same day. */
+export function getJobFreshnessScore(job: ScrapedJob): number {
+  const today = utcDay()
+  const cached = freshnessCache.get(job)
+  if (cached !== undefined && cached.day === today) {
+    return cached.score
+  }
+  const score = calculateFreshnessScore(job.posted)
+  freshnessCache.set(job, { score, day: today })
+  return score
+}
+
 /**
  * Calculates a freshness score based on how recently a job was posted
  * Score ranges from 0 to 1, with newer jobs getting higher scores

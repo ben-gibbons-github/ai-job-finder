@@ -1,6 +1,6 @@
 import type { ScrapedJob } from '../scraping/ScrapedJob.js'
 import type { JobScores, SearchLogFlags } from './SearchInterfaces.js'
-import { calculateFreshnessScore } from './SearchFreshness.js'
+import { calculateFreshnessScore, getJobFreshnessScore } from './SearchFreshness.js'
 import { calculateLocationScore } from './SearchDistance.js'
 import { calculateImpactScore } from './SearchImpact.js'
 import { toSafeText, tokenize, calculateResumeScore } from './SearchResumeMatch.js'
@@ -123,7 +123,7 @@ export function calculateIndividualScores(
 
   // Freshness score
   t = timingAcc !== undefined ? performance.now() : 0
-  const freshnessScore = calculateFreshnessScore(job.posted, logFlags.fresh === true)
+  const freshnessScore = getJobFreshnessScore(job)
   if (timingAcc !== undefined) timingAcc.freshnessMs += performance.now() - t
 
   // Get the employer related to this job:

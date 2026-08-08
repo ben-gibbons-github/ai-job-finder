@@ -17,7 +17,7 @@ import type {
 import { auditJob } from './SearchAudit.js'
 import { geocodeUserLocation, geocodeJobLocations, isRemoteJob } from './SearchDistance.js'
 import { calculateIndividualScores, jobMatchesQuery, type ScoreTimings } from './SearchUtils.js'
-import { calculateFreshnessScore } from './SearchFreshness.js'
+import { calculateFreshnessScore, getJobFreshnessScore } from './SearchFreshness.js'
 import { tokenize } from './SearchResumeMatch.js'
 import { getOrCreateEmployer } from '../scraping/ScrapedEmployerCache.js'
 import { setActiveOperation, clearActiveOperation } from '../utils/ServerActivityTracker.js'
@@ -522,22 +522,24 @@ class SearchMain {
     // These 4 scores come from the employer cache / freshness — no resume or
     // location work needed — so this trim is essentially free.
     const PRE_FILTER_MIN_JOBS = 1000
+    const PRE_FILTER_MIN_JOBS2 = 10000
     let preFilteredJobs = matched
     let preFilterDropped = 0
     if (matched.length > PRE_FILTER_MIN_JOBS) {
+      const wThresh = matched.length > PRE_FILTER_MIN_JOBS2 ? 0.75 : 0.5
       const wImpact = searchPayload.scoreWeights?.impact ?? 1
       const wQol = searchPayload.scoreWeights?.qualityOfLife ?? 1
       const wFresh = searchPayload.scoreWeights?.fresh ?? 1
       const wAudit = searchPayload.scoreWeights?.audit ?? 1
       const maxScore = wImpact + wQol + wFresh + wAudit
       if (maxScore > 0) {
-        const threshold = 0.75 * maxScore
+        const threshold = wThresh * maxScore
         setActiveOperation(`search:preFilter (${matched.length} jobs)`)
         preFilteredJobs = await asyncFilter(matched, (job) => {
           const employer = getOrCreateEmployer(job)
           const impact = Math.min((Number(employer.ai_impact_score) || 0) / 100, 1.0) * wImpact
           const qol = Math.min((Number(employer.employeeQualityOfLifeScore) || 0) / 100, 1.0) * wQol
-          const fresh = calculateFreshnessScore(job.posted) * wFresh
+          const fresh = getJobFreshnessScore(job) * wFresh
           const audit = Math.min((Number(employer.ai_score) || 0) / 100, 1.0) * wAudit
           return (impact + qol + fresh + audit) >= threshold
         }, 5_000)
