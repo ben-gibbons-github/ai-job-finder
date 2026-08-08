@@ -17,7 +17,9 @@ import type {
 import { auditJob } from './SearchAudit.js'
 import { geocodeUserLocation, geocodeJobLocations, isRemoteJob } from './SearchDistance.js'
 import { calculateIndividualScores, jobMatchesQuery, type ScoreTimings } from './SearchUtils.js'
+import { calculateFreshnessScore } from './SearchFreshness.js'
 import { tokenize } from './SearchResumeMatch.js'
+import { getOrCreateEmployer } from '../scraping/ScrapedEmployerCache.js'
 import { setActiveOperation, clearActiveOperation } from '../utils/ServerActivityTracker.js'
 
 const SERVER_HIDDEN_EXCLUSIONS_ENABLED = true
@@ -36,21 +38,6 @@ async function asyncFilter<T>(arr: T[], predicate: (item: T) => boolean, chunkSi
     const end = Math.min(i + chunkSize, arr.length)
     for (let j = i; j < end; j++) {
       if (predicate(arr[j])) result.push(arr[j])
-    }
-    if (end < arr.length) await yieldToEventLoop()
-  }
-  return result
-}
-
-/**
- * Non-blocking map: processes `arr` in chunks, yielding between each.
- */
-async function asyncMap<T, U>(arr: T[], fn: (item: T) => U, chunkSize = 2_000): Promise<U[]> {
-  const result: U[] = new Array(arr.length)
-  for (let i = 0; i < arr.length; i += chunkSize) {
-    const end = Math.min(i + chunkSize, arr.length)
-    for (let j = i; j < end; j++) {
-      result[j] = fn(arr[j])
     }
     if (end < arr.length) await yieldToEventLoop()
   }
@@ -529,12 +516,37 @@ class SearchMain {
     const queryMatchMs = performance.now() - queryMatchStart
     clearActiveOperation('search:queryMatch')
 
-    // Cap how many jobs get fully scored+sorted to protect memory.
-    // We still report the true matched count; scoring only covers the first N jobs.
-    // 20k gives 200 pages of 100 — more than enough for practical browsing.
-    const MAX_SCORE_CANDIDATES = 20_000
-    const totalMatchedCount = matched.length
-    const jobsToScore = matched.length > MAX_SCORE_CANDIDATES ? matched.slice(0, MAX_SCORE_CANDIDATES) : matched
+    // ── Cheap pre-filter ────────────────────────────────────────────────────
+    // When matched jobs exceed 1000, drop jobs whose weighted (impact + qol +
+    // fresh + audit) score is below 75% of the maximum on those dimensions.
+    // These 4 scores come from the employer cache / freshness — no resume or
+    // location work needed — so this trim is essentially free.
+    const PRE_FILTER_MIN_JOBS = 1000
+    let preFilteredJobs = matched
+    let preFilterDropped = 0
+    if (matched.length > PRE_FILTER_MIN_JOBS) {
+      const wImpact = searchPayload.scoreWeights?.impact ?? 1
+      const wQol = searchPayload.scoreWeights?.qualityOfLife ?? 1
+      const wFresh = searchPayload.scoreWeights?.fresh ?? 1
+      const wAudit = searchPayload.scoreWeights?.audit ?? 1
+      const maxScore = wImpact + wQol + wFresh + wAudit
+      if (maxScore > 0) {
+        const threshold = 0.75 * maxScore
+        setActiveOperation(`search:preFilter (${matched.length} jobs)`)
+        preFilteredJobs = await asyncFilter(matched, (job) => {
+          const employer = getOrCreateEmployer(job)
+          const impact = Math.min((Number(employer.ai_impact_score) || 0) / 100, 1.0) * wImpact
+          const qol = Math.min((Number(employer.employeeQualityOfLifeScore) || 0) / 100, 1.0) * wQol
+          const fresh = calculateFreshnessScore(job.posted) * wFresh
+          const audit = Math.min((Number(employer.ai_score) || 0) / 100, 1.0) * wAudit
+          return (impact + qol + fresh + audit) >= threshold
+        }, 5_000)
+        clearActiveOperation('search:preFilter')
+        preFilterDropped = matched.length - preFilteredJobs.length
+        console.log(`[SearchMain] Pre-filter: ${matched.length} → ${preFilteredJobs.length} jobs (dropped ${preFilterDropped}, threshold=${threshold.toFixed(2)})`)
+      }
+    }
+    // ────────────────────────────────────────────────────────────────────────
 
     const resumeText = typeof searchPayload.resumeText === 'string' ? searchPayload.resumeText : ''
     const locationText = typeof searchPayload.locationText === 'string' ? searchPayload.locationText : ''
@@ -566,16 +578,16 @@ class SearchMain {
       const lon = job.location_lon
       return typeof lat === 'number' && typeof lon === 'number' && !isNaN(lat) && !isNaN(lon) && !(lat === 0 && lon === 0)
     }
-    const geoCountBefore = debugEnabled && hasUsableUserCoords ? matched.filter(hasValidJobCoords).length : 0
+    const geoCountBefore = debugEnabled && hasUsableUserCoords ? preFilteredJobs.filter(hasValidJobCoords).length : 0
     const jobGeocodeStart = performance.now()
-    setActiveOperation(`search:jobGeocode (${matched.length} matched)`)
-    const jobsWithCoords = matched
+    setActiveOperation(`search:jobGeocode (${preFilteredJobs.length} matched)`)
+    const jobsWithCoords = preFilteredJobs
     const jobGeocodeMs = performance.now() - jobGeocodeStart
     clearActiveOperation('search:jobGeocode')
     const geoCountAfter = debugEnabled && hasUsableUserCoords ? jobsWithCoords.filter(hasValidJobCoords).length : 0
     const jobGeoHadCoords = geoCountBefore
     const jobGeoNewlyGeocoded = geoCountAfter - geoCountBefore
-    const jobGeoSkipped = hasUsableUserCoords ? matched.length - geoCountAfter : matched.length
+    const jobGeoSkipped = hasUsableUserCoords ? preFilteredJobs.length - geoCountAfter : preFilteredJobs.length
 
     // Calculate scores for each job and create wrappers
     const scoreRankStart = performance.now()
@@ -586,8 +598,8 @@ class SearchMain {
       ? { resumeMs: 0, locationMs: 0, freshnessMs: 0, auditMs: 0, qolMs: 0, impactMs: 0 }
       : undefined
     const scoreMapStart = performance.now()
-    setActiveOperation(`search:score (${jobsToScore.length} jobs)`)
-    const unsortedWrappers = await asyncMap(jobsToScore, (job) => {
+    const unsortedWrappers = preFilteredJobs
+      .map((job) => {
         const scores = calculateIndividualScores(job, resumeText, locationText, userLat, userLon, logFlags, precomputedResumeTokens, scoringTimings)
         const addedJobBonus = job.source === 'AddedByUser'
           ? Math.max(0.45, Number.isFinite(job.audit_number) ? Number(job.audit_number) / 100 : 0.45)
@@ -719,11 +731,11 @@ class SearchMain {
     }
 
     if (start < 0 || end < 0 || end <= start) {
-      return { matched: sortedByUserRatingWrappers, size: totalMatchedCount, meta }
+      return { matched: sortedByUserRatingWrappers, size: sortedByUserRatingWrappers.length, meta }
     }
 
     console.log(
-      `[SearchMain] phases (ms): filter=${filterMs.toFixed(1)} queryMatch=${queryMatchMs.toFixed(1)} userGeocode=${userGeocodeMs.toFixed(1)} jobGeocode=${jobGeocodeMs.toFixed(1)} scoreRank=${scoreRankMs.toFixed(1)} userRatingSort=${userRatingSortMs.toFixed(1)} | total=${totalMs.toFixed(1)} | input=${jobs.length} visible=${visibleJobs.length} matched=${totalMatchedCount} scored=${jobsToScore.length} query="${rawQuery}"`,
+      `[SearchMain] phases (ms): filter=${filterMs.toFixed(1)} queryMatch=${queryMatchMs.toFixed(1)} userGeocode=${userGeocodeMs.toFixed(1)} jobGeocode=${jobGeocodeMs.toFixed(1)} scoreRank=${scoreRankMs.toFixed(1)} userRatingSort=${userRatingSortMs.toFixed(1)} | total=${totalMs.toFixed(1)} | input=${jobs.length} visible=${visibleJobs.length} matched=${matched.length} query="${rawQuery}"`,
     )
 
     if (logSearchMain) {
@@ -741,12 +753,12 @@ class SearchMain {
     if (searchFingerprint !== null) {
       this.setCached(searchFingerprint, {
         wrappers: sortedByUserRatingWrappers,
-        size: totalMatchedCount,
+        size: sortedByUserRatingWrappers.length,
         meta: { aiCoverage: meta.aiCoverage, scoreDistribution: meta.scoreDistribution, appliedFilters: meta.appliedFilters },
       })
     }
 
-    return { matched: sliced, size: totalMatchedCount, meta }
+    return { matched: sliced, size: sortedByUserRatingWrappers.length, meta }
   }
 }
 
