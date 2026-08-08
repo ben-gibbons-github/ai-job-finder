@@ -514,6 +514,15 @@ class SearchMain {
     const queryMatchMs = performance.now() - queryMatchStart
     clearActiveOperation('search:queryMatch')
 
+    // Hard cap on matched jobs before scoring to prevent OOM on very broad queries.
+    // The real match count is preserved for the UI to display.
+    const MAX_SCORE_JOBS = 50_000
+    const totalMatchedBeforeCap = matched.length
+    const scoringJobs = matched.length > MAX_SCORE_JOBS ? matched.slice(0, MAX_SCORE_JOBS) : matched
+    if (totalMatchedBeforeCap > MAX_SCORE_JOBS) {
+      console.warn(`[Search] Match cap: ${totalMatchedBeforeCap.toLocaleString()} matched → scoring capped at ${MAX_SCORE_JOBS.toLocaleString()}`)
+    }
+
     const resumeText = typeof searchPayload.resumeText === 'string' ? searchPayload.resumeText : ''
     const locationText = typeof searchPayload.locationText === 'string' ? searchPayload.locationText : ''
 
@@ -544,16 +553,16 @@ class SearchMain {
       const lon = job.location_lon
       return typeof lat === 'number' && typeof lon === 'number' && !isNaN(lat) && !isNaN(lon) && !(lat === 0 && lon === 0)
     }
-    const geoCountBefore = debugEnabled && hasUsableUserCoords ? matched.filter(hasValidJobCoords).length : 0
+    const geoCountBefore = debugEnabled && hasUsableUserCoords ? scoringJobs.filter(hasValidJobCoords).length : 0
     const jobGeocodeStart = performance.now()
-    setActiveOperation(`search:jobGeocode (${matched.length} matched)`)
-    const jobsWithCoords = matched
+    setActiveOperation(`search:jobGeocode (${scoringJobs.length} matched)`)
+    const jobsWithCoords = scoringJobs
     const jobGeocodeMs = performance.now() - jobGeocodeStart
     clearActiveOperation('search:jobGeocode')
     const geoCountAfter = debugEnabled && hasUsableUserCoords ? jobsWithCoords.filter(hasValidJobCoords).length : 0
     const jobGeoHadCoords = geoCountBefore
     const jobGeoNewlyGeocoded = geoCountAfter - geoCountBefore
-    const jobGeoSkipped = hasUsableUserCoords ? matched.length - geoCountAfter : matched.length
+    const jobGeoSkipped = hasUsableUserCoords ? scoringJobs.length - geoCountAfter : scoringJobs.length
 
     // Calculate scores for each job and create wrappers
     const scoreRankStart = performance.now()
@@ -664,7 +673,7 @@ class SearchMain {
           query: rawQuery,
           totalJobsInput: jobs.length,
           totalJobsVisible: visibleJobs.length,
-          totalJobsMatched: matched.length,
+          totalJobsMatched: totalMatchedBeforeCap,
           timings: {
             filterMs: Number(filterMs.toFixed(2)),
             queryMatchMs: Number(queryMatchMs.toFixed(2)),
@@ -690,18 +699,18 @@ class SearchMain {
             remoteJobsFiltered: visibleJobs.length - remoteFilteredJobs.length,
             userRatingFiltered: remoteFilteredJobs.length - ratingFilteredJobs.length,
             userRatingFilterMode: userRatingMode,
-            queryMismatch: ratingFilteredJobs.length - matched.length,
+            queryMismatch: ratingFilteredJobs.length - totalMatchedBeforeCap,
           },
         }
       })() : undefined,
     }
 
     if (start < 0 || end < 0 || end <= start) {
-      return { matched: sortedByUserRatingWrappers, size: sortedByUserRatingWrappers.length, meta }
+      return { matched: sortedByUserRatingWrappers, size: totalMatchedBeforeCap, meta }
     }
 
     console.log(
-      `[SearchMain] phases (ms): filter=${filterMs.toFixed(1)} queryMatch=${queryMatchMs.toFixed(1)} userGeocode=${userGeocodeMs.toFixed(1)} jobGeocode=${jobGeocodeMs.toFixed(1)} scoreRank=${scoreRankMs.toFixed(1)} userRatingSort=${userRatingSortMs.toFixed(1)} | total=${totalMs.toFixed(1)} | input=${jobs.length} visible=${visibleJobs.length} matched=${matched.length} query="${rawQuery}"`,
+      `[SearchMain] phases (ms): filter=${filterMs.toFixed(1)} queryMatch=${queryMatchMs.toFixed(1)} userGeocode=${userGeocodeMs.toFixed(1)} jobGeocode=${jobGeocodeMs.toFixed(1)} scoreRank=${scoreRankMs.toFixed(1)} userRatingSort=${userRatingSortMs.toFixed(1)} | total=${totalMs.toFixed(1)} | input=${jobs.length} visible=${visibleJobs.length} matched=${totalMatchedBeforeCap}${totalMatchedBeforeCap > MAX_SCORE_JOBS ? ` (capped→${MAX_SCORE_JOBS})` : ''} query="${rawQuery}"`,
     )
 
     if (logSearchMain) {
@@ -724,7 +733,7 @@ class SearchMain {
       })
     }
 
-    return { matched: sliced, size: sortedByUserRatingWrappers.length, meta }
+    return { matched: sliced, size: totalMatchedBeforeCap, meta }
   }
 }
 
