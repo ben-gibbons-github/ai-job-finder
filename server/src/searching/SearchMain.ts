@@ -42,6 +42,21 @@ async function asyncFilter<T>(arr: T[], predicate: (item: T) => boolean, chunkSi
   return result
 }
 
+/**
+ * Non-blocking map: processes `arr` in chunks, yielding between each.
+ */
+async function asyncMap<T, U>(arr: T[], fn: (item: T) => U, chunkSize = 2_000): Promise<U[]> {
+  const result: U[] = new Array(arr.length)
+  for (let i = 0; i < arr.length; i += chunkSize) {
+    const end = Math.min(i + chunkSize, arr.length)
+    for (let j = i; j < end; j++) {
+      result[j] = fn(arr[j])
+    }
+    if (end < arr.length) await yieldToEventLoop()
+  }
+  return result
+}
+
 // ─── Search result cache ─────────────────────────────────────────────────────
 // Caches full sorted result sets (pre-pagination) keyed on a fingerprint of all
 // search settings EXCEPT start/end. Pagination then slices from the cached list.
@@ -514,14 +529,12 @@ class SearchMain {
     const queryMatchMs = performance.now() - queryMatchStart
     clearActiveOperation('search:queryMatch')
 
-    // Hard cap on matched jobs before scoring to prevent OOM on very broad queries.
-    // The real match count is preserved for the UI to display.
-    const MAX_SCORE_JOBS = 50_000
-    const totalMatchedBeforeCap = matched.length
-    const scoringJobs = matched.length > MAX_SCORE_JOBS ? matched.slice(0, MAX_SCORE_JOBS) : matched
-    if (totalMatchedBeforeCap > MAX_SCORE_JOBS) {
-      console.warn(`[Search] Match cap: ${totalMatchedBeforeCap.toLocaleString()} matched → scoring capped at ${MAX_SCORE_JOBS.toLocaleString()}`)
-    }
+    // Cap how many jobs get fully scored+sorted to protect memory.
+    // We still report the true matched count; scoring only covers the first N jobs.
+    // 20k gives 200 pages of 100 — more than enough for practical browsing.
+    const MAX_SCORE_CANDIDATES = 20_000
+    const totalMatchedCount = matched.length
+    const jobsToScore = matched.length > MAX_SCORE_CANDIDATES ? matched.slice(0, MAX_SCORE_CANDIDATES) : matched
 
     const resumeText = typeof searchPayload.resumeText === 'string' ? searchPayload.resumeText : ''
     const locationText = typeof searchPayload.locationText === 'string' ? searchPayload.locationText : ''
@@ -553,16 +566,16 @@ class SearchMain {
       const lon = job.location_lon
       return typeof lat === 'number' && typeof lon === 'number' && !isNaN(lat) && !isNaN(lon) && !(lat === 0 && lon === 0)
     }
-    const geoCountBefore = debugEnabled && hasUsableUserCoords ? scoringJobs.filter(hasValidJobCoords).length : 0
+    const geoCountBefore = debugEnabled && hasUsableUserCoords ? matched.filter(hasValidJobCoords).length : 0
     const jobGeocodeStart = performance.now()
-    setActiveOperation(`search:jobGeocode (${scoringJobs.length} matched)`)
-    const jobsWithCoords = scoringJobs
+    setActiveOperation(`search:jobGeocode (${matched.length} matched)`)
+    const jobsWithCoords = matched
     const jobGeocodeMs = performance.now() - jobGeocodeStart
     clearActiveOperation('search:jobGeocode')
     const geoCountAfter = debugEnabled && hasUsableUserCoords ? jobsWithCoords.filter(hasValidJobCoords).length : 0
     const jobGeoHadCoords = geoCountBefore
     const jobGeoNewlyGeocoded = geoCountAfter - geoCountBefore
-    const jobGeoSkipped = hasUsableUserCoords ? scoringJobs.length - geoCountAfter : scoringJobs.length
+    const jobGeoSkipped = hasUsableUserCoords ? matched.length - geoCountAfter : matched.length
 
     // Calculate scores for each job and create wrappers
     const scoreRankStart = performance.now()
@@ -573,8 +586,8 @@ class SearchMain {
       ? { resumeMs: 0, locationMs: 0, freshnessMs: 0, auditMs: 0, qolMs: 0, impactMs: 0 }
       : undefined
     const scoreMapStart = performance.now()
-    const unsortedWrappers = jobsWithCoords
-      .map((job) => {
+    setActiveOperation(`search:score (${jobsToScore.length} jobs)`)
+    const unsortedWrappers = await asyncMap(jobsToScore, (job) => {
         const scores = calculateIndividualScores(job, resumeText, locationText, userLat, userLon, logFlags, precomputedResumeTokens, scoringTimings)
         const addedJobBonus = job.source === 'AddedByUser'
           ? Math.max(0.45, Number.isFinite(job.audit_number) ? Number(job.audit_number) / 100 : 0.45)
@@ -673,7 +686,7 @@ class SearchMain {
           query: rawQuery,
           totalJobsInput: jobs.length,
           totalJobsVisible: visibleJobs.length,
-          totalJobsMatched: totalMatchedBeforeCap,
+          totalJobsMatched: matched.length,
           timings: {
             filterMs: Number(filterMs.toFixed(2)),
             queryMatchMs: Number(queryMatchMs.toFixed(2)),
@@ -699,18 +712,18 @@ class SearchMain {
             remoteJobsFiltered: visibleJobs.length - remoteFilteredJobs.length,
             userRatingFiltered: remoteFilteredJobs.length - ratingFilteredJobs.length,
             userRatingFilterMode: userRatingMode,
-            queryMismatch: ratingFilteredJobs.length - totalMatchedBeforeCap,
+            queryMismatch: ratingFilteredJobs.length - matched.length,
           },
         }
       })() : undefined,
     }
 
     if (start < 0 || end < 0 || end <= start) {
-      return { matched: sortedByUserRatingWrappers, size: totalMatchedBeforeCap, meta }
+      return { matched: sortedByUserRatingWrappers, size: totalMatchedCount, meta }
     }
 
     console.log(
-      `[SearchMain] phases (ms): filter=${filterMs.toFixed(1)} queryMatch=${queryMatchMs.toFixed(1)} userGeocode=${userGeocodeMs.toFixed(1)} jobGeocode=${jobGeocodeMs.toFixed(1)} scoreRank=${scoreRankMs.toFixed(1)} userRatingSort=${userRatingSortMs.toFixed(1)} | total=${totalMs.toFixed(1)} | input=${jobs.length} visible=${visibleJobs.length} matched=${totalMatchedBeforeCap}${totalMatchedBeforeCap > MAX_SCORE_JOBS ? ` (capped→${MAX_SCORE_JOBS})` : ''} query="${rawQuery}"`,
+      `[SearchMain] phases (ms): filter=${filterMs.toFixed(1)} queryMatch=${queryMatchMs.toFixed(1)} userGeocode=${userGeocodeMs.toFixed(1)} jobGeocode=${jobGeocodeMs.toFixed(1)} scoreRank=${scoreRankMs.toFixed(1)} userRatingSort=${userRatingSortMs.toFixed(1)} | total=${totalMs.toFixed(1)} | input=${jobs.length} visible=${visibleJobs.length} matched=${totalMatchedCount} scored=${jobsToScore.length} query="${rawQuery}"`,
     )
 
     if (logSearchMain) {
@@ -728,12 +741,12 @@ class SearchMain {
     if (searchFingerprint !== null) {
       this.setCached(searchFingerprint, {
         wrappers: sortedByUserRatingWrappers,
-        size: sortedByUserRatingWrappers.length,
+        size: totalMatchedCount,
         meta: { aiCoverage: meta.aiCoverage, scoreDistribution: meta.scoreDistribution, appliedFilters: meta.appliedFilters },
       })
     }
 
-    return { matched: sliced, size: totalMatchedBeforeCap, meta }
+    return { matched: sliced, size: totalMatchedCount, meta }
   }
 }
 
