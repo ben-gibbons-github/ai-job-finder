@@ -521,12 +521,12 @@ class SearchMain {
     // fresh + audit) score is below 75% of the maximum on those dimensions.
     // These 4 scores come from the employer cache / freshness — no resume or
     // location work needed — so this trim is essentially free.
-    const PRE_FILTER_MIN_JOBS = 1000
+    const PRE_FILTER_MIN_JOBS = 1000o
     const PRE_FILTER_MIN_JOBS2 = 10000
     let preFilteredJobs = matched
     let preFilterDropped = 0
     if (matched.length > PRE_FILTER_MIN_JOBS) {
-      const wThresh = matched.length > PRE_FILTER_MIN_JOBS2 ? 0.75 : 0.5
+      const wThresh = matched.length > PRE_FILTER_MIN_JOBS2 ? 0.5 : 0.25
       const wImpact = searchPayload.scoreWeights?.impact ?? 1
       const wQol = searchPayload.scoreWeights?.qualityOfLife ?? 1
       const wFresh = searchPayload.scoreWeights?.fresh ?? 1
@@ -536,6 +536,7 @@ class SearchMain {
         const threshold = wThresh * maxScore
         setActiveOperation(`search:preFilter (${matched.length} jobs)`)
         preFilteredJobs = await asyncFilter(matched, (job) => {
+          if (hasAnyUserRating(job, ratedJobUrls, ratedCompanies)) return true
           const employer = getOrCreateEmployer(job)
           const impact = Math.min((Number(employer.ai_impact_score) || 0) / 100, 1.0) * wImpact
           const qol = Math.min((Number(employer.employeeQualityOfLifeScore) || 0) / 100, 1.0) * wQol
