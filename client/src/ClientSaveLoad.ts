@@ -78,6 +78,7 @@ export interface JobStatusRecord {
 }
 
 export type JobStatusesByUrl = Record<string, JobStatusRecord>;
+export type JobStatusesByCompany = Record<string, JobStatusRecord>;
 
 const LEGACY_USER_NOTES_KEY = 'jobFinder_userNotes_v1';
 const USER_JOB_NOTES_KEY = 'jobFinder_userJobNotes_v2';
@@ -102,6 +103,8 @@ const HIGHLIGHTED_JOB_URL_COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 365;
 const JOB_STATUSES_COOKIE_KEY = 'jobFinder_jobStatuses_v1';
 const JOB_STATUSES_LOCAL_STORAGE_KEY = 'jobFinder_jobStatuses_v1';
 const JOB_STATUSES_COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 365;
+const JOB_STATUSES_BY_COMPANY_LOCAL_STORAGE_KEY = 'jobFinder_companyStatuses_v1';
+const JOB_STATUSES_BY_COMPANY_COOKIE_KEY = 'jobFinder_companyStatuses_v1';
 const COMPANY_COLOR_TAGS_COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 365;
 const COMPANY_TAG_COLORS: CompanyTagColor[] = ['red', 'orange', 'yellow', 'green', 'blue', 'purple'];
 
@@ -124,8 +127,8 @@ const DEFAULT_CLIENT_SEARCH_SETTINGS: ClientSearchSettings = {
   },
 };
 
-function normalizeCompanyKey(companyName: string): string {
-  return String(companyName ?? '').trim().toLowerCase();
+function normalizeCompanyKey(name: unknown): string {
+  return String(name ?? '').trim().toLowerCase();
 }
 
 function normalizeCompanyTagColor(value: unknown): CompanyTagColor | null {
@@ -492,6 +495,96 @@ export function saveJobStatusesByUrl(data: JobStatusesByUrl): JobStatusesByUrl {
   }
 
   return normalized;
+}
+
+// ── Company-keyed status (v2) ────────────────────────────────────────────────
+
+function normalizeJobStatusesByCompany(input: unknown): JobStatusesByCompany {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) return {};
+  const normalized: JobStatusesByCompany = {};
+  for (const [key, value] of Object.entries(input as Record<string, unknown>)) {
+    const k = normalizeCompanyKey(key);
+    if (!k) continue;
+    const record = normalizeJobStatusRecord(value);
+    if (!record) continue;
+    if (record.currentStatus === 'none' && record.history.length === 0) continue;
+    normalized[k] = record;
+  }
+  return normalized;
+}
+
+export function loadJobStatusesByCompany(): JobStatusesByCompany {
+  if (typeof window !== 'undefined') {
+    try {
+      const raw = window.localStorage.getItem(JOB_STATUSES_BY_COMPANY_LOCAL_STORAGE_KEY);
+      if (raw) {
+        const parsed = normalizeJobStatusesByCompany(JSON.parse(raw) as unknown);
+        if (Object.keys(parsed).length > 0) return parsed;
+      }
+    } catch { /* fall through */ }
+  }
+  try {
+    const cookieValue = getCookie(JOB_STATUSES_BY_COMPANY_COOKIE_KEY);
+    if (cookieValue) return normalizeJobStatusesByCompany(JSON.parse(decodeURIComponent(cookieValue)) as unknown);
+  } catch { /* ignore */ }
+  return {};
+}
+
+export function saveJobStatusesByCompany(data: JobStatusesByCompany): JobStatusesByCompany {
+  const normalized = normalizeJobStatusesByCompany(data);
+  const serialized = JSON.stringify(normalized);
+  if (typeof window !== 'undefined') {
+    try { window.localStorage.setItem(JOB_STATUSES_BY_COMPANY_LOCAL_STORAGE_KEY, serialized); } catch { /* ignore */ }
+  }
+  try { setCookie(JOB_STATUSES_BY_COMPANY_COOKIE_KEY, serialized, JOB_STATUSES_COOKIE_MAX_AGE_SECONDS); } catch { /* ignore */ }
+  return normalized;
+}
+
+export function setJobStatusByCompany(
+  current: JobStatusesByCompany,
+  companyName: string,
+  nextStatus: JobStatus,
+): JobStatusesByCompany {
+  const key = normalizeCompanyKey(companyName);
+  if (!key) return current;
+  const normalized = normalizeJobStatus(nextStatus);
+  const existing = current[key] ?? { currentStatus: 'none', history: [] };
+  if (existing.currentStatus === normalized) return current;
+  const updated = {
+    ...current,
+    [key]: {
+      currentStatus: normalized,
+      history: [
+        ...existing.history,
+        { changedAt: new Date().toISOString(), beforeStatus: existing.currentStatus, afterStatus: normalized },
+      ],
+    } as JobStatusRecord,
+  };
+  return saveJobStatusesByCompany(updated);
+}
+
+/**
+ * Migrate old per-URL status records to per-company.
+ * urlToCompany: mapping of job source_url -> company_name (from search results).
+ * Only migrates entries not already present in the company store.
+ */
+export function migrateJobStatusesToCompany(
+  byUrl: JobStatusesByUrl,
+  byCompany: JobStatusesByCompany,
+  urlToCompany: Record<string, string>,
+): JobStatusesByCompany {
+  let changed = false;
+  const result = { ...byCompany };
+  for (const [url, record] of Object.entries(byUrl)) {
+    const rawCompany = urlToCompany[url];
+    if (!rawCompany) continue;
+    const key = normalizeCompanyKey(rawCompany);
+    if (!key || result[key]) continue; // don't overwrite existing company status
+    result[key] = record;
+    changed = true;
+  }
+  if (changed) saveJobStatusesByCompany(result);
+  return result;
 }
 
 export function setJobStatusByUrl(

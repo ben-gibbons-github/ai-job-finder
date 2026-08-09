@@ -1254,35 +1254,75 @@
 /* .job-tile--user-created green highlight removed — status shown via top badge */
 
 .job-tile--highlighted {
-  border-color: #3b82f6;
+  border-color: #ca8a04;
   box-shadow:
     0 8px 24px rgba(15, 23, 42, 0.10),
-    0 0 0 2px rgba(59, 130, 246, 0.30),
-    0 0 22px rgba(59, 130, 246, 0.28);
+    0 0 0 2px rgba(202, 138, 4, 0.28),
+    0 0 22px rgba(234, 179, 8, 0.32);
 }
 
 .job-tile--highlighted:hover {
-  border-color: #2563eb;
+  border-color: #a16207;
   box-shadow:
     0 12px 28px rgba(15, 23, 42, 0.14),
-    0 0 0 2px rgba(37, 99, 235, 0.38),
-    0 0 28px rgba(59, 130, 246, 0.36);
+    0 0 0 2px rgba(161, 98, 7, 0.36),
+    0 0 28px rgba(234, 179, 8, 0.42);
 }
 
 .job-tile--highlighted:focus-visible {
-  border-color: #2563eb;
+  border-color: #a16207;
   box-shadow:
-    0 0 0 3px rgba(59, 130, 246, 0.35),
+    0 0 0 3px rgba(202, 138, 4, 0.32),
     0 10px 28px rgba(15, 23, 42, 0.14),
-    0 0 28px rgba(59, 130, 246, 0.32);
+    0 0 28px rgba(234, 179, 8, 0.38);
 }
 
-/* .job-tile--applied purple highlight removed — status is shown via top badge */
-
-.job-tile--applied:focus-visible {
+.job-tile--applied {
+  border-color: #a855f7;
   box-shadow:
-    0 0 0 3px rgba(196, 181, 253, 0.42),
-    0 14px 32px rgba(15, 23, 42, 0.16);
+    0 8px 24px rgba(15, 23, 42, 0.10),
+    0 0 0 2px rgba(168, 85, 247, 0.24),
+    0 0 22px rgba(168, 85, 247, 0.26);
+}
+
+.job-tile--applied:hover {
+  border-color: #9333ea;
+  box-shadow:
+    0 12px 28px rgba(15, 23, 42, 0.14),
+    0 0 0 2px rgba(147, 51, 234, 0.32),
+    0 0 28px rgba(168, 85, 247, 0.34);
+}
+
+.job-tile--rejected {
+  border-color: #ef4444;
+  box-shadow:
+    0 8px 24px rgba(15, 23, 42, 0.10),
+    0 0 0 2px rgba(239, 68, 68, 0.22),
+    0 0 22px rgba(239, 68, 68, 0.24);
+}
+
+.job-tile--rejected:hover {
+  border-color: #dc2626;
+  box-shadow:
+    0 12px 28px rgba(15, 23, 42, 0.14),
+    0 0 0 2px rgba(220, 38, 38, 0.30),
+    0 0 28px rgba(239, 68, 68, 0.32);
+}
+
+.job-tile--user-created {
+  border-color: #22c55e;
+  box-shadow:
+    0 8px 24px rgba(15, 23, 42, 0.10),
+    0 0 0 2px rgba(34, 197, 94, 0.22),
+    0 0 22px rgba(34, 197, 94, 0.26);
+}
+
+.job-tile--user-created:hover {
+  border-color: #16a34a;
+  box-shadow:
+    0 12px 28px rgba(15, 23, 42, 0.14),
+    0 0 0 2px rgba(22, 163, 74, 0.30),
+    0 0 28px rgba(34, 197, 94, 0.34);
 }
 
 .job-tile::after {

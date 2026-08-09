@@ -411,9 +411,16 @@ const JobTile: React.FC<JobTileProps> = ({
     }
   };
 
+  const tileStateClass =
+    currentJobStatus === 'applied' ? ' job-tile--applied' :
+    currentJobStatus === 'rejected' ? ' job-tile--rejected' :
+    isHighlighted ? ' job-tile--highlighted' :
+    isUserCreatedJob ? ' job-tile--user-created' :
+    ''
+
   return (
     <div
-      className={`job-tile${isHighlighted ? ' job-tile--highlighted' : ''}`}
+      className={`job-tile${tileStateClass}`}
       onClick={handleTileClick}
       role="button"
       tabIndex={0}

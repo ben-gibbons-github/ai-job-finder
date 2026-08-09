@@ -20,6 +20,7 @@ import {
   saveAddedJobs,
   loadAllUserNotes,
   loadJobStatusesByUrl,
+  loadJobStatusesByCompany,
   loadUserNotesDailyActivity,
   loadJobsViewedDailyActivity,
   loadCommentsWrittenDailyActivity,
@@ -44,13 +45,13 @@ import {
   type CompanyTagColor,
   type DailyScoreBreakdownByDay,
   type JobStatus,
-  type JobStatusesByUrl,
+  type JobStatusesByCompany,
   type UserJobNote,
   type UserRatingMode,
   saveCompanyColorTags,
   saveHighlightedJobUrl,
-  saveJobStatusesByUrl,
-  setJobStatusByUrl,
+  setJobStatusByCompany,
+  migrateJobStatusesToCompany,
 } from './ClientSaveLoad'
 
 type SearchCommand = 'AIAuditAllJobsInThisSearch'
@@ -165,7 +166,7 @@ function App() {
   const [userNotesByJob, setUserNotesByJob] = useState<Record<string, UserJobNote>>(() => loadAllUserNotes().perJob)
   const [userNotesByCompany, setUserNotesByCompany] = useState<Record<string, UserJobNote>>(() => loadAllUserNotes().perCompany)
   const [companyColorTagsByCompany, setCompanyColorTagsByCompany] = useState<Record<string, CompanyTagColor[]>>(() => loadCompanyColorTagsByCompany())
-  const [jobStatusesByUrl, setJobStatusesByUrl] = useState<JobStatusesByUrl>(() => loadJobStatusesByUrl())
+  const [jobStatusesByCompany, setJobStatusesByCompany] = useState<JobStatusesByCompany>(() => loadJobStatusesByCompany())
   const [addedJobs, setAddedJobs] = useState<AddedLocalJob[]>(() => loadAddedJobs())
   const [dailyNoteAddsByDay, setDailyNoteAddsByDay] = useState<Record<string, number>>(() => loadUserNotesDailyActivity())
   const [jobsViewedByDay, setJobsViewedByDay] = useState<Record<string, number>>(() => loadJobsViewedDailyActivity())
@@ -256,6 +257,17 @@ function App() {
         setTotalItems(typeof response.total === 'number' ? response.total : response.results.length)
         setSearchMeta(response.meta ?? null)
         setSearchDebugInfo(response.meta?.debugInfo ?? null)
+        // Migrate any legacy per-URL statuses to per-company using this result set
+        const legacyByUrl = loadJobStatusesByUrl()
+        if (Object.keys(legacyByUrl).length > 0) {
+          const urlToCompany: Record<string, string> = {}
+          for (const wrapper of response.results) {
+            const url = String(wrapper?.job?.source_url ?? '').trim()
+            const company = String(wrapper?.job?.company_name ?? '').trim()
+            if (url && company) urlToCompany[url] = company
+          }
+          setJobStatusesByCompany((prev) => migrateJobStatusesToCompany(legacyByUrl, prev, urlToCompany))
+        }
       }
     }
 
@@ -327,10 +339,6 @@ function App() {
   useEffect(() => {
     writeStringArrayCache(HIDDEN_COMPANIES_CACHE_KEY, hiddenCompanies)
   }, [hiddenCompanies])
-
-  useEffect(() => {
-    saveJobStatusesByUrl(jobStatusesByUrl)
-  }, [jobStatusesByUrl])
 
   useEffect(() => {
     saveHighlightedJobUrl(highlightedJobUrl)
@@ -579,7 +587,7 @@ function App() {
       const jobNote = sourceUrl ? userNotesByJob[sourceUrl] : undefined
       const companyNote = companyKey ? userNotesByCompany[companyKey] : undefined
       const tagColors = companyKey ? (companyColorTagsByCompany[companyKey] ?? []) : []
-      const statusRecord = sourceUrl ? jobStatusesByUrl[sourceUrl] : undefined
+      const statusRecord = companyKey ? jobStatusesByCompany[companyKey] : undefined
       const auditOverride = sourceUrl ? auditResults[sourceUrl] : undefined
       const impactOverride = sourceUrl ? impactResults[sourceUrl] : undefined
       const qolOverride = sourceUrl ? qualityOfLifeResults[sourceUrl] : undefined
@@ -663,7 +671,7 @@ function App() {
     setUserNotesByJob(importedNotes.perJob)
     setUserNotesByCompany(importedNotes.perCompany)
     setCompanyColorTagsByCompany(loadCompanyColorTagsByCompany())
-    setJobStatusesByUrl(loadJobStatusesByUrl())
+    setJobStatusesByCompany(loadJobStatusesByCompany())
     setHighlightedJobUrl(loadHighlightedJobUrl())
     setAddedJobs(loadAddedJobs())
     setDailyNoteAddsByDay(loadUserNotesDailyActivity())
@@ -816,13 +824,10 @@ function App() {
     }
   }
 
-  const handleSetJobStatus = (sourceUrl?: string, nextStatus?: JobStatus) => {
-    const normalizedSourceUrl = String(sourceUrl ?? '').trim()
-    if (!normalizedSourceUrl || !nextStatus) {
-      return
-    }
-
-    setJobStatusesByUrl((prev) => setJobStatusByUrl(prev, normalizedSourceUrl, nextStatus))
+  const handleSetJobStatus = (companyName?: string, nextStatus?: JobStatus) => {
+    const normalized = String(companyName ?? '').trim()
+    if (!normalized || !nextStatus) return
+    setJobStatusesByCompany((prev) => setJobStatusByCompany(prev, normalized, nextStatus))
   }
 
   const handleToggleHighlightJob = (jobUrl?: string) => {
@@ -1173,8 +1178,8 @@ function App() {
                 onAwardReadCompletion={wrapper.job?.source_url ? () => handleAwardReadCompletion(wrapper.job!.source_url) : undefined}
                 hasReadCompletionAwarded={Boolean(wrapper.job?.source_url && readBonusAwardedJobUrls.includes(wrapper.job.source_url))}
                 onSaveUserCreatedJobDetails={handleSaveUserCreatedJobDetails}
-                jobStatusRecord={wrapper.job?.source_url ? jobStatusesByUrl[wrapper.job.source_url] : undefined}
-                onSetJobStatus={wrapper.job?.source_url ? (nextStatus) => handleSetJobStatus(wrapper.job!.source_url, nextStatus) : undefined}
+                jobStatusRecord={wrapper.job?.company_name ? jobStatusesByCompany[String(wrapper.job.company_name).trim().toLowerCase()] : undefined}
+                onSetJobStatus={wrapper.job?.company_name ? (nextStatus) => handleSetJobStatus(wrapper.job!.company_name, nextStatus) : undefined}
               />
             ))}
           </div>
