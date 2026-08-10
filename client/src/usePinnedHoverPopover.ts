@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from 'react'
 
-export type InsightsPopoverKey = 'tagCloud' | 'distribution' | 'weights' | 'actions' | 'userNotes'
+export type InsightsPopoverKey = 'tagCloud' | 'distribution' | 'actions' | 'userNotes'
 
 export interface PinnedHoverPopoverState {
   containerRef: React.RefObject<HTMLDivElement | null>

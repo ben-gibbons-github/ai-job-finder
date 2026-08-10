@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react'
 import JobDistributionGraph, { type JobDistributionMeta } from './JobDistributionGraph'
-import ScoreWeightSliders, { type ScoreWeights } from './ScoreWeightSliders'
 import { usePinnedHoverPopover, type InsightsPopoverKey } from './usePinnedHoverPopover'
 import ActionsMenu from './ActionsMenu'
 import { type AddedJobDraft, type CompanyTagColor, type DailyScoreBreakdownByDay, type UserRatingMode } from './ClientSaveLoad'
@@ -9,8 +8,6 @@ import TagCloudPanel, { type TagCloudEntry } from './TagCloudPanel'
 
 interface InsightsHoverPopoversProps {
   searchMeta: JobDistributionMeta | null
-  scoreWeights: ScoreWeights
-  onScoreWeightsChange: (weights: ScoreWeights) => void
   onOpenAiCorpus: () => void
   onRunAuditAllInSearch?: () => void
   onAddJob: (draft: AddedJobDraft) => void
@@ -19,8 +16,6 @@ interface InsightsHoverPopoversProps {
   onImportAllData: (xmlText: string) => void | Promise<void>
   userRatingMode: UserRatingMode
   onUserRatingModeChange: (value: UserRatingMode) => void
-  includeRemoteJobs: boolean
-  onIncludeRemoteJobsChange: (value: boolean) => void
   hideApplied: boolean
   onHideAppliedChange: (value: boolean) => void
   hideTagColors: CompanyTagColor[]
@@ -39,8 +34,6 @@ interface InsightsHoverPopoversProps {
 
 export default function InsightsHoverPopovers({
   searchMeta,
-  scoreWeights,
-  onScoreWeightsChange,
   onOpenAiCorpus,
   onRunAuditAllInSearch,
   onAddJob,
@@ -49,8 +42,6 @@ export default function InsightsHoverPopovers({
   onImportAllData,
   userRatingMode,
   onUserRatingModeChange,
-  includeRemoteJobs,
-  onIncludeRemoteJobsChange,
   hideApplied,
   onHideAppliedChange,
   hideTagColors,
@@ -70,13 +61,11 @@ export default function InsightsHoverPopovers({
   const [panelShiftX, setPanelShiftX] = useState<Record<InsightsPopoverKey, number>>({
     tagCloud: 0,
     distribution: 0,
-    weights: 0,
     actions: 0,
     userNotes: 0,
   })
   const tagCloudPanelRef = useRef<HTMLDivElement | null>(null)
   const distributionPanelRef = useRef<HTMLDivElement | null>(null)
-  const weightsPanelRef = useRef<HTMLDivElement | null>(null)
   const actionsPanelRef = useRef<HTMLDivElement | null>(null)
   const userNotesPanelRef = useRef<HTMLDivElement | null>(null)
   const {
@@ -92,9 +81,7 @@ export default function InsightsHoverPopovers({
         ? tagCloudPanelRef.current
         : key === 'distribution'
         ? distributionPanelRef.current
-        : key === 'weights'
-          ? weightsPanelRef.current
-          : key === 'actions'
+        : key === 'actions'
             ? actionsPanelRef.current
             : userNotesPanelRef.current
 
@@ -225,33 +212,6 @@ export default function InsightsHoverPopovers({
         </div>
       </div>
 
-      <div
-        className="app-insights-actions__item"
-        onMouseEnter={() => {
-          if (isEnabled) {
-            setHoverPopover('weights')
-          }
-        }}
-      >
-        <button
-          type="button"
-          className={`app-insights-actions__button ${visiblePopover === 'weights' ? 'app-insights-actions__button--active' : ''}`}
-        >
-          Score weights
-        </button>
-        <div
-          className={`app-insights-hover-panel app-insights-hover-panel--weights ${visiblePopover === 'weights' ? 'app-insights-hover-panel--open' : ''}`}
-          ref={weightsPanelRef}
-          style={panelStyle('weights')}
-          onMouseEnter={() => setHoverPopover('weights')}
-        >
-          <ScoreWeightSliders
-            weights={scoreWeights}
-            onChange={onScoreWeightsChange}
-          />
-        </div>
-      </div>
-
       <ActionsMenu
         visiblePopover={visiblePopover}
         setHoverPopover={setHoverPopover}
@@ -265,8 +225,6 @@ export default function InsightsHoverPopovers({
         onImportAllData={onImportAllData}
         userRatingMode={userRatingMode}
         onUserRatingModeChange={onUserRatingModeChange}
-        includeRemoteJobs={includeRemoteJobs}
-        onIncludeRemoteJobsChange={onIncludeRemoteJobsChange}
         hideApplied={hideApplied}
         onHideAppliedChange={onHideAppliedChange}
         hideTagColors={hideTagColors}

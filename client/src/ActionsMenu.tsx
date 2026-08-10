@@ -25,8 +25,6 @@ interface ActionsMenuProps {
   onImportAllData: (xmlText: string) => void | Promise<void>
   userRatingMode: UserRatingMode
   onUserRatingModeChange: (value: UserRatingMode) => void
-  includeRemoteJobs: boolean
-  onIncludeRemoteJobsChange: (value: boolean) => void
   hideApplied: boolean
   onHideAppliedChange: (value: boolean) => void
   hideTagColors: CompanyTagColor[]
@@ -47,8 +45,6 @@ export default function ActionsMenu({
   onImportAllData,
   userRatingMode,
   onUserRatingModeChange,
-  includeRemoteJobs,
-  onIncludeRemoteJobsChange,
   hideApplied,
   onHideAppliedChange,
   hideTagColors,
@@ -252,16 +248,6 @@ export default function ActionsMenu({
         }}
       >
         <div className="insights-actions-menu">
-          <label className="insights-actions-menu__checkbox-row">
-            <input
-              type="checkbox"
-              className="insights-actions-menu__checkbox"
-              checked={includeRemoteJobs}
-              onChange={(event) => onIncludeRemoteJobsChange(event.target.checked)}
-            />
-            <span>Include remote jobs</span>
-          </label>
-
           <label className="insights-actions-menu__checkbox-row">
             <input
               type="checkbox"

@@ -1,12 +1,12 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import './App.css'
 import JobTile from './JobTile'
 import Pagination from './Pagination'
 import SearchTextEntry from './SearchTextEntry'
 import LocationDropdown from './LocationDropdown'
+import ScoreWeightSliders, { type ScoreWeights } from './ScoreWeightSliders'
 import { extractTextFromFile } from './ResumeReader'
 import UploadResume from './UploadResume'
-import { type ScoreWeights } from './ScoreWeightSliders'
 import BulkAuditButton from './AuditAllButton'
 import GlobalAIButton from './GlobalAIButton'
 import { type JobDistributionMeta } from './JobDistributionGraph'
@@ -141,6 +141,43 @@ function writeStringArrayCache(cacheKey: string, entries: string[]): void {
 }
 
 const savedSettings = loadClientSearchSettings()
+
+// ── SearchSettingsDropdown ────────────────────────────────────────────────────
+interface SearchSettingsDropdownProps {
+  scoreWeights: ScoreWeights
+  onScoreWeightsChange: (w: ScoreWeights) => void
+  includeRemoteJobs: boolean
+  onIncludeRemoteJobsChange: (v: boolean) => void
+}
+function SearchSettingsDropdown({ scoreWeights, onScoreWeightsChange, includeRemoteJobs, onIncludeRemoteJobsChange }: SearchSettingsDropdownProps) {
+  const [open, setOpen] = React.useState(false)
+  const ref = React.useRef<HTMLDivElement>(null)
+  React.useEffect(() => {
+    if (!open) return
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [open])
+  return (
+    <div className="search-settings-dropdown" ref={ref}>
+      <button type="button" className="search-settings-trigger" onClick={() => setOpen(v => !v)} aria-expanded={open} aria-haspopup="true">
+        Search settings {open ? '▲' : '▼'}
+      </button>
+      {open && (
+        <div className="search-settings-panel" role="dialog" aria-label="Search settings">
+          <label className="search-settings-checkbox-row">
+            <input type="checkbox" checked={includeRemoteJobs} onChange={e => onIncludeRemoteJobsChange(e.target.checked)} />
+            <span>Include remote jobs</span>
+          </label>
+          <div className="search-settings-divider" />
+          <ScoreWeightSliders weights={scoreWeights} onChange={onScoreWeightsChange} />
+        </div>
+      )}
+    </div>
+  )
+}
 
 function App() {
   const [resumeText, setResumeText] = useState(savedSettings.resumeText)
@@ -1010,8 +1047,6 @@ function App() {
       <h1 className={`app-title${isSearching ? ' app-title--searching' : ''}`}>Job Search for Good</h1>
       <InsightsHoverPopovers
         searchMeta={searchMeta}
-        scoreWeights={scoreWeights}
-        onScoreWeightsChange={setScoreWeights}
         onOpenAiCorpus={() => setOpenAiCorpusSignal((value) => value + 1)}
         onRunAuditAllInSearch={auditEnabled ? handleRunAuditAllInSearch : undefined}
         onAddJob={handleAddJob}
@@ -1020,8 +1055,6 @@ function App() {
         onImportAllData={handleImportAllData}
         userRatingMode={userRatingMode}
         onUserRatingModeChange={setUserRatingMode}
-        includeRemoteJobs={includeRemoteJobs}
-        onIncludeRemoteJobsChange={setIncludeRemoteJobs}
         hideApplied={hideApplied}
         onHideAppliedChange={setHideApplied}
         hideTagColors={hideTagColors}
@@ -1076,6 +1109,13 @@ function App() {
           highlight={hasTextQuery && !resumeText}
         />
       </section>
+
+      <SearchSettingsDropdown
+        scoreWeights={scoreWeights}
+        onScoreWeightsChange={setScoreWeights}
+        includeRemoteJobs={includeRemoteJobs}
+        onIncludeRemoteJobsChange={setIncludeRemoteJobs}
+      />
 
       {!isSearching && (
         <Pagination
