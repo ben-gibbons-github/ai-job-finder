@@ -5,57 +5,45 @@ import { fetchPortalFallbackJobs } from './TerraBoardFallback.js';
 // All slugs below have been verified against the live Greenhouse boards API.
 // Remove or replace any entry that starts returning 404 to keep scraping clean.
 const DEFAULT_GREENHOUSE_BOARDS = [
-  'stripe',
-  'airbnb',
-  'asana',
-  'affirm',
-  'brex',
-  'datadog',
-  'discord',
-  'dropbox',
-  'duolingo',
-  'fivetran',
-  'instacart',
-  'intercom',
-  'lyft',
-  'mongodb',
-  'okta',
-  'reddit',
-  'webflow',
-  'databricks',
-  'coinbase',
-  'hubspot',
-  'robinhood',
-  'instabase',
-  'figma',
-  'cloudflare',
-  'fastly',
-  'figure',
-  'scaleai',
-  'chime',
-  'coursera',
-  'newrelic',
-  'samsara',
-  'gusto',
-  'apolloio',
-  'tripactions',
-  'squarespace',
-  'twilio',
-  'blend',
-  'flexport',
-  'carta',
-  'rubrik',
-  'nuro',
-  'xai',
-  'ripple',
-  'khanacademy',
-  'ginkgobioworks',
-  'smartsheet',
-  'solarwinds',
+  // Tech / SaaS
+  'stripe', 'airbnb', 'asana', 'affirm', 'brex', 'datadog', 'discord', 'dropbox',
+  'duolingo', 'fivetran', 'instacart', 'intercom', 'lyft', 'mongodb', 'okta',
+  'reddit', 'webflow', 'databricks', 'coinbase', 'hubspot', 'robinhood',
+  'instabase', 'figma', 'cloudflare', 'fastly', 'figure', 'scaleai', 'chime',
+  'coursera', 'newrelic', 'samsara', 'gusto', 'apolloio', 'tripactions',
+  'squarespace', 'twilio', 'blend', 'flexport', 'carta', 'rubrik', 'nuro',
+  'xai', 'ripple', 'khanacademy', 'ginkgobioworks', 'smartsheet', 'solarwinds',
+  // Additional tech
+  'gitlab', 'hashicorp', 'cockroachlabs', 'airtable', 'plaid', 'benchmarkemail',
+  'miro', 'lucid', 'domo', 'qualtrics', 'zendesk', 'twitch', 'wix',
+  'expensify', 'brainly', 'duolingo', 'kahoot', 'benchling', 'benchmarkemail',
+  'lob', 'gladly', 'front', 'heap', 'census', 'segment', 'iteratively',
+  'dbtlabs', 'firebolt', 'starburst', 'airbyte', 'hightouch', 'census',
+  'mixpanel', 'amplitude', 'looker', 'chartio', 'mode', 'thoughtspot',
+  'zapier', 'make', 'tray', 'workato', 'retool', 'appsmith',
+  // Climate / cleantech
+  'watershed', 'climateai', 'xomaenergy', 'brightmark', 'solugen', 'pachama',
+  'terraformation', 'optera', 'carbonchain', 'watershed', 'c3ai',
+  'arcadia', 'stem', 'enerparc', 'clearway', 'nextera', 'sunrun',
+  // Health / biotech
+  'modernatherapeutics', 'recursionpharma', 'insitro', 'seer', 'tempus',
+  'komodo', 'cityblock', 'cerebral', 'headway', 'brightline', 'brightside',
+  'hims', 'ro', 'teladoc', 'livongo', 'optum', 'oscar', 'clover',
+  'virta', 'thrive', 'noom', 'whoop', 'oura', 'withings',
+  // Social impact / nonprofit tech
+  'codeforamerica', 'socialfinance', 'bridgespan', 'gatesfoundation',
+  'wellcome', 'rwjf', 'commoncause', 'aclu', 'earthjustice',
+  'thenevadaindependent', 'calmatters',
+  // Fintech / economic inclusion
+  'chime', 'current', 'dave', 'brigit', 'earnin', 'varo', 'greenwood',
+  'oneunited', 'hope', 'springfour', 'missionlane',
+  // Education
+  'chegg', 'instructure', 'powerschool', 'nwea', 'renaissance', 'iready',
+  'newsela', 'curriculum', 'thinkcerca', 'achieve3000',
 ];
 const DEFAULT_GREENHOUSE_PER_PAGE = 100;
 const DEFAULT_MAX_GREENHOUSE_PAGES = 25;
-const DEFAULT_MAX_GREENHOUSE_BOARDS = 80;
+const DEFAULT_MAX_GREENHOUSE_BOARDS = 200;
 const DEFAULT_GREENHOUSE_INCLUDE_CONTENT = false;
 
 interface GreenhouseJob {
