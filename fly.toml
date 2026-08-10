@@ -36,6 +36,6 @@ primary_region = 'dfw'
     path = '/api/hello'
 
 [[vm]]
-  cpu_kind = 'shared'
+  cpu_kind = 'performance'
   cpus = 2
   memory_mb = 8192
