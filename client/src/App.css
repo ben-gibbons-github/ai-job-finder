@@ -1139,12 +1139,12 @@
   top: calc(100% + 6px);
   left: 0;
   z-index: 200;
-  min-width: 300px;
+  min-width: 560px;
   background: #ffffff;
   border: 1px solid #e2e8f0;
   border-radius: 12px;
   box-shadow: 0 8px 24px rgba(15, 23, 42, 0.12), 0 2px 6px rgba(15, 23, 42, 0.06);
-  padding: 12px 14px;
+  padding: 12px 16px;
 }
 
 .search-settings-checkbox-row {
@@ -1170,6 +1170,35 @@
   height: 1px;
   background: #f1f5f9;
   margin: 10px 0;
+}
+
+/* Override slider layout when inside search-settings-panel */
+.search-settings-panel .score-weight-sliders {
+  background: none;
+  border: none;
+  border-radius: 0;
+  padding: 0;
+}
+
+.search-settings-panel .score-weight-sliders__list {
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+}
+
+.search-settings-panel .score-weight-slider {
+  flex: 1 1 140px;
+  min-width: 120px;
+  max-width: 180px;
+}
+
+.search-settings-panel .score-weight-sliders__title {
+  display: none;
+}
+
+.search-settings-panel .score-weight-sliders__reset-btn {
+  align-self: flex-end;
+  margin-top: 4px;
 }
 
 .compact-search-bar + .pagination {
