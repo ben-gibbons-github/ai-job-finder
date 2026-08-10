@@ -1127,6 +1127,13 @@
   border-color: #9ca3af !important;
 }
 
+.search-settings-trigger--disabled,
+.search-settings-trigger:disabled {
+  opacity: 0.4 !important;
+  cursor: default !important;
+  pointer-events: none !important;
+}
+
 .search-settings-panel {
   position: absolute;
   top: calc(100% + 6px);

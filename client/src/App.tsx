@@ -148,8 +148,9 @@ interface SearchSettingsDropdownProps {
   onScoreWeightsChange: (w: ScoreWeights) => void
   includeRemoteJobs: boolean
   onIncludeRemoteJobsChange: (v: boolean) => void
+  isEnabled: boolean
 }
-function SearchSettingsDropdown({ scoreWeights, onScoreWeightsChange, includeRemoteJobs, onIncludeRemoteJobsChange }: SearchSettingsDropdownProps) {
+function SearchSettingsDropdown({ scoreWeights, onScoreWeightsChange, includeRemoteJobs, onIncludeRemoteJobsChange, isEnabled }: SearchSettingsDropdownProps) {
   const [open, setOpen] = React.useState(false)
   const ref = React.useRef<HTMLDivElement>(null)
   React.useEffect(() => {
@@ -162,7 +163,7 @@ function SearchSettingsDropdown({ scoreWeights, onScoreWeightsChange, includeRem
   }, [open])
   return (
     <div className="search-settings-dropdown" ref={ref}>
-      <button type="button" className="search-settings-trigger" onClick={() => setOpen(v => !v)} aria-expanded={open} aria-haspopup="true">
+      <button type="button" className={`search-settings-trigger${!isEnabled ? ' search-settings-trigger--disabled' : ''}`} onClick={() => isEnabled && setOpen(v => !v)} aria-expanded={open} aria-haspopup="true" disabled={!isEnabled}>
         Search settings {open ? '▲' : '▼'}
       </button>
       {open && (
@@ -1115,6 +1116,7 @@ function App() {
         onScoreWeightsChange={setScoreWeights}
         includeRemoteJobs={includeRemoteJobs}
         onIncludeRemoteJobsChange={setIncludeRemoteJobs}
+        isEnabled={hasTextQuery}
       />
 
       {!isSearching && (
