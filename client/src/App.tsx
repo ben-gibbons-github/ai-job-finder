@@ -477,7 +477,7 @@ function App() {
       const derivedHiddenCompanies = [...hiddenCompanies]
       if (hideApplied) {
         for (const [company, record] of Object.entries(jobStatusesByCompany)) {
-          if (record.currentStatus === 'applied' && !derivedHiddenCompanies.includes(company)) {
+          if (record.currentStatus !== 'none' && !derivedHiddenCompanies.includes(company)) {
             derivedHiddenCompanies.push(company)
           }
         }

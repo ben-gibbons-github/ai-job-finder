@@ -269,7 +269,7 @@ export default function ActionsMenu({
               checked={hideApplied}
               onChange={(event) => onHideAppliedChange(event.target.checked)}
             />
-            <span>Hide jobs I already applied for</span>
+            <span>Hide jobs with any status (applied, rejected, etc.)</span>
           </label>
 
           <label className="insights-actions-menu__select-row">
