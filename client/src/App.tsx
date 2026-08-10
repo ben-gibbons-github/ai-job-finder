@@ -175,8 +175,8 @@ function App() {
   const [dailyScoreBreakdownByDay, setDailyScoreBreakdownByDay] = useState<DailyScoreBreakdownByDay>(() => loadDailyScoreBreakdownByDay())
   const [userRatingMode, setUserRatingMode] = useState<UserRatingMode>(savedSettings.userRatingMode)
   const [includeRemoteJobs, setIncludeRemoteJobs] = useState(savedSettings.includeRemoteJobs)
-  const [hideApplied, setHideApplied] = useState(false)
-  const [hideTagColors, setHideTagColors] = useState<import('./ClientSaveLoad').CompanyTagColor[]>([])
+  const [hideApplied, setHideApplied] = useState(savedSettings.hideApplied)
+  const [hideTagColors, setHideTagColors] = useState<import('./ClientSaveLoad').CompanyTagColor[]>(savedSettings.hideTagColors)
   const [searchDebugInfo, setSearchDebugInfo] = useState<{
     cacheHit?: boolean
     userLat: number | null
@@ -358,9 +358,11 @@ function App() {
       uploadedResumeName,
       userRatingMode,
       includeRemoteJobs,
+      hideApplied,
+      hideTagColors,
       scoreWeights,
     })
-  }, [query, locationText, resumeText, uploadedResumeName, userRatingMode, includeRemoteJobs, scoreWeights])
+  }, [query, locationText, resumeText, uploadedResumeName, userRatingMode, includeRemoteJobs, hideApplied, hideTagColors, scoreWeights])
 
   const userRatingsPayload = useMemo(() => {
     const jobRatingsByUrl = Object.fromEntries(

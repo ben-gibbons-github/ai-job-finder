@@ -38,6 +38,8 @@ export interface ClientSearchSettings {
   uploadedResumeName: string;
   userRatingMode: UserRatingMode;
   includeRemoteJobs: boolean;
+  hideApplied: boolean;
+  hideTagColors: CompanyTagColor[];
   scoreWeights: {
     resume: number;
     impact: number;
@@ -117,6 +119,8 @@ const DEFAULT_CLIENT_SEARCH_SETTINGS: ClientSearchSettings = {
   uploadedResumeName: '',
   userRatingMode: 'none',
   includeRemoteJobs: true,
+  hideApplied: false,
+  hideTagColors: [],
   scoreWeights: {
     resume: 1,
     impact: 1,
@@ -1257,6 +1261,10 @@ export function loadClientSearchSettings(): ClientSearchSettings {
       uploadedResumeName: String(data.uploadedResumeName ?? ''),
       userRatingMode: toUserRatingMode((data as Record<string, unknown>).userRatingMode, (data as Record<string, unknown>).sortByUserRating),
       includeRemoteJobs: data.includeRemoteJobs === undefined ? true : Boolean(data.includeRemoteJobs),
+      hideApplied: Boolean((data as Record<string, unknown>).hideApplied),
+      hideTagColors: Array.isArray((data as Record<string, unknown>).hideTagColors)
+        ? ((data as Record<string, unknown>).hideTagColors as unknown[]).filter((c): c is CompanyTagColor => COMPANY_TAG_COLORS.includes(c as CompanyTagColor))
+        : [],
       scoreWeights: {
         resume: toFiniteOrFallback((parsedWeights as Record<string, unknown>).resume, 1),
         impact: toFiniteOrFallback((parsedWeights as Record<string, unknown>).impact, 1),
@@ -1463,6 +1471,8 @@ export function importAllLocalDataFromXml(xmlText: string): { ok: boolean; messa
       uploadedResumeName: String(searchSettingsNode?.querySelector('uploadedResumeName')?.textContent ?? currentSettings.uploadedResumeName),
       userRatingMode: toUserRatingMode(searchSettingsNode?.getAttribute('userRatingMode'), currentSettings.userRatingMode === 'sort'),
       includeRemoteJobs: parseXmlBoolean(searchSettingsNode?.getAttribute('includeRemoteJobs'), currentSettings.includeRemoteJobs),
+      hideApplied: parseXmlBoolean(searchSettingsNode?.getAttribute('hideApplied'), currentSettings.hideApplied),
+      hideTagColors: currentSettings.hideTagColors,
       scoreWeights: {
         resume: toFiniteOrFallback(scoreWeightsNode?.getAttribute('resume'), currentSettings.scoreWeights.resume),
         impact: toFiniteOrFallback(scoreWeightsNode?.getAttribute('impact'), currentSettings.scoreWeights.impact),
