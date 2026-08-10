@@ -175,6 +175,8 @@ function App() {
   const [dailyScoreBreakdownByDay, setDailyScoreBreakdownByDay] = useState<DailyScoreBreakdownByDay>(() => loadDailyScoreBreakdownByDay())
   const [userRatingMode, setUserRatingMode] = useState<UserRatingMode>(savedSettings.userRatingMode)
   const [includeRemoteJobs, setIncludeRemoteJobs] = useState(savedSettings.includeRemoteJobs)
+  const [hideApplied, setHideApplied] = useState(false)
+  const [hideTagColors, setHideTagColors] = useState<import('./ClientSaveLoad').CompanyTagColor[]>([])
   const [searchDebugInfo, setSearchDebugInfo] = useState<{
     cacheHit?: boolean
     userLat: number | null
@@ -471,6 +473,23 @@ function App() {
         ? persistedSettings.resumeText
         : resumeText
 
+      // Companies to hide derived from filter options
+      const derivedHiddenCompanies = [...hiddenCompanies]
+      if (hideApplied) {
+        for (const [company, record] of Object.entries(jobStatusesByCompany)) {
+          if (record.currentStatus === 'applied' && !derivedHiddenCompanies.includes(company)) {
+            derivedHiddenCompanies.push(company)
+          }
+        }
+      }
+      if (hideTagColors.length > 0) {
+        for (const [company, colors] of Object.entries(companyColorTagsByCompany)) {
+          if (hideTagColors.some((c) => colors.includes(c)) && !derivedHiddenCompanies.includes(company)) {
+            derivedHiddenCompanies.push(company)
+          }
+        }
+      }
+
       const payload: ClientSearchPayload = {
         query,
         resumeText: effectiveResumeText,
@@ -483,7 +502,7 @@ function App() {
         end: searchEnd,
         scoreWeights,
         hiddenJobUrls,
-        hiddenCompanies,
+        hiddenCompanies: derivedHiddenCompanies,
         addedJobs: addedJobsSearchPayload,
       }
 
@@ -519,7 +538,7 @@ function App() {
     }
 
     emitSearch('stateChange')
-  }, [query, resumeText, uploadedResumeName, isResumeLoading, locationText, includeRemoteJobs, userRatingMode, userRatingsPayload, userRatingFilter, searchStart, searchEnd, scoreWeights, hiddenJobUrls, hiddenCompanies, addedJobsSearchPayload])
+  }, [query, resumeText, uploadedResumeName, isResumeLoading, locationText, includeRemoteJobs, hideApplied, hideTagColors, userRatingMode, userRatingsPayload, userRatingFilter, searchStart, searchEnd, scoreWeights, hiddenJobUrls, hiddenCompanies, addedJobsSearchPayload, jobStatusesByCompany, companyColorTagsByCompany])
 
   const handleRunAuditAllInSearch = () => {
     const payload: ClientSearchPayload = {
@@ -1001,6 +1020,10 @@ function App() {
         onUserRatingModeChange={setUserRatingMode}
         includeRemoteJobs={includeRemoteJobs}
         onIncludeRemoteJobsChange={setIncludeRemoteJobs}
+        hideApplied={hideApplied}
+        onHideAppliedChange={setHideApplied}
+        hideTagColors={hideTagColors}
+        onHideTagColorsChange={setHideTagColors}
         visibleJobsCount={visibleJobs.length}
         jobsWithUserNotesCount={jobsWithUserNotesCount}
         userNotesCoveragePercent={userNotesCoveragePercent}

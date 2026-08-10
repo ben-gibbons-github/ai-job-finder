@@ -1,7 +1,16 @@
 import { useRef, useState, type ChangeEvent, type CSSProperties, type FormEvent, type RefObject } from 'react'
 import { createPortal } from 'react-dom'
 import { type InsightsPopoverKey } from './usePinnedHoverPopover'
-import { type AddedJobDraft, type UserRatingMode } from './ClientSaveLoad'
+import { type AddedJobDraft, type CompanyTagColor, type UserRatingMode } from './ClientSaveLoad'
+
+const COMPANY_TAG_COLOR_OPTIONS: { color: CompanyTagColor; label: string }[] = [
+  { color: 'red', label: 'Red' },
+  { color: 'orange', label: 'Orange' },
+  { color: 'yellow', label: 'Yellow' },
+  { color: 'green', label: 'Green' },
+  { color: 'blue', label: 'Blue' },
+  { color: 'purple', label: 'Purple' },
+]
 
 interface ActionsMenuProps {
   visiblePopover: InsightsPopoverKey | null
@@ -18,6 +27,10 @@ interface ActionsMenuProps {
   onUserRatingModeChange: (value: UserRatingMode) => void
   includeRemoteJobs: boolean
   onIncludeRemoteJobsChange: (value: boolean) => void
+  hideApplied: boolean
+  onHideAppliedChange: (value: boolean) => void
+  hideTagColors: CompanyTagColor[]
+  onHideTagColorsChange: (colors: CompanyTagColor[]) => void
   isEnabled: boolean
 }
 
@@ -36,6 +49,10 @@ export default function ActionsMenu({
   onUserRatingModeChange,
   includeRemoteJobs,
   onIncludeRemoteJobsChange,
+  hideApplied,
+  onHideAppliedChange,
+  hideTagColors,
+  onHideTagColorsChange,
   isEnabled,
 }: ActionsMenuProps) {
   const importInputRef = useRef<HTMLInputElement | null>(null)
@@ -243,6 +260,33 @@ export default function ActionsMenu({
               onChange={(event) => onIncludeRemoteJobsChange(event.target.checked)}
             />
             <span>Include remote jobs</span>
+          </label>
+
+          <label className="insights-actions-menu__checkbox-row">
+            <input
+              type="checkbox"
+              className="insights-actions-menu__checkbox"
+              checked={hideApplied}
+              onChange={(event) => onHideAppliedChange(event.target.checked)}
+            />
+            <span>Hide jobs I already applied for</span>
+          </label>
+
+          <label className="insights-actions-menu__select-row">
+            <span className="insights-actions-menu__select-label">Hide jobs with tag</span>
+            <select
+              className="insights-actions-menu__select"
+              value={hideTagColors.length === 1 ? hideTagColors[0] : ''}
+              onChange={(event) => {
+                const val = event.target.value as CompanyTagColor | ''
+                onHideTagColorsChange(val ? [val] : [])
+              }}
+            >
+              <option value="">— none —</option>
+              {COMPANY_TAG_COLOR_OPTIONS.map((opt) => (
+                <option key={opt.color} value={opt.color}>{opt.label}</option>
+              ))}
+            </select>
           </label>
 
           <label className="insights-actions-menu__select-row">

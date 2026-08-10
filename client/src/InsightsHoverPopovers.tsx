@@ -3,7 +3,7 @@ import JobDistributionGraph, { type JobDistributionMeta } from './JobDistributio
 import ScoreWeightSliders, { type ScoreWeights } from './ScoreWeightSliders'
 import { usePinnedHoverPopover, type InsightsPopoverKey } from './usePinnedHoverPopover'
 import ActionsMenu from './ActionsMenu'
-import { type AddedJobDraft, type DailyScoreBreakdownByDay, type UserRatingMode } from './ClientSaveLoad'
+import { type AddedJobDraft, type CompanyTagColor, type DailyScoreBreakdownByDay, type UserRatingMode } from './ClientSaveLoad'
 import UserNotesStatsPanel from './UserNotesStatsPanel'
 import TagCloudPanel, { type TagCloudEntry } from './TagCloudPanel'
 
@@ -21,6 +21,10 @@ interface InsightsHoverPopoversProps {
   onUserRatingModeChange: (value: UserRatingMode) => void
   includeRemoteJobs: boolean
   onIncludeRemoteJobsChange: (value: boolean) => void
+  hideApplied: boolean
+  onHideAppliedChange: (value: boolean) => void
+  hideTagColors: CompanyTagColor[]
+  onHideTagColorsChange: (colors: CompanyTagColor[]) => void
   visibleJobsCount: number
   jobsWithUserNotesCount: number
   userNotesCoveragePercent: number
@@ -47,6 +51,10 @@ export default function InsightsHoverPopovers({
   onUserRatingModeChange,
   includeRemoteJobs,
   onIncludeRemoteJobsChange,
+  hideApplied,
+  onHideAppliedChange,
+  hideTagColors,
+  onHideTagColorsChange,
   visibleJobsCount,
   jobsWithUserNotesCount,
   userNotesCoveragePercent,
@@ -259,6 +267,10 @@ export default function InsightsHoverPopovers({
         onUserRatingModeChange={onUserRatingModeChange}
         includeRemoteJobs={includeRemoteJobs}
         onIncludeRemoteJobsChange={onIncludeRemoteJobsChange}
+        hideApplied={hideApplied}
+        onHideAppliedChange={onHideAppliedChange}
+        hideTagColors={hideTagColors}
+        onHideTagColorsChange={onHideTagColorsChange}
         isEnabled={isEnabled}
       />
 
