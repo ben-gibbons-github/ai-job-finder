@@ -521,8 +521,8 @@ class SearchMain {
     // fresh + audit) score is below 75% of the maximum on those dimensions.
     // These 4 scores come from the employer cache / freshness — no resume or
     // location work needed — so this trim is essentially free.
-    const PRE_FILTER_MIN_JOBS = 1000o
-    const PRE_FILTER_MIN_JOBS2 = 10000
+    const PRE_FILTER_MIN_JOBS = 10000
+    const PRE_FILTER_MIN_JOBS2 = 100000
     let preFilteredJobs = matched
     let preFilterDropped = 0
     if (matched.length > PRE_FILTER_MIN_JOBS) {

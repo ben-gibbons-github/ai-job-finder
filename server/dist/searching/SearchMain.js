@@ -210,8 +210,17 @@ class SearchMain {
         const logFlags = searchPayload.searchLogFlags ?? {};
         const logSearchMain = logFlags.searchMain === true;
         const hiddenExclusionsEnabled = SERVER_HIDDEN_EXCLUSIONS_ENABLED;
+        const logSearchStage = (stageName, startedAt, details) => {
+            if (!logSearchMain) {
+                return;
+            }
+            const elapsedMs = Date.now() - startedAt;
+            console.log(`[SearchMain] ${stageName} took ${elapsedMs}ms${details ? ` (${details})` : ''}`);
+        };
+        const searchStartedAt = Date.now();
         const rawQueryValue = searchPayload.query;
         const rawQuery = typeof rawQueryValue === 'string' ? rawQueryValue : '';
+        const parseInputsStartedAt = Date.now();
         const queryTerms = rawQuery
             .trim()
             .toLowerCase()
@@ -230,6 +239,8 @@ class SearchMain {
             : new Set();
         const addedJobs = sanitizeAddedJobs(searchPayload.addedJobs);
         const jobsForSearch = mergeAddedJobs(jobs, addedJobs);
+        logSearchStage('input normalization', parseInputsStartedAt, `queryTerms=${queryTerms.length}, jobs=${jobsForSearch.length}, addedJobs=${addedJobs.length}`);
+        const hiddenFilterStartedAt = Date.now();
         const visibleJobs = jobsForSearch.filter((job) => {
             const sourceUrl = normalizeExactUrl(job.source_url);
             const companyName = normalizeExactCompanyName(job.company_name);
@@ -241,11 +252,15 @@ class SearchMain {
             }
             return true;
         });
+        logSearchStage('hidden exclusion filtering', hiddenFilterStartedAt, `visibleJobs=${visibleJobs.length}`);
         const includeRemoteJobs = searchPayload.includeRemoteJobs !== false;
+        const remoteFilterStartedAt = Date.now();
         const remoteFilteredJobs = includeRemoteJobs
             ? visibleJobs
             : visibleJobs.filter((job) => !isRemoteJob(job));
+        logSearchStage('remote filtering', remoteFilterStartedAt, `jobs=${remoteFilteredJobs.length}`);
         const userRatingMode = parseUserRatingMode(searchPayload.userRatingMode);
+        const ratingFilterStartedAt = Date.now();
         const jobRatingMap = userRatingMode !== 'none'
             ? buildUserRatingMap(searchPayload.userRatings?.jobRatingsByUrl, normalizeExactUrl)
             : new Map();
@@ -277,15 +292,19 @@ class SearchMain {
             : userRatingMode === 'hideRated'
                 ? remoteFilteredJobs.filter((job) => !hasAnyUserRating(job, ratedJobUrls, ratedCompanies))
                 : remoteFilteredJobs;
+        logSearchStage('user rating filtering', ratingFilterStartedAt, `jobs=${ratingFilteredJobs.length}, mode=${userRatingMode}`);
         if (logSearchMain) {
             console.log('SearchMain.search called with query:', rawQuery, 'parsed terms:', queryTerms, 'locationText:', searchPayload.locationText, 'resumeText length:', typeof searchPayload.resumeText === 'string' ? searchPayload.resumeText.length : 'N/A', 'hiddenExclusionsEnabled:', hiddenExclusionsEnabled, 'hiddenJobUrls:', hiddenJobUrls.size, 'hiddenCompanies:', hiddenCompanies.size, 'userRatingMode:', userRatingMode, 'jobRatingMap:', jobRatingMap.size, 'companyRatingMap:', companyRatingMap.size, 'ratedJobUrls:', ratedJobUrls.size, 'ratedCompanies:', ratedCompanies.size);
         }
+        const queryMatchStartedAt = Date.now();
         const matched = queryTerms.length > 0
             ? ratingFilteredJobs.filter((job) => jobMatchesQuery(job, queryTerms, logFlags.query === true))
             : ratingFilteredJobs; // If no query terms, consider all visible jobs as matched (subject to pagination later)
+        logSearchStage('query matching', queryMatchStartedAt, `matched=${matched.length}`);
         const resumeText = typeof searchPayload.resumeText === 'string' ? searchPayload.resumeText : '';
         const locationText = typeof searchPayload.locationText === 'string' ? searchPayload.locationText : '';
         // Geocode user location
+        const userGeocodeStartedAt = Date.now();
         const userLocCoords = locationText.length > 0 ? await geocodeUserLocation(locationText, logFlags.location === true) : null;
         const userLat = userLocCoords?.lat ?? null;
         const userLon = userLocCoords?.lon ?? null;
@@ -296,13 +315,17 @@ class SearchMain {
         if (logSearchMain) {
             console.log('User location geocoded to:', userLocCoords, 'for location text:', locationText);
         }
+        logSearchStage('user location geocoding', userGeocodeStartedAt, hasUsableUserCoords ? 'coords=usable' : 'coords=unavailable');
         // return { matched: [], size: matched.length }
         // Geocoding every job location is expensive and only helps when user coordinates exist.
         // For empty/failed location input paths, skip this entirely and rely on text/remote scoring.
+        const jobGeocodeStartedAt = Date.now();
         const jobsWithCoords = hasUsableUserCoords
             ? await geocodeJobLocations(matched, logFlags.location === true)
             : matched;
+        logSearchStage('job location geocoding', jobGeocodeStartedAt, `jobs=${jobsWithCoords.length}`);
         // Calculate scores for each job and create wrappers
+        const rankingStartedAt = Date.now();
         const rankedWrappers = jobsWithCoords
             .map((job) => {
             const scores = calculateIndividualScores(job, resumeText, locationText, userLat, userLon, logFlags);
@@ -325,6 +348,8 @@ class SearchMain {
             };
         })
             .sort((a, b) => b.totalScore - a.totalScore);
+        logSearchStage('score calculation and ranking', rankingStartedAt, `ranked=${rankedWrappers.length}`);
+        const userRatingSortStartedAt = Date.now();
         const sortedByUserRatingWrappers = userRatingMode === 'none'
             ? rankedWrappers
             : rankedWrappers
@@ -351,6 +376,8 @@ class SearchMain {
                 return a.originalIndex - b.originalIndex;
             })
                 .map((entry) => entry.wrapper);
+        logSearchStage('user rating sort', userRatingSortStartedAt, `sorted=${sortedByUserRatingWrappers.length}`);
+        const metaStartedAt = Date.now();
         const start = Number.isInteger(searchPayload.start) ? Number(searchPayload.start) : 0;
         const end = Number.isInteger(searchPayload.end) ? Number(searchPayload.end) : sortedByUserRatingWrappers.length;
         const meta = {
@@ -361,7 +388,9 @@ class SearchMain {
                 userRatingMode,
             },
         };
+        logSearchStage('result metadata', metaStartedAt, `matched=${sortedByUserRatingWrappers.length}`);
         if (start < 0 || end < 0 || end <= start) {
+            logSearchStage('search total', searchStartedAt, `returned=${sortedByUserRatingWrappers.length}`);
             return { matched: sortedByUserRatingWrappers, size: sortedByUserRatingWrappers.length, meta };
         }
         if (logSearchMain) {
@@ -373,6 +402,7 @@ class SearchMain {
         //   const shouldLaunch = true
         //   wrapper.scores.audit = Math.min(auditJob(wrapper.job, logFlags.audit === true, shouldLaunch) / 100, 1.0)
         // })
+        logSearchStage('search total', searchStartedAt, `returned=${sliced.length}, matched=${sortedByUserRatingWrappers.length}`);
         return { matched: sliced, size: sortedByUserRatingWrappers.length, meta };
     }
 }
