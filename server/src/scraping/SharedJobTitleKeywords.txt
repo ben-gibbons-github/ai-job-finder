@@ -1,10 +1,12 @@
 # Shared job title keywords used across keyword-based APIs.
-# One keyword per line.
+# One keyword per line. Lines starting with # are comments.
 
+# ── Software Engineering ──────────────────────────────────────────────────────
 software engineer
 senior software engineer
 staff software engineer
 principal software engineer
+lead software engineer
 backend engineer
 frontend engineer
 full stack engineer
@@ -15,6 +17,9 @@ mobile developer
 android developer
 ios developer
 react developer
+react native developer
+vue developer
+angular developer
 node.js developer
 typescript developer
 python developer
@@ -25,105 +30,429 @@ rust developer
 php developer
 ruby developer
 wordpress developer
+scala developer
+kotlin developer
+swift developer
+c++ developer
+c developer
+perl developer
+r developer
+julia developer
+elixir developer
+clojure developer
+haskell developer
+embedded software engineer
+firmware engineer
+systems programmer
+game developer
+unity developer
+unreal engine developer
+graphics engineer
+shader engineer
+low level engineer
+systems software engineer
+distributed systems engineer
+real-time systems engineer
+integration engineer
+api developer
+rest api developer
+graphql developer
+microservices engineer
+event driven systems engineer
+kafka engineer
+websocket engineer
+grpc engineer
+
+# ── QA / Testing ─────────────────────────────────────────────────────────────
 qa engineer
 software test engineer
 test automation engineer
 sdet
 quality assurance analyst
-release engineer
-build engineer
-platform engineer
+quality assurance engineer
+manual tester
+automation tester
+performance test engineer
+load test engineer
+test lead
+qa lead
+qa manager
+test manager
+quality engineer
+quality analyst
+mobile test engineer
+api test engineer
+security tester
+penetration tester
+
+# ── DevOps / Platform / SRE ──────────────────────────────────────────────────
+devops engineer
 site reliability engineer
 sre
-devops engineer
+platform engineer
 cloud engineer
 cloud architect
+infrastructure engineer
+release engineer
+build engineer
+ci/cd engineer
+devsecops engineer
+reliability engineer
+production engineer
+systems engineer
+systems administrator
+network engineer
+network administrator
+network architect
+systems reliability engineer
+chaos engineer
+incident manager
+support engineer
+cloud infrastructure engineer
+aws engineer
+gcp engineer
+azure engineer
+kubernetes engineer
+docker engineer
+terraform engineer
+ansible engineer
+linux engineer
+linux administrator
+storage engineer
+disaster recovery engineer
+
+# ── Architecture ─────────────────────────────────────────────────────────────
 solutions architect
 enterprise architect
-systems engineer
-network engineer
+cloud architect
+data architect
+application architect
+technical architect
+software architect
+integration architect
+security architect
+infrastructure architect
+
+# ── Security / Cybersecurity ──────────────────────────────────────────────────
 security engineer
 application security engineer
 cybersecurity analyst
 security analyst
 information security analyst
+information security engineer
+cybersecurity engineer
+penetration tester
+ethical hacker
+red team engineer
+blue team analyst
+threat intelligence analyst
+soc analyst
+security operations analyst
+incident response analyst
+forensic analyst
+malware analyst
+vulnerability researcher
+reverse engineer
+security researcher
+cloud security engineer
+devsecops engineer
+appsec engineer
+iam engineer
+zero trust architect
+security architect
+compliance engineer
+grc analyst
+risk analyst
+privacy analyst
+data privacy engineer
+security consultant
+aml analyst
+kyc analyst
+fraud analyst
+
+# ── IT Support ────────────────────────────────────────────────────────────────
 it support specialist
 help desk technician
 desktop support technician
 technical support engineer
 it administrator
-systems administrator
-database administrator
+it technician
+it manager
+it director
+it coordinator
+field technician
+field support engineer
+desktop engineer
+it analyst
+service desk analyst
+deskside support
+remote support technician
+it project manager
+vp of engineering
+vp of technology
+chief information officer
+cio
+chief technology officer
+cto
+chief information security officer
+ciso
+director of engineering
+head of engineering
+engineering manager
+director of technology
+
+# ── Data Engineering ──────────────────────────────────────────────────────────
 data engineer
+senior data engineer
+staff data engineer
+principal data engineer
+data platform engineer
+analytics engineer
+etl developer
+etl engineer
+data pipeline engineer
+data warehouse engineer
+lakehouse engineer
+streaming data engineer
+real-time data engineer
+spark engineer
+airflow engineer
+dbt engineer
+databricks engineer
+snowflake engineer
+bigquery engineer
+data integration engineer
+data quality engineer
+
+# ── Data Analytics / BI ──────────────────────────────────────────────────────
 data analyst
 senior data analyst
 business intelligence analyst
 bi analyst
-analytics engineer
+bi developer
+bi engineer
+reporting analyst
+data visualization engineer
+tableau developer
+power bi developer
+looker developer
+product analytics engineer
+growth analyst
+marketing analyst
+web analyst
+financial data analyst
+operations analyst
+supply chain analyst
+revenue operations analyst
+sales operations analyst
+pricing analyst
+quantitative analyst
+quantitative researcher
+
+# ── Data Science / ML / AI ────────────────────────────────────────────────────
 data scientist
+senior data scientist
+staff data scientist
+principal data scientist
 machine learning engineer
 ml engineer
 ai engineer
 research scientist
 research engineer
+applied scientist
 nlp engineer
+nlp scientist
 computer vision engineer
+computer vision scientist
+multimodal engineer
+reinforcement learning engineer
+generative ai engineer
+llm engineer
+foundation model engineer
+fine-tuning engineer
 prompt engineer
+ai product manager
+ml product manager
+ai researcher
+ml researcher
+deep learning engineer
+data science manager
+ml ops engineer
+mlops engineer
+model deployment engineer
+feature engineering specialist
+evaluation engineer
+
+# ── Product Management ────────────────────────────────────────────────────────
 product manager
 senior product manager
 group product manager
+principal product manager
 technical product manager
+staff product manager
+director of product
+head of product
+vp of product
+chief product officer
+cpo
+product director
+product lead
+associate product manager
+apm
+product analyst
+platform product manager
+growth product manager
+consumer product manager
+enterprise product manager
+mobile product manager
+data product manager
+api product manager
+product operations manager
+product owner
+
+# ── Program / Project Management ─────────────────────────────────────────────
 program manager
 technical program manager
+senior program manager
 project manager
+senior project manager
 project coordinator
+project lead
 scrum master
 agile coach
-product owner
+delivery manager
+pmo analyst
+portfolio manager
+release manager
+change manager
+transformation manager
+digital transformation manager
+implementation manager
+implementation consultant
+
+# ── Business Analysis / Strategy ─────────────────────────────────────────────
 business analyst
+senior business analyst
 strategy analyst
+strategy manager
+strategy consultant
+management consultant
+business strategy manager
+competitive intelligence analyst
+market research analyst
+market analyst
+go to market manager
+business development manager
+business development analyst
+business development representative
+bdr
+growth analyst
+growth manager
 operations analyst
-process analyst
-operations manager
 business operations manager
 chief of staff
+strategy and operations manager
 general manager
-office manager
-executive assistant
-administrative assistant
-administrative coordinator
-customer service representative
-customer support specialist
+director of operations
+vp of operations
+chief operating officer
+coo
+
+# ── Customer Success ──────────────────────────────────────────────────────────
 customer success manager
+senior customer success manager
+customer success director
+vp of customer success
+customer experience manager
 account manager
 technical account manager
+enterprise customer success manager
+customer onboarding manager
+customer enablement manager
 implementation specialist
 solutions consultant
+professional services consultant
+professional services engineer
+solutions engineer
+pre-sales engineer
+sales engineer
+field application engineer
+
+# ── Sales ─────────────────────────────────────────────────────────────────────
 sales representative
 inside sales representative
 outside sales representative
-business development representative
-bdr
-sdr
 account executive
 enterprise account executive
+mid-market account executive
+smb account executive
+commercial account executive
+national account manager
+key account manager
+strategic account manager
 sales manager
 regional sales manager
+director of sales
+vp of sales
+chief revenue officer
+cro
 channel manager
+channel sales manager
+partner manager
 partnerships manager
-growth manager
+business development representative
+sdr
+sales operations manager
+sales enablement manager
+sales engineer
+territory manager
+insurance sales agent
+financial advisor
+wealth advisor
+
+# ── Marketing ─────────────────────────────────────────────────────────────────
 marketing coordinator
 marketing specialist
 digital marketing specialist
+marketing manager
+senior marketing manager
+director of marketing
+vp of marketing
+chief marketing officer
+cmo
 performance marketing manager
+growth marketing manager
+paid media manager
 seo specialist
+seo manager
 content marketing manager
+content strategist
 social media manager
-communications manager
-public relations manager
+social media specialist
+community manager
 brand manager
 product marketing manager
+senior product marketing manager
+director of product marketing
 demand generation manager
+email marketing manager
+lifecycle marketing manager
+retention marketing manager
+campaign manager
+marketing analyst
+marketing operations manager
+marketing automation manager
+event marketing manager
+field marketing manager
+affiliate marketing manager
+pr manager
+public relations manager
+communications manager
+corporate communications manager
+media relations manager
+technical marketing engineer
+
+# ── Design / Creative ─────────────────────────────────────────────────────────
 graphic designer
 ui designer
 ux designer
@@ -131,214 +460,599 @@ ui ux designer
 product designer
 visual designer
 motion designer
+brand designer
+interaction designer
 instructional designer
+art director
+creative director
+design director
+head of design
+experience designer
+service designer
+design researcher
+user researcher
+ux researcher
+design systems engineer
+web designer
+presentation designer
+photographer
+videographer
+video editor
+video producer
+content creator
+audio engineer
+sound designer
 copywriter
 technical writer
 content writer
 editor
+managing editor
+copy editor
+documentation writer
+api documentation writer
+
+# ── Finance / Accounting ──────────────────────────────────────────────────────
 finance analyst
 financial analyst
+senior financial analyst
 fp&a analyst
-accountant
+fp&a manager
+director of fp&a
+vp of finance
+chief financial officer
+cfo
+accounting manager
+controller
+assistant controller
 staff accountant
 senior accountant
-tax accountant
 cost accountant
+tax accountant
+tax manager
+audit manager
 auditor
-controller
+internal auditor
+external auditor
+forensic accountant
+financial controller
+accounts payable specialist
+accounts receivable specialist
+billing specialist
 bookkeeper
 payroll specialist
-procurement specialist
-sourcing specialist
-supply chain analyst
-supply chain manager
-logistics coordinator
-logistics manager
-inventory analyst
-operations coordinator
-warehouse associate
-warehouse manager
-fulfillment associate
-forklift operator
-purchasing manager
-buyer
-category manager
+payroll manager
+treasury analyst
+treasury manager
+investment analyst
+equity analyst
+credit analyst
+credit manager
+risk manager
+financial risk manager
+market risk analyst
+quantitative finance
+actuary
+actuarial analyst
+mergers and acquisitions analyst
+investment banker
+portfolio analyst
+wealth manager
+financial planner
+certified financial planner
+cfp
+financial consultant
+mortgage underwriter
+loan officer
+loan underwriter
+compliance analyst
+regulatory analyst
+fraud analyst
+insurance underwriter
+claims adjuster
+
+# ── Legal ────────────────────────────────────────────────────────────────────
+legal assistant
+paralegal
+senior paralegal
+litigation paralegal
+corporate paralegal
+legal coordinator
+contract administrator
+contracts manager
+legal operations analyst
+legal operations manager
+general counsel
+associate general counsel
+senior counsel
+legal counsel
+corporate attorney
+litigation attorney
+employment attorney
+regulatory attorney
+intellectual property attorney
+patent attorney
+trademark attorney
+privacy attorney
+compliance attorney
+securities attorney
+real estate attorney
+mergers and acquisitions attorney
+contract attorney
+legal analyst
+policy analyst
+policy advisor
+policy manager
+government affairs manager
+government relations manager
+regulatory affairs specialist
+public affairs manager
+public affairs specialist
+legislative analyst
+
+# ── Human Resources ───────────────────────────────────────────────────────────
 human resources generalist
 hr generalist
 hr manager
+hr director
+vp of hr
+chief people officer
+head of people
+people operations specialist
+people operations manager
+people partner
 hr business partner
+hrbp
 recruiter
 technical recruiter
+senior technical recruiter
+corporate recruiter
+executive recruiter
 talent acquisition specialist
 talent acquisition manager
-people operations specialist
+talent acquisition director
+head of talent acquisition
+sourcer
+recruiting coordinator
+campus recruiter
+diversity recruiter
+employer branding manager
 learning and development specialist
+l&d specialist
+learning and development manager
+training specialist
+training manager
+organizational development specialist
+organizational development manager
 compensation analyst
+compensation specialist
+compensation manager
+total rewards analyst
+benefits analyst
 benefits specialist
-legal assistant
-paralegal
-contract administrator
-contracts manager
-compliance analyst
-risk analyst
-policy analyst
-government affairs manager
-public affairs specialist
-grant writer
-grant manager
-fundraising manager
-development manager nonprofit
-nonprofit program manager
-program coordinator
+benefits manager
+hris analyst
+workday analyst
+hr data analyst
+employee experience manager
+dei specialist
+diversity equity inclusion specialist
+diversity manager
+
+# ── Operations / Supply Chain ─────────────────────────────────────────────────
+operations coordinator
+operations manager
+operations director
+operations analyst
+process analyst
+process improvement specialist
+business process analyst
+lean specialist
+six sigma specialist
+process engineer
+industrial engineer
+manufacturing engineer
+quality manager
+quality control specialist
+continuous improvement manager
+warehouse associate
+warehouse manager
+warehouse supervisor
+distribution center manager
+fulfillment associate
+fulfillment manager
+logistics coordinator
+logistics manager
+logistics analyst
+transportation coordinator
+transportation manager
+freight coordinator
+freight manager
+fleet manager
+supply chain analyst
+supply chain manager
+supply chain director
+supply chain coordinator
+procurement specialist
+sourcing specialist
+strategic sourcing manager
+purchasing manager
+buyer
+category manager
+vendor manager
+supplier quality engineer
+inventory analyst
+inventory manager
+demand planner
+production planner
+production scheduler
+manufacturing manager
+plant manager
+plant supervisor
+production supervisor
+production manager
+assembly technician
+operations associate
+order management specialist
+import export coordinator
+customs specialist
+trade compliance manager
+
+# ── Customer Service ──────────────────────────────────────────────────────────
+customer service representative
+customer support specialist
+customer support engineer
+technical support specialist
+call center representative
+call center supervisor
+call center manager
+contact center agent
+contact center manager
+member services representative
+client services representative
+client services manager
+field service technician
+field service engineer
+field service manager
+remote support specialist
+customer care specialist
+customer care manager
+onboarding specialist
+
+# ── Administrative ────────────────────────────────────────────────────────────
+executive assistant
+senior executive assistant
+administrative assistant
+administrative coordinator
+office manager
+office administrator
+receptionist
+front desk coordinator
+facilities manager
+facilities administrator
+event coordinator
+event planner
+event manager
+travel coordinator
+office coordinator
+team coordinator
+personal assistant
+chief of staff
+business manager
+administrative manager
+director of administration
+
+# ── Education ────────────────────────────────────────────────────────────────
+teacher
+elementary teacher
+middle school teacher
+high school teacher
+special education teacher
+gifted education teacher
+bilingual teacher
+esl teacher
+stem teacher
+math teacher
+science teacher
+history teacher
+english teacher
+art teacher
+music teacher
+physical education teacher
+computer science teacher
+substitute teacher
+teaching assistant
+teacher aide
+paraprofessional
+school counselor
+academic advisor
+college counselor
+librarian
+instructional coach
+literacy coach
+curriculum specialist
+curriculum coordinator
+curriculum developer
+instructional coordinator
+instructional designer
+learning designer
+educational technology specialist
+e-learning developer
+lms administrator
+training coordinator
+corporate trainer
+professor
+associate professor
+adjunct professor
+lecturer
+postdoctoral researcher
+research assistant
+research associate
+principal
+vice principal
+assistant principal
+superintendent
+academic director
+admissions coordinator
+admissions counselor
+financial aid advisor
+registrar
+enrollment manager
+student success coordinator
+tutoring coordinator
+outdoor education instructor
+
+# ── Healthcare ────────────────────────────────────────────────────────────────
+registered nurse
+rn
+licensed practical nurse
+lpn
+licensed vocational nurse
+nurse practitioner
+np
+certified nurse midwife
+clinical nurse specialist
+nurse anesthetist
+crna
+dental hygienist
+dental assistant
+medical assistant
+patient care technician
+phlebotomist
+patient services representative
+patient access specialist
+care coordinator
+care navigator
 case manager
 social worker
-community manager
-community organizer
-community outreach coordinator
-volunteer coordinator
-health educator
-public health specialist
-epidemiologist
-research coordinator
-clinical research coordinator
-clinical data manager
-clinical trial manager
-medical assistant
-registered nurse
-licensed practical nurse
-nurse practitioner
-physician assistant
-care coordinator
-occupational therapist
-physical therapist
-speech therapist
+licensed clinical social worker
+lcsw
+licensed marriage and family therapist
 mental health counselor
 therapist
 psychologist
-pharmacist
+psychiatrist
+physician assistant
+pa
+nurse educator
+clinical educator
+health educator
+community health worker
+patient advocate
+health coach
+wellness coach
+occupational therapist
+physical therapist
+speech language pathologist
+slp
+respiratory therapist
+radiologic technologist
+mri technologist
+ct technologist
+ultrasound technologist
+sonographer
+nuclear medicine technologist
+radiation therapist
+medical laboratory technologist
+clinical laboratory scientist
+medical technologist
 pharmacy technician
-radiology technician
-laboratory technician
-lab technologist
-quality control specialist
-quality manager
-manufacturing engineer
-process engineer
-industrial engineer
-mechanical engineer
-electrical engineer
-electronics engineer
-firmware engineer
-embedded engineer
-hardware engineer
-controls engineer
-automation engineer
-robotics engineer
-civil engineer
-structural engineer
-transportation engineer
-environmental engineer
-energy engineer
-renewable energy engineer
-solar engineer
-wind technician
-field engineer
-field service technician
-construction manager
-construction superintendent
-project engineer
-estimator
-architect
-urban planner
-gis analyst
-geospatial analyst
-survey technician
-safety manager
-ehs manager
-hse coordinator
-facilities manager
-maintenance technician
-maintenance manager
-electrician
-plumber
-hvac technician
-automotive technician
-mechanic
-truck driver
-delivery driver
-bus driver
-school bus driver
-teacher
-elementary teacher
-high school teacher
-special education teacher
-substitute teacher
-teaching assistant
-school counselor
-academic advisor
-librarian
-instructional coach
-curriculum specialist
-professor
-lecturer
-research assistant
-research associate
-economist
-statistician
-actuary
-claims adjuster
-claims specialist
-underwriter
-loan officer
-mortgage processor
-bank teller
-branch manager
-fraud analyst
-investigator
-operations supervisor
-call center representative
-call center manager
-retail associate
-retail manager
-store manager
-assistant store manager
-cashier
-barista
-restaurant manager
-assistant restaurant manager
-line cook
-chef
-kitchen manager
-hotel manager
-front desk agent
-guest services agent
-event coordinator
-event manager
-travel consultant
-flight attendant
-airport operations agent
-property manager
-leasing consultant
-real estate analyst
-real estate coordinator
-mortgage underwriter
-customer experience manager
-member services representative
-success coach
-program specialist
-program assistant
-service coordinator
-intake coordinator
-admissions counselor
-billing specialist
-medical biller
+surgical technologist
+biomedical equipment technician
+biomedical engineer
+clinical informatics analyst
+health informatics specialist
+clinical data manager
+clinical researcher
+clinical research coordinator
+crc
+clinical trial coordinator
+clinical project manager
+regulatory affairs specialist
+medical writer
+medical editor
+coding specialist
 medical coder
-revenue cycle analyst
-patient services representative
-patient access specialist
-care navigator
+medical biller
+revenue cycle specialist
+health information manager
+population health manager
+utilization review nurse
+discharge planner
+home health aide
+certified nursing assistant
+cna
+behavior technician
+aba therapist
+applied behavior analyst
+recreational therapist
+clinical pharmacist
+pharmacist
+pharmacy director
+occupational health nurse
+infection control nurse
+quality improvement coordinator
+patient safety specialist
+medical staff coordinator
+clinical operations manager
+practice manager
+clinic manager
+healthcare administrator
+hospital administrator
+director of nursing
+chief nursing officer
+chief medical officer
+cmo
+
+# ── Behavioral Health ─────────────────────────────────────────────────────────
+addiction counselor
+substance abuse counselor
+recovery coach
+peer support specialist
+crisis counselor
+crisis intervention specialist
+mobile crisis worker
+psychiatric technician
+psychiatric nurse
+mental health technician
+residential counselor
+group therapy facilitator
+trauma therapist
+child therapist
+adolescent therapist
+family therapist
+couples therapist
+grief counselor
+employee assistance program counselor
+school psychologist
+neuropsychologist
+forensic psychologist
+
+# ── Public Health ─────────────────────────────────────────────────────────────
+epidemiologist
+epidemiology analyst
+biostatistician
+public health analyst
+public health specialist
+public health coordinator
+public health educator
+community health educator
+health promotion specialist
+health communication specialist
+global health analyst
+global health manager
+disease surveillance analyst
+vaccination coordinator
+immunization program manager
+nutrition specialist
+registered dietitian
+dietitian
+food security analyst
+maternal health specialist
+reproductive health specialist
+global health program manager
+health systems researcher
+hiv specialist
+tb specialist
+malaria specialist
+wash specialist
+health economist
+health policy analyst
+health services researcher
+
+# ── Social Work / Community Services ─────────────────────────────────────────
+medical social worker
+psychiatric social worker
+child welfare worker
+child protective services worker
+foster care specialist
+family support specialist
+homeless services coordinator
+housing case manager
+shelter manager
+outreach worker
+community outreach coordinator
+volunteer coordinator
+volunteer manager
+community organizer
+community engagement specialist
+community relations manager
+community development specialist
+community liaison
+youth development specialist
+youth program manager
+re-entry specialist
+workforce development specialist
+job coach
+employment specialist
+benefits navigator
+financial empowerment specialist
+food bank coordinator
+emergency services coordinator
+disaster recovery specialist
+refugee resettlement specialist
+immigration case manager
+legal aid coordinator
+victim advocate
+domestic violence advocate
+crisis line specialist
+elder care coordinator
+senior services coordinator
+
+# ── Nonprofit / Social Enterprise ────────────────────────────────────────────
+nonprofit program manager
+program coordinator nonprofit
+program director nonprofit
+program officer
+program specialist
+program associate
+grant writer
+grant manager
+grants coordinator
+grants administrator
+development associate
+development coordinator
+development manager nonprofit
+development director
+major gifts officer
+major gifts manager
+planned giving officer
+individual giving manager
+annual fund manager
 donor relations manager
-partnerships coordinator
+donor engagement specialist
+prospect researcher
+stewardship coordinator
+fundraising manager
+fundraising coordinator
+campaign manager nonprofit
+corporate relations manager
+foundation relations manager
+government grants manager
+impact measurement analyst
+impact reporting analyst
+monitoring and evaluation specialist
+me&l specialist
+learning and evaluation manager
+outcomes analyst
+theory of change specialist
+policy advocacy manager
+advocacy coordinator
+policy analyst nonprofit
+social policy analyst
+legislative affairs manager
+coalition builder
+communications manager nonprofit
+executive director nonprofit
+deputy director
+managing director nonprofit
+chief program officer
+chief impact officer
+membership coordinator
+membership manager
+partnerships director nonprofit
+
+# ── Environment / Climate / Conservation ─────────────────────────────────────
+environmental engineer
 sustainability analyst
 climate analyst
 carbon analyst
@@ -346,18 +1060,954 @@ esg analyst
 impact analyst
 impact manager
 resilience planner
-disaster response coordinator
+sustainability manager
+sustainability director
+head of sustainability
+climate change analyst
+carbon footprint analyst
+life cycle assessment analyst
+lca analyst
+environmental compliance specialist
+environmental health and safety specialist
+ehs specialist
+ehs manager
+hse coordinator
+hse manager
+environmental scientist
+environmental consultant
+environmental planner
+land use planner
+natural resources manager
+conservation biologist
+wildlife biologist
+marine biologist
+ecologist
+restoration ecologist
+conservation scientist
+forest ecologist
+wetland scientist
+soil scientist
+hydrogeologist
+climate scientist
+atmospheric scientist
+climatologist
+air quality specialist
+water quality specialist
+stormwater specialist
+floodplain manager
+climate resilience analyst
+climate adaptation specialist
+clean energy analyst
+renewable energy analyst
+solar energy analyst
+wind energy analyst
+energy storage analyst
+grid analyst
+demand response analyst
+energy efficiency specialist
+building energy analyst
+green building specialist
+leed professional
+leed ap
+energy manager
+carbon market analyst
+voluntary carbon market specialist
+environmental finance analyst
+green finance analyst
+nature-based solutions specialist
+biodiversity analyst
+ecosystem services analyst
+circular economy specialist
+waste management specialist
+zero waste coordinator
+sustainability educator
+environmental educator
+outdoor educator
+park ranger
+wilderness guide
+climate communicator
+climate journalist
+sustainability communications specialist
+
+# ── Energy / Utilities ────────────────────────────────────────────────────────
+energy engineer
+renewable energy engineer
+solar engineer
+solar technician
+solar installer
+solar system designer
+wind energy engineer
+wind turbine technician
+offshore wind specialist
+energy storage engineer
+battery engineer
+grid engineer
+transmission engineer
+distribution engineer
+substation engineer
+power systems engineer
+controls engineer
+scada engineer
+energy management engineer
+demand side management specialist
+energy consultant
+power engineer
+electrical engineer
+electrical designer
+electrical estimator
+protection relay engineer
+energy market analyst
+power trading analyst
+energy trader
+utility analyst
+utility engineer
+rate analyst
+regulatory compliance engineer
+energy project manager
+renewable developer
+solar project developer
+wind project developer
+energy procurement specialist
+utility program manager
+energy efficiency program manager
+smart grid analyst
+advanced metering analyst
+ev infrastructure engineer
+hydrogen engineer
+fuel cell engineer
+geothermal engineer
+nuclear engineer
+nuclear operations specialist
+reactor operator
+health physics technician
+
+# ── Civil / Construction / Real Estate ───────────────────────────────────────
+civil engineer
+structural engineer
+transportation engineer
+highway engineer
+traffic engineer
+geotechnical engineer
+materials engineer
+construction manager
+construction superintendent
+construction estimator
+project engineer construction
+site manager
+field engineer
+safety engineer construction
+building inspector
+code enforcement officer
+plan reviewer
+construction project manager
+development manager real estate
+asset manager real estate
+property manager
+leasing consultant
+leasing manager
+asset management analyst
+portfolio manager real estate
+real estate analyst
+real estate development manager
+land acquisition manager
+facilities manager
+building engineer
+building operations manager
+building maintenance technician
+hvac technician
+hvac engineer
+plumbing engineer
+fire protection engineer
+mep engineer
+commissioning engineer
+leed professional
+landscape architect
+landscape designer
+urban designer
+urban planner
+regional planner
+transportation planner
+housing planner
+zoning administrator
+permit coordinator
+title officer
+mortgage loan originator
+mortgage processor
+underwriter real estate
+appraiser
+home inspector
+real estate agent
+commercial real estate broker
+leasing agent
+
+# ── Trades / Skilled Craft ────────────────────────────────────────────────────
+electrician
+master electrician
+journeyman electrician
+low voltage technician
+instrumentation technician
+industrial electrician
+plumber
+master plumber
+pipefitter
+steamfitter
+hvac technician
+hvac installer
+refrigeration technician
+boilermaker
+sheet metal worker
+welder
+millwright
+machinist
+cnc machinist
+cnc programmer
+cnc operator
+tool and die maker
+maintenance technician
+maintenance engineer
+maintenance manager
+facilities maintenance technician
+elevator mechanic
+crane operator
+rigger
+ironworker
+roofer
+carpenter
+construction laborer
+concrete worker
+mason
+painter
+solar panel installer
+wind turbine technician
+forklift operator
+
+# ── Manufacturing / Production ────────────────────────────────────────────────
+manufacturing engineer
+process engineer
+industrial engineer
+production engineer
+quality engineer manufacturing
+quality control inspector
+quality technician
+continuous improvement specialist
+lean manufacturing specialist
+six sigma black belt
+six sigma green belt
+manufacturing manager
+plant manager
+plant superintendent
+production supervisor
+production manager
+assembly line worker
+assembly technician
+machine operator
+press operator
+warehouse associate
+shipping and receiving associate
+material handler
+inventory specialist
+production planner
+production scheduler
+demand planner
+materials manager
+procurement analyst
+validation engineer
+equipment engineer
+r&d technician
+r&d engineer
+process development engineer
+test engineer
+product development engineer
+packaging engineer
+food scientist
+food safety specialist
+food quality specialist
+
+# ── Science / Research ────────────────────────────────────────────────────────
+research scientist
+research engineer
+principal researcher
+staff scientist
+postdoctoral researcher
+postdoc fellow
+graduate researcher
+laboratory scientist
+laboratory technician
+lab technologist
+research associate
+research analyst
+clinical researcher
+clinical scientist
+biostatistician
+computational biologist
+computational chemist
+bioinformatics scientist
+genomics scientist
+molecular biologist
+cell biologist
+immunologist
+virologist
+microbiologist
+biochemist
+organic chemist
+medicinal chemist
+medicinal scientist
+pharmacologist
+toxicologist
+neuroscientist
+cognitive scientist
+developmental biologist
+systems biologist
+structural biologist
+materials scientist
+polymer scientist
+nanotechnology researcher
+battery researcher
+semiconductor researcher
+photonics researcher
+optics engineer
+quantum computing researcher
+quantum engineer
+space scientist
+astrophysicist
+atmospheric researcher
+oceanographer
+geologist
+geophysicist
+hydrologist
+seismologist
+astronomer
+physicist
+chemist
+biologist
+ecologist
+conservation scientist
+wildlife ecologist
+entomologist
+marine researcher
+fisheries scientist
+agronomist
+soil scientist
+plant biologist
+crop scientist
+nutrition researcher
+exercise scientist
+sports scientist
+behavioral scientist
+social scientist
+
+# ── Agriculture / Food ───────────────────────────────────────────────────────
+agronomist
+crop consultant
+precision agriculture specialist
+agronomy manager
+farm manager
+agricultural engineer
+agricultural technician
+irrigation specialist
+livestock manager
+dairy manager
+horticulturist
+nursery manager
+greenhouse manager
+urban farmer
+vertical farm specialist
+food technologist
+food safety manager
+food quality manager
+food production manager
+brewmaster
+winemaker
+fermentation scientist
+chef
+executive chef
+sous chef
+kitchen manager
+restaurant manager
+food and beverage manager
+catering manager
+nutritionist
+registered dietitian nutritionist
+
+# ── Transportation / Logistics ───────────────────────────────────────────────
+truck driver
+cdl driver
+delivery driver
+bus driver
+school bus driver
+transit driver
+locomotive engineer
+train conductor
+aircraft mechanic
+avionics technician
+logistics coordinator
+logistics manager
+freight coordinator
+freight broker
+customs broker
+import export specialist
+international trade specialist
+supply chain manager
+transportation planner
+fleet manager
+fleet coordinator
+dispatcher
+traffic coordinator
+shipping coordinator
+receiving coordinator
+dock supervisor
+yard manager
+terminal manager
+
+# ── Hospitality / Tourism ─────────────────────────────────────────────────────
+hotel manager
+general manager hospitality
+front desk agent
+guest services agent
+concierge
+housekeeping supervisor
+food and beverage manager
+banquet manager
+event coordinator hospitality
+catering coordinator
+reservations agent
+revenue manager hotel
+sales manager hospitality
+convention services manager
+spa manager
+fitness director
+recreation coordinator
+tour guide
+travel agent
+travel consultant
+ecotourism specialist
+cruise coordinator
+outdoor adventure guide
+park ranger
+museum curator
+museum educator
+exhibit designer
+archivist
+
+# ── Media / Journalism / Publishing ──────────────────────────────────────────
+journalist
+reporter
+investigative journalist
+data journalist
+science journalist
+environment journalist
+climate journalist
+health journalist
+political reporter
+foreign correspondent
+photojournalist
+video journalist
+documentary filmmaker
+podcast producer
+broadcast journalist
+news producer
+news director
+editor
+managing editor
+senior editor
+executive editor
+copy editor
+developmental editor
+acquisitions editor
+editorial assistant
+book editor
+digital editor
+multimedia journalist
+social media editor
+newsletter editor
+audience development editor
+seo editor
+translator
+localization specialist
+content strategist
+content producer
+media analyst
+
+# ── Government / Civic Tech / Public Policy ──────────────────────────────────
+policy analyst
+policy advisor
+policy manager
+policy director
+policy researcher
+public policy analyst
+health policy analyst
+education policy analyst
+housing policy analyst
+criminal justice policy analyst
+immigration policy analyst
+environment policy analyst
+energy policy analyst
+economic policy analyst
+fiscal analyst
+budget analyst
+financial analyst government
+management analyst government
+program analyst government
+program specialist government
+grants specialist government
+federal grants manager
+contract specialist government
+contracting officer
+procurement officer
+acquisition specialist
+compliance analyst government
+regulatory analyst government
+legislative analyst
+legislative aide
+policy counsel
+government affairs manager
+public affairs manager
+stakeholder engagement manager
+community engagement manager
+public engagement specialist
+intergovernmental affairs manager
+foreign affairs analyst
+diplomatic officer
+development finance analyst
+international policy analyst
+city planner
+regional planner
+urban policy analyst
+housing policy specialist
+transit policy analyst
+infrastructure policy analyst
+municipal finance analyst
+public finance analyst
+tax policy analyst
+performance management analyst
+government technology analyst
+digital government specialist
+civic technology engineer
+open data specialist
+
+# ── International Development / Humanitarian ─────────────────────────────────
+international development specialist
+development program officer
 humanitarian program manager
-monitoring and evaluation specialist
-me&l specialist
-meals coordinator
-operations associate
-finance manager
-accounting manager
-treasury analyst
-business manager
-office administrator
-executive director
-chief operating officer
-chief technology officer
-chief financial officer
+emergency response coordinator
+disaster relief coordinator
+humanitarian logistics coordinator
+food security analyst
+food security specialist
+livelihood specialist
+protection officer
+child protection officer
+gender specialist
+gender equality analyst
+women empowerment specialist
+gender based violence specialist
+gbv specialist
+refugee program officer
+displacement specialist
+cash transfer programmer
+monitoring and evaluation officer
+meal officer
+results measurement specialist
+learning officer
+knowledge management specialist
+communications officer humanitarian
+reporting officer
+donor reporting specialist
+program coordinator development
+field coordinator
+field manager
+country director
+regional director development
+technical advisor
+senior technical advisor
+capacity building specialist
+community mobilizer
+social mobilization specialist
+behavior change communication specialist
+bcc specialist
+health systems strengthening specialist
+nutrition program manager
+wash engineer
+water sanitation specialist
+sanitation engineer
+livelihoods officer
+economic empowerment specialist
+microfinance specialist
+financial inclusion specialist
+agriculture development specialist
+food and agriculture specialist
+climate resilience officer
+emergency preparedness specialist
+emergency response specialist
+
+# ── Emerging / Interdisciplinary ─────────────────────────────────────────────
+digital transformation specialist
+innovation manager
+head of ventures
+technology strategist
+digital strategist
+future of work specialist
+remote work specialist
+global operations manager
+global expansion manager
+international operations manager
+transformation lead
+organizational effectiveness specialist
+workforce planning analyst
+succession planning manager
+talent intelligence analyst
+people analytics analyst
+workforce analytics manager
+hr technology specialist
+responsible ai specialist
+ai safety researcher
+ai alignment researcher
+ai policy analyst
+technology policy analyst
+robot ethicist
+digital rights analyst
+algorithmic accountability analyst
+fairness in ai researcher
+explainable ai engineer
+ai transparency specialist
+internet of things engineer
+iot engineer
+iot architect
+iot security engineer
+edge computing engineer
+hardware engineer
+chip designer
+silicon engineer
+semiconductor process engineer
+fpga engineer
+asic designer
+rf engineer
+wireless communications engineer
+5g engineer
+telecommunications engineer
+optical engineer
+photonics engineer
+quantum software engineer
+quantum algorithm researcher
+augmented reality engineer
+ar developer
+virtual reality engineer
+vr developer
+mixed reality developer
+xr developer
+metaverse engineer
+spatial computing engineer
+blockchain engineer
+smart contract developer
+web3 engineer
+defi engineer
+solidity developer
+rust blockchain developer
+zero knowledge proof engineer
+zk engineer
+cryptography engineer
+cryptographer
+privacy engineer
+federated learning engineer
+digital twin engineer
+simulation engineer
+synthetic data engineer
+autonomous systems engineer
+self driving engineer
+robotics software engineer
+ros engineer
+motion planning engineer
+perception engineer
+slam engineer
+drone engineer
+uav engineer
+unmanned systems engineer
+remote sensing analyst
+satellite imagery analyst
+earth observation analyst
+geospatial data scientist
+gis developer
+gis analyst
+geospatial engineer
+lidar specialist
+remote sensing scientist
+
+# ── Additional Healthcare & Life Sciences ────────────────────────────────────
+medical device engineer
+medical device regulatory specialist
+clinical affairs manager
+clinical operations director
+pharmacovigilance specialist
+drug safety associate
+post market surveillance analyst
+quality systems specialist
+quality management system specialist
+iso 13485 specialist
+fda compliance specialist
+510k specialist
+pma specialist
+clinical pharmacist specialist
+hematology technologist
+microbiology technologist
+transfusion medicine specialist
+anatomic pathology specialist
+clinical genetics specialist
+genetic counselor
+molecular diagnostics specialist
+point of care testing specialist
+clinical immunology specialist
+endocrinology specialist
+nephrology nurse
+oncology nurse
+palliative care nurse
+transplant coordinator
+cardiac cath lab technologist
+interventional radiology technologist
+electrophysiology technologist
+ecg technician
+eeg technician
+sleep specialist polysomnographer
+neurodiagnostic technologist
+physical medicine and rehabilitation specialist
+orthotics and prosthetics specialist
+wound care nurse
+ostomy nurse
+stomal therapist
+infection preventionist
+sterile processing supervisor
+pharmacy informaticist
+clinical informatics director
+health information exchange specialist
+interoperability analyst
+telehealth coordinator
+digital health specialist
+virtual care coordinator
+remote patient monitoring specialist
+population health analyst
+
+# ── Additional Climate & Sustainability ──────────────────────────────────────
+decarbonization specialist
+net zero analyst
+scope 3 emissions analyst
+ghg inventory specialist
+climate disclosure specialist
+tcfd specialist
+sfdr specialist
+esg reporting analyst
+esg integration analyst
+esg fund analyst
+green bond analyst
+sustainable finance analyst
+climate risk analyst
+physical risk analyst
+transition risk analyst
+climate scenario analyst
+nature risk analyst
+tnfd specialist
+blue carbon specialist
+ocean carbon specialist
+reforestation specialist
+afforestation specialist
+wetland restoration specialist
+prairie restoration specialist
+urban forestry specialist
+urban greening specialist
+green infrastructure specialist
+urban heat island specialist
+active transportation planner
+transit-oriented development planner
+climate-smart agriculture specialist
+regenerative agriculture specialist
+soil carbon sequestration specialist
+agroforestry specialist
+permaculture designer
+rewilding specialist
+keystone species specialist
+pollinator specialist
+habitat connectivity specialist
+watershed restoration specialist
+estuary specialist
+salmon recovery specialist
+fisheries restoration specialist
+water stewardship specialist
+water recycling specialist
+wastewater engineer
+water quality engineer
+desalination engineer
+stormwater engineer
+flood resilience specialist
+sea level rise specialist
+coastal resilience specialist
+wildfire mitigation specialist
+drought resilience specialist
+heat resilience specialist
+
+# ── Additional Social Impact & Justice ───────────────────────────────────────
+racial justice analyst
+equity analyst
+environmental justice specialist
+climate justice advocate
+indigenous rights specialist
+disability rights specialist
+disability inclusion specialist
+neurodiversity specialist
+accessibility specialist
+digital equity specialist
+tech equity specialist
+digital divide specialist
+financial literacy coordinator
+economic mobility specialist
+asset building specialist
+earned income tax credit specialist
+eitc specialist
+renter protection specialist
+affordable housing developer
+community land trust manager
+cooperative development specialist
+worker cooperative specialist
+social enterprise developer
+impact investing analyst
+community development financial institution analyst
+cdfi analyst
+community reinvestment act specialist
+cra specialist
+fair housing specialist
+homelessness prevention specialist
+housing stability specialist
+permanent supportive housing coordinator
+low-income housing tax credit specialist
+lihtc specialist
+historic preservation specialist
+cultural heritage specialist
+minority business specialist
+mbda specialist
+supplier diversity specialist
+social procurement specialist
+community wealth building specialist
+anchor institution specialist
+community benefit agreement specialist
+
+# ── Philanthropy & Foundations ────────────────────────────────────────────────
+program officer foundation
+program associate foundation
+program director foundation
+grants management analyst
+grants database administrator
+foundation relations specialist
+corporate philanthropy manager
+workplace giving coordinator
+employee volunteer program manager
+cause marketing specialist
+social impact manager
+impact strategy manager
+philanthropic advisor
+foundation president
+foundation executive director
+endowment manager
+family office advisor
+donor advised fund specialist
+community foundation program officer
+
+# ── Education Technology ─────────────────────────────────────────────────────
+edtech engineer
+education software engineer
+learning management system engineer
+lms developer
+learning experience platform engineer
+adaptive learning engineer
+personalized learning engineer
+gamification designer
+simulation-based learning designer
+virtual lab developer
+online course developer
+mooc developer
+instructional design specialist
+blended learning specialist
+flipped classroom specialist
+project-based learning specialist
+stem curriculum developer
+coding bootcamp instructor
+data science instructor
+machine learning instructor
+cybersecurity instructor
+cloud computing instructor
+digital literacy instructor
+media literacy specialist
+information literacy specialist
+research skills educator
+maker space coordinator
+robotics educator
+drone education specialist
+
+# ── Worker Rights / Labor ────────────────────────────────────────────────────
+union organizer
+labor organizer
+labor researcher
+collective bargaining specialist
+wage theft investigator
+workplace safety investigator
+occupational safety specialist
+ergonomics specialist
+workers compensation specialist
+workers compensation manager
+labor relations specialist
+labor relations manager
+employee relations specialist
+employee relations manager
+human rights defender
+living wage advocate
+fair trade specialist
+supply chain labor specialist
+responsible sourcing specialist
+ethical supply chain specialist
+
+# ── Animal Welfare ────────────────────────────────────────────────────────────
+animal care specialist
+animal shelter manager
+shelter veterinarian
+veterinary technician
+veterinary nurse
+veterinary assistant
+veterinarian
+exotic animal vet
+zoo veterinarian
+wildlife veterinarian
+companion animal vet
+feline specialist
+canine behavior specialist
+animal training specialist
+animal assisted therapy specialist
+marine mammal trainer
+wildlife rescue specialist
+wildlife rehabilitator
+raptor specialist
+
+# ── Arts & Culture ───────────────────────────────────────────────────────────
+arts administrator
+arts program manager
+cultural programming director
+gallery director
+museum director
+curatorial assistant
+curator
+associate curator
+collections manager
+registrar museum
+conservation technician
+art conservator
+restoration artist
+arts educator
+arts consultant
+public art coordinator
+mural artist
+community arts facilitator
+creative placemaking specialist
+culture and arts policy specialist
+theatre manager
+performing arts administrator
+music program coordinator
+dance program coordinator
+film program coordinator
+arts grant writer
+artist residency coordinator
+culture center manager
