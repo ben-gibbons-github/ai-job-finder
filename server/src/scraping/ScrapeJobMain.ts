@@ -84,6 +84,8 @@ import UsaJobsScraper from './USAJobs.js';
 import AdzunaScraper from './Adzuna.js';
 import JoobleScraper from './Jooble.js';
 import ReedScraper from './Reed.js';
+import JSearchScraper from './JSearch.js';
+import LinkedInJobsScraper from './LinkedInJobs.js';
 import scrapedEmployerCache from './ScrapedEmployerCache.js';
 import { gatherLegacyAIData } from './GatherLegacyAIData.js';
 import { logScrapeQualityFlags } from './ScrapeJobAudit.js';
@@ -540,6 +542,14 @@ const SCRAPER_COMPONENTS: ScraperComponent[] = [
   {
     name: 'Reed',
     scrapeJobs: () => new ReedScraper().scrapeJobs(),
+  },
+  {
+    name: 'JSearch',
+    scrapeJobs: () => new JSearchScraper().scrapeJobs(),
+  },
+  {
+    name: 'LinkedInJobs',
+    scrapeJobs: () => new LinkedInJobsScraper().scrapeJobs(),
   },
 ];
 
