@@ -443,6 +443,8 @@ const JobTileStatsPopover: React.FC<JobTileStatsPopoverProps> = ({
             onHideCompany={onHideCompany}
             isHighlighted={isHighlighted}
             onToggleHighlightJob={onToggleHighlightJob}
+            companyTagColors={companyTagColors}
+            onSetCompanyTagColors={onSetCompanyTagColors}
           />
           <button
             type="button"

@@ -477,6 +477,8 @@ const JobTile: React.FC<JobTileProps> = ({
             onHideCompany={onHideCompany}
             isHighlighted={Boolean(isHighlighted)}
             onToggleHighlightJob={() => onToggleHighlightJob?.(job?.source_url)}
+            companyTagColors={companyTagColors}
+            onSetCompanyTagColors={onSetCompanyTagColors}
           />
         </div>
 

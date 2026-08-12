@@ -1,5 +1,15 @@
 import React, { useEffect, useRef, useState } from 'react';
 import GenericPopover from './GenericPopover';
+import type { CompanyTagColor } from './ClientSaveLoad';
+
+const TAG_COLOR_OPTIONS: Array<{ color: CompanyTagColor; label: string; bg: string; border: string }> = [
+  { color: 'red',    label: 'Red',    bg: '#fef2f2', border: '#fca5a5' },
+  { color: 'orange', label: 'Orange', bg: '#fff7ed', border: '#fdba74' },
+  { color: 'yellow', label: 'Yellow', bg: '#fefce8', border: '#fde047' },
+  { color: 'green',  label: 'Green',  bg: '#ecfdf5', border: '#86efac' },
+  { color: 'blue',   label: 'Blue',   bg: '#eff6ff', border: '#93c5fd' },
+  { color: 'purple', label: 'Purple', bg: '#f5f3ff', border: '#c4b5fd' },
+];
 
 interface Job {
   name?: string;
@@ -33,6 +43,8 @@ interface JobTileDropdownProps {
   onHideCompany?: (companyName?: string) => void;
   isHighlighted?: boolean;
   onToggleHighlightJob?: () => void;
+  companyTagColors?: CompanyTagColor[];
+  onSetCompanyTagColors?: (colors: CompanyTagColor[]) => void;
 }
 
 function getSourceLabel(sourceUrl?: string): string {
@@ -59,8 +71,11 @@ const JobTileDropdown: React.FC<JobTileDropdownProps> = ({
   onHideCompany,
   isHighlighted,
   onToggleHighlightJob,
+  companyTagColors,
+  onSetCompanyTagColors,
 }) => {
   const [open, setOpen] = useState(false);
+  const [tagsOpen, setTagsOpen] = useState(false);
   const [deepResearchPopoverOpen, setDeepResearchPopoverOpen] = useState(false);
   const [deepResearchPopoverTitle, setDeepResearchPopoverTitle] = useState('');
   const [deepResearchPopoverText, setDeepResearchPopoverText] = useState('');
@@ -368,6 +383,44 @@ Be specific, direct, and high quality. Treat this as a real application I intend
           </button>
 
           <div className="job-tile-dropdown-divider" role="separator" />
+
+          {onSetCompanyTagColors && (
+            <>
+              <button
+                type="button"
+                className="job-tile-dropdown-item"
+                role="menuitem"
+                onClick={(e) => { e.stopPropagation(); setTagsOpen(v => !v); }}
+              >
+                <span className="dropdown-item-icon">🏷️</span>
+                <span className="dropdown-item-label">Tags</span>
+                <span style={{ fontSize: '0.7rem', opacity: 0.6, marginLeft: 'auto' }}>{tagsOpen ? '▲' : '▼'}</span>
+              </button>
+              {tagsOpen && (
+                <div className="job-tile-dropdown-tags">
+                  {TAG_COLOR_OPTIONS.map(({ color, label, bg, border }) => {
+                    const active = Array.isArray(companyTagColors) && companyTagColors.includes(color);
+                    const next = active
+                      ? (companyTagColors ?? []).filter(c => c !== color)
+                      : [...(companyTagColors ?? []), color];
+                    return (
+                      <button
+                        key={color}
+                        type="button"
+                        className={`job-tile-dropdown-tag-btn${active ? ' job-tile-dropdown-tag-btn--active' : ''}`}
+                        style={{ background: bg, borderColor: border }}
+                        onClick={(e) => { e.stopPropagation(); onSetCompanyTagColors(next as CompanyTagColor[]); }}
+                        title={label}
+                        aria-pressed={active}
+                      >
+                        {active && <span className="job-tile-dropdown-tag-check">✓</span>}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </>
+          )}
 
           <button
             className="job-tile-dropdown-item"
