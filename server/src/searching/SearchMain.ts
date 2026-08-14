@@ -522,11 +522,15 @@ class SearchMain {
     // These 4 scores come from the employer cache / freshness — no resume or
     // location work needed — so this trim is essentially free.
     const PRE_FILTER_MIN_JOBS = 10000
-    const PRE_FILTER_MIN_JOBS2 = 100000
+    const PRE_FILTER_MIN_JOBS2 = 50000
+    const PRE_FILTER_MIN_JOBS3 = 80000
     let preFilteredJobs = matched
     let preFilterDropped = 0
     if (matched.length > PRE_FILTER_MIN_JOBS) {
-      const wThresh = matched.length > PRE_FILTER_MIN_JOBS2 ? 0.5 : 0.25
+      let wThresh = matched.length > PRE_FILTER_MIN_JOBS2 ? 0.5 : 0.25
+      if (matched.length > PRE_FILTER_MIN_JOBS3)
+        wThresh = 0.75
+      
       const wImpact = searchPayload.scoreWeights?.impact ?? 1
       const wQol = searchPayload.scoreWeights?.qualityOfLife ?? 1
       const wFresh = searchPayload.scoreWeights?.fresh ?? 1
