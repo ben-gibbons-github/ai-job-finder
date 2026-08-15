@@ -354,7 +354,7 @@ io.on('connection', (socket) => {
   console.log(`Socket connected: ${socket.id}`)
 
   socket.emit('server:hello', 'Hello from Socket.IO server!')
-  socket.emit('server:config', { auditEnabled: AUDIT_ENABLED })
+  socket.emit('server:config', { auditEnabled: AUDIT_ENABLED, totalJobs: JOBS.length })
 
   if (cachedTagCloud.length > 0) {
     socket.emit('server:tagCloud', cachedTagCloud)

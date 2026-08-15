@@ -195,6 +195,7 @@ function App() {
   const [scoreWeights, setScoreWeights] = useState<ScoreWeights>(savedSettings.scoreWeights)
   const [auditResults, setAuditResults] = useState<Record<string, { auditScore: number; auditText: string; error?: string }>>({})
   const [auditEnabled, setAuditEnabled] = useState(false)
+  const [totalJobsInDb, setTotalJobsInDb] = useState(0)
   const [impactResults, setImpactResults] = useState<Record<string, { ai_impact_score: number; ai_impact_summary: string; error?: string }>>({})
   const [qualityOfLifeResults, setQualityOfLifeResults] = useState<Record<string, { employeeQualityOfLifeScore: number; employeeQualityOfLifeSummary: string; error?: string }>>({})
   const [hiddenJobUrls, setHiddenJobUrls] = useState<string[]>(() => readStringArrayCache(HIDDEN_JOBS_CACHE_KEY))
@@ -357,9 +358,12 @@ function App() {
         setTagCloud(entries)
       }
     })
-    socket.on('server:config', (config: { auditEnabled?: boolean }) => {
+    socket.on('server:config', (config: { auditEnabled?: boolean; totalJobs?: number }) => {
       if (typeof config?.auditEnabled === 'boolean') {
         setAuditEnabled(config.auditEnabled)
+      }
+      if (typeof config?.totalJobs === 'number' && config.totalJobs > 0) {
+        setTotalJobsInDb(config.totalJobs)
       }
     })
 
@@ -1046,6 +1050,9 @@ function App() {
   return (
     <main className="app">
       <h1 className={`app-title${isSearching ? ' app-title--searching' : ''}`}>Job Search for Good</h1>
+      {totalJobsInDb > 0 && (
+        <p className="app-db-count">{totalJobsInDb.toLocaleString()} jobs in the database</p>
+      )}
       <InsightsHoverPopovers
         searchMeta={searchMeta}
         onOpenAiCorpus={() => setOpenAiCorpusSignal((value) => value + 1)}
