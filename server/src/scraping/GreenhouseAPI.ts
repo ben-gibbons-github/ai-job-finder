@@ -98,6 +98,70 @@ const DEFAULT_GREENHOUSE_BOARDS = [
   'sentry', 'rollbar', 'bugsnag', 'raygun', 'appsignal',
   'launchdarkly', 'split', 'flagsmith', 'unleash', 'growthbook',
   'hotjar', 'fullstory', 'logrocket', 'mouseflow', 'contentsquare',
+  // ── Batch 3: More tech + impact companies ─────────────────────────────────
+  // SaaS / Productivity
+  'asana', 'monday', 'clickup', 'basecamp', 'todoist', 'height-app',
+  'plane', 'linear', 'shortcut', 'pivotal-tracker', 'jira-atlassian',
+  'confluence', 'trello-atlassian', 'notion-so', 'coda-io', 'craft-docs',
+  'roam', 'obsidian', 'logseq', 'capacities', 'tana',
+  'anytype', 'appflowy', 'notesnook', 'joplin', 'standardnotes',
+  // Communication / Messaging
+  'slack', 'mattermost', 'zulip', 'element-io', 'rocket-chat',
+  'twist', 'fleep', 'chanty', 'pumble', 'spike-email',
+  'hey-email', 'fastmail', 'protonmail', 'tutanota', 'mailfence',
+  'superhuman', 'shortwave', 'mimestream', 'airmail', 'spark-email',
+  // Video / Async
+  'loom', 'mmhmm', 'claap', 'grain', 'rewatch',
+  'tella', 'jumpshare', 'zight', 'screencastify', 'screenpal',
+  'jam-dev', 'bird-eats-bug', 'repro', 'inspectlet', 'mouseflow',
+  // HR Tech
+  'bamboohr', 'namely', 'hris', 'zenefits', 'paychex-flex',
+  'adp-workforce', 'ukg', 'ceridian', 'cornerstone', 'sap-successfactors',
+  'oracle-hcm', 'workday-hcm', 'saba', 'taleo-oracle', 'icims-hcm',
+  'greenhouse-hcm', 'lever-hcm', 'jobvite', 'jazzhr', 'recruitee',
+  'breezy-hr', 'workable', 'pinpoint', 'teamtailor', 'personio',
+  'humaans', 'rippling-hr', 'deel-hr', 'remote-hr', 'oyster-hr',
+  'papaya-global', 'globalupside', 'velocity-global', 'horizons',
+  'multiplier', 'omnipresent', 'netsuite-hr', 'sage-hr', 'hibob',
+  // Healthcare IT
+  'epic-ehr', 'cerner-oracle', 'allscripts', 'meditech', 'nextgen',
+  'eclinicalworks', 'athena', 'drchrono', 'kareo', 'practicefusion',
+  'modmed', 'advancedmd', 'webpt', 'clinicient', 'brighttree',
+  'netsmart', 'qualifacts', 'therapy-brands', 'kipu', 'cat',
+  // Legal Tech
+  'clio', 'mycase', 'lawmatics', 'practice-panther', 'smokeball',
+  'filevine', 'litify', 'lawgeex', 'kira-systems', 'luminance',
+  'relativity', 'epiq', 'consilio', 'disco', 'everlaw',
+  'logikcull', 'nextpoint', 'casetext', 'ravel-law', 'fastcase',
+  'westlaw', 'lexisnexis', 'bloomberglaw', 'vlex', 'ross-intel',
+  // Real Estate Tech
+  'zillow', 'redfin', 'opendoor', 'offerpad', 'ribbon',
+  'knock', 'homeward', 'homelight', 'orchard', 'flyhomes',
+  'property-finder', 'realtor-com', 'trulia', 'apartments-com',
+  'zumper', 'apartmentlist', 'rentals-com', 'cozy', 'tenant-cloud',
+  'buildium', 'appfolio', 'propertyware', 'rentmanager', 'yardibreeze',
+  'yardi-systems', 'realpage', 'mri-software', 'entrata', 'resman',
+  // Insurance Tech
+  'hippo', 'lemonade', 'root', 'metromile', 'clearcover',
+  'branch', 'kin', 'openly', 'slide', 'demotech',
+  'pie-insurance', 'next-insurance', 'thimble', 'hiscox', 'coalition',
+  'at-bay', 'corvus', 'cowbell', 'resilience-cyber', 'paladin-risk',
+  'embroker', 'vouch', 'newfront', 'layr', 'inswee',
+  // AgriTech / Food
+  'inari', 'indigo-ag', 'benson-hill', 'taranis', 'granular',
+  'farmers-business', 'agrian', 'crop-zone', 'agworld', 'telus-ag',
+  'cargill', 'archer-daniels', 'bunge', 'corteva', 'syngenta',
+  'mosaic', 'cf-industries', 'nutrien', 'oci', 'ameropa',
+  'impossible-foods', 'beyond-meat', 'just-egg', 'new-wave-foods',
+  'rebellyous-foods', 'good-catch', 'atlantic-natural-foods',
+  'ripple-foods', 'miyokos', 'violife', 'so-delicious', 'daiya',
+  // Logistics Tech
+  'flexport-logistics', 'freightos', 'convoy-transport', 'transfix',
+  'uber-freight', 'loadsmart', 'echo-global', 'coyote-logistics',
+  'ch-robinson', 'xpo-logistics', 'jb-hunt', 'werner', 'swift',
+  'old-dominion', 'fedex-freight', 'ups-freight', 'estes',
+  'saia', 'forward-air', 'averitt', 'southeastern-freight',
+  'project44', 'fourkites', 'visibility', 'macropoint', 'descartes',
 ];
 const DEFAULT_GREENHOUSE_PER_PAGE = 100;
 const DEFAULT_MAX_GREENHOUSE_PAGES = 25;
