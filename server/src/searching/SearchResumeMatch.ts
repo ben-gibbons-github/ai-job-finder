@@ -153,7 +153,8 @@ export function calculateResumeScore(job: ScrapedJob, resumeText: string, should
 
   const coverage = hits / sourceTokens.length
   const hitSaturation = hits / (hits + 5)
-  const score = Math.min(1, coverage * 0.35 + hitSaturation * 0.65) * 2
+  const raw = Math.min(1, coverage * 0.35 + hitSaturation * 0.65) * 2
+  const score = Math.min(1, raw * 0.74)
 
   if (jobKey) {
     resumeScoreCache.scores.set(jobKey, score)

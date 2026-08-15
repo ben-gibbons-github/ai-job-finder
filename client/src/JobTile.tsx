@@ -177,6 +177,15 @@ const getUserScoreBand = (score: number): 'blue' | 'green' | 'yellow' | 'red' =>
   return 'red';
 };
 
+/** If remote is 'Unknown' but location implies remote, infer 'Remote'. */
+const resolveRemoteDisplay = (remote: string | undefined, location: string | undefined): string => {
+  const r = String(remote ?? '').trim();
+  const loc = String(location ?? '').trim().toLowerCase();
+  if (r && r.toLowerCase() !== 'unknown') return r;
+  if (/\bremote\b|\bhybrid\b|work from home|\bwfh\b/.test(loc)) return 'Remote';
+  return r || 'Unknown';
+};
+
 const getSourceHost = (sourceUrl?: string): string => {
   if (!sourceUrl) {
     return 'Source unavailable';
@@ -486,7 +495,7 @@ const JobTile: React.FC<JobTileProps> = ({
           <p className="job-company"><strong>Company:</strong> {job?.company_name || 'Company Name'}</p>
           <p className="job-location"><strong>Location:</strong> {job?.location || 'Location'}</p>
           <p className="job-type"><strong>Type:</strong> {job?.type || 'Full-time'}</p>
-          {job?.remote && <p className="job-remote"><strong>Remote:</strong> {job.remote}</p>}
+          {job?.remote && <p className="job-remote"><strong>Remote:</strong> {resolveRemoteDisplay(job.remote, job?.location)}</p>}
         </div>
 
         <div className="job-text-block">

@@ -80,6 +80,27 @@ export function warmJobHaystachCache(jobs: ScrapedJob[]): void {
 }
 
 /**
+ * Computes a cheap quality score for a job: avg of (impact, qol, fresh, audit).
+ * Used to pre-sort the master job list so high-quality matches surface first.
+ */
+export function getJobQualityScore(job: ScrapedJob): number {
+  const employer = getOrCreateEmployer(job)
+  const impact = Math.min((Number(employer.ai_impact_score) || 0) / 100, 1.0)
+  const qol   = Math.min((Number(employer.employeeQualityOfLifeScore) || 0) / 100, 1.0)
+  const audit = Math.min((Number(employer.ai_score) || 0) / 100, 1.0)
+  const fresh = getJobFreshnessScore(job)
+  return (impact + qol + audit + fresh) / 4
+}
+
+/**
+ * Sorts the jobs array in-place by descending quality score.
+ * Call once after the master job list is loaded so all searches see the best jobs first.
+ */
+export function sortJobsByQuality(jobs: ScrapedJob[]): void {
+  jobs.sort((a, b) => getJobQualityScore(b) - getJobQualityScore(a))
+}
+
+/**
  * Calculate individual score components for a job
  * 
  * @param job - The job to score

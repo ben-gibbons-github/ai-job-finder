@@ -44,7 +44,25 @@ async function asyncFilter<T>(arr: T[], predicate: (item: T) => boolean, chunkSi
   return result
 }
 
-// ─── Search result cache ─────────────────────────────────────────────────────
+/**
+ * Like asyncFilter but stops once `limit` items have been collected.
+ * Yields between chunks so the event loop stays responsive.
+ */
+async function asyncFilterFirstN<T>(arr: T[], predicate: (item: T) => boolean, limit: number, chunkSize = 500): Promise<T[]> {
+  const result: T[] = []
+  for (let i = 0; i < arr.length; i += chunkSize) {
+    const end = Math.min(i + chunkSize, arr.length)
+    for (let j = i; j < end; j++) {
+      if (predicate(arr[j])) {
+        result.push(arr[j])
+        if (result.length >= limit) return result
+      }
+    }
+    if (end < arr.length && result.length < limit) await yieldToEventLoop()
+  }
+  return result
+}
+
 // Caches full sorted result sets (pre-pagination) keyed on a fingerprint of all
 // search settings EXCEPT start/end. Pagination then slices from the cached list.
 
@@ -510,50 +528,17 @@ class SearchMain {
 
     const queryMatchStart = performance.now()
     setActiveOperation(`search:queryMatch (${ratingFilteredJobs.length} jobs, terms=${queryTerms.length})`)
+    // Jobs are pre-sorted by quality at startup. asyncFilterFirstN stops once
+    // we have 5000 candidates — so we always score the highest-quality matches.
+    const QUERY_MATCH_LIMIT = 5000
     const matched = queryTerms.length > 0
-      ? await asyncFilter(ratingFilteredJobs, (job) => jobMatchesQuery(job, queryTerms, logFlags.query === true), 500)
-      : ratingFilteredJobs // If no query terms, consider all visible jobs as matched (subject to pagination later)
+      ? await asyncFilterFirstN(ratingFilteredJobs, (job) => jobMatchesQuery(job, queryTerms, logFlags.query === true), QUERY_MATCH_LIMIT)
+      : ratingFilteredJobs.slice(0, QUERY_MATCH_LIMIT * 10) // empty query: take top N by quality
     const queryMatchMs = performance.now() - queryMatchStart
     clearActiveOperation('search:queryMatch')
 
-    // ── Cheap pre-filter ────────────────────────────────────────────────────
-    // When matched jobs exceed 1000, drop jobs whose weighted (impact + qol +
-    // fresh + audit) score is below 75% of the maximum on those dimensions.
-    // These 4 scores come from the employer cache / freshness — no resume or
-    // location work needed — so this trim is essentially free.
-    const PRE_FILTER_MIN_JOBS = 10000
-    const PRE_FILTER_MIN_JOBS2 = 50000
-    const PRE_FILTER_MIN_JOBS3 = 80000
-    let preFilteredJobs = matched
-    let preFilterDropped = 0
-    if (matched.length > PRE_FILTER_MIN_JOBS) {
-      let wThresh = matched.length > PRE_FILTER_MIN_JOBS2 ? 0.5 : 0.25
-      if (matched.length > PRE_FILTER_MIN_JOBS3)
-        wThresh = 0.75
-      
-      const wImpact = searchPayload.scoreWeights?.impact ?? 1
-      const wQol = searchPayload.scoreWeights?.qualityOfLife ?? 1
-      const wFresh = searchPayload.scoreWeights?.fresh ?? 1
-      const wAudit = searchPayload.scoreWeights?.audit ?? 1
-      const maxScore = wImpact + wQol + wFresh + wAudit
-      if (maxScore > 0) {
-        const threshold = wThresh * maxScore
-        setActiveOperation(`search:preFilter (${matched.length} jobs)`)
-        preFilteredJobs = await asyncFilter(matched, (job) => {
-          if (hasAnyUserRating(job, ratedJobUrls, ratedCompanies)) return true
-          const employer = getOrCreateEmployer(job)
-          const impact = Math.min((Number(employer.ai_impact_score) || 0) / 100, 1.0) * wImpact
-          const qol = Math.min((Number(employer.employeeQualityOfLifeScore) || 0) / 100, 1.0) * wQol
-          const fresh = getJobFreshnessScore(job) * wFresh
-          const audit = Math.min((Number(employer.ai_score) || 0) / 100, 1.0) * wAudit
-          return (impact + qol + fresh + audit) >= threshold
-        }, 5_000)
-        clearActiveOperation('search:preFilter')
-        preFilterDropped = matched.length - preFilteredJobs.length
-        console.log(`[SearchMain] Pre-filter: ${matched.length} → ${preFilteredJobs.length} jobs (dropped ${preFilterDropped}, threshold=${threshold.toFixed(2)})`)
-      }
-    }
-    // ────────────────────────────────────────────────────────────────────────
+    const preFilteredJobs = matched
+    const preFilterDropped = 0
 
     const resumeText = typeof searchPayload.resumeText === 'string' ? searchPayload.resumeText : ''
     const locationText = typeof searchPayload.locationText === 'string' ? searchPayload.locationText : ''

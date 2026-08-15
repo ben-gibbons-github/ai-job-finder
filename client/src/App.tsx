@@ -1278,6 +1278,10 @@ function App() {
         GitHub
       </a>
 
+      <footer className="app-legal-footer">
+        Job postings and company descriptions are aggregated from public sources for informational and analytical purposes. All trademarks and company names belong to their respective owners.
+      </footer>
+
     </main>
   )
 }

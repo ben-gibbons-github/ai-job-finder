@@ -12,7 +12,7 @@ import { scrapeJobsMain } from './scraping/ScrapeJobMain.js'
 import { searchLocationsOpenStreetMap, type LocationOption } from './searching/LocationSearch.js'
 import { getSearchSuggestionCount, getSearchSuggestions, rebuildSearchSuggestions } from './searching/SearchSuggestion.js'
 import SearchMain, { type SearchPayload, type RankedJobWrapper, type SearchResultMeta } from './searching/SearchMain.js'
-import { warmJobHaystachCache, getVocabSize } from './searching/SearchUtils.js'
+import { warmJobHaystachCache, getVocabSize, sortJobsByQuality } from './searching/SearchUtils.js'
 import { Top100Search } from './searching/Top100Search.js'
 import { auditJobAsync, type AuditResult } from './searching/SearchAudit.js'
 import { impactJobAIAsync, type ImpactAIResult } from './searching/SearchImpactAI.js'
@@ -150,6 +150,11 @@ function buildTagCloud(jobs: ScrapedJob[], topN = 150): TagCloudEntry[] {
 
     JOBS = await scrapeJobsMain()
     console.log(`Loaded ${JOBS.length} jobs at startup.`)
+
+    const doneSortQuality = startTimer(`sortJobsByQuality (${JOBS.length} jobs)`)
+    sortJobsByQuality(JOBS)
+    doneSortQuality()
+    console.log(`[Startup] Jobs sorted by quality score.`)
 
     const doneSearchSuggestions = startTimer(`rebuildSearchSuggestions (${JOBS.length} jobs)`)
     rebuildSearchSuggestions(JOBS)

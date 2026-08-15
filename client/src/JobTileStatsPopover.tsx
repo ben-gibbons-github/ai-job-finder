@@ -68,6 +68,24 @@ const formatPercent = (score?: number): string => {
   return `${((score as number) * 100).toFixed(1)}%`;
 };
 
+/** If remote is 'Unknown' but location implies remote, return 'Remote'. */
+function resolveRemoteDisplay(remote: string | undefined, location: string | undefined): string {
+  const r = String(remote ?? '').trim()
+  
+
+/** If remote is 'Unknown' but location implies remote, return 'Remote'. */
+function resolveRemoteDisplay(remote: string | undefined, location: string | undefined): string {
+  const r = String(remote ?? '').trim()
+  const loc = String(location ?? '').trim().toLowerCase()
+  if (r && r.toLowerCase() !== 'unknown') return r
+  if (/\bremote\b|\bhybrid\b|work from home|\bwfh\b/.test(loc)) return 'Remote'
+  return r || 'Unknown'
+}const loc = String(location ?? '').trim().toLowerCase()
+  if (r && r.toLowerCase() !== 'unknown') return r
+  if (/\bremote\b|\bhybrid\b|work from home|\bwfh\b/.test(loc)) return 'Remote'
+  return r || 'Unknown'
+}
+
 const withFallback = (value?: string): string => {
   const normalized = String(value ?? '').trim();
   return normalized || '—';
@@ -545,7 +563,7 @@ const JobTileStatsPopover: React.FC<JobTileStatsPopoverProps> = ({
               </div>
               <div className="job-stats-meta-item">
                 <span className="job-stats-meta-label">Remote</span>
-                <strong>{withFallback(remote)}</strong>
+                <strong>{withFallback(resolveRemoteDisplay(remote, location))}</strong>
               </div>
               {jobSourceUrl && (
                 <div className="job-stats-meta-item job-stats-meta-item--wide">

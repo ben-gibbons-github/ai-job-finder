@@ -86,6 +86,7 @@ import JoobleScraper from './Jooble.js';
 import ReedScraper from './Reed.js';
 import JSearchScraper from './JSearch.js';
 import LinkedInJobsScraper from './LinkedInJobs.js';
+import WorkdayScraper from './Workday.js';
 import scrapedEmployerCache from './ScrapedEmployerCache.js';
 import { gatherLegacyAIData } from './GatherLegacyAIData.js';
 import { logScrapeQualityFlags } from './ScrapeJobAudit.js';
@@ -550,6 +551,10 @@ const SCRAPER_COMPONENTS: ScraperComponent[] = [
   {
     name: 'LinkedInJobs',
     scrapeJobs: () => new LinkedInJobsScraper().scrapeJobs(),
+  },
+  {
+    name: 'Workday',
+    scrapeJobs: () => new WorkdayScraper().scrapeJobs(),
   },
 ];
 
