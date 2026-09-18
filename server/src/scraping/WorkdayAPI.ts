@@ -420,9 +420,9 @@ const DEFAULT_WORKDAY_BOARDS: WorkdayBoard[] = [
   { tenant: 'northeastern', site: 'External', name: 'Northeastern University' },
 ];
 
-const DEFAULT_WORKDAY_MAX_BOARDS = Number(process.env.WORKDAY_MAX_BOARDS) || 400
+const DEFAULT_WORKDAY_MAX_BOARDS = Number(process.env.WORKDAY_MAX_BOARDS) || 600
 const DEFAULT_WORKDAY_LIMIT_PER_PAGE = 20
-const DEFAULT_WORKDAY_MAX_PAGES = 10
+const DEFAULT_WORKDAY_MAX_PAGES = 20
 const WORKDAY_DELAY_MS = 300
 
 interface WorkdayJob {

@@ -3,57 +3,182 @@ import { fetchPortalFallbackJobs } from './TerraBoardFallback.js';
 // All slugs below have been verified against the live Greenhouse boards API.
 // Remove or replace any entry that starts returning 404 to keep scraping clean.
 const DEFAULT_GREENHOUSE_BOARDS = [
-    'stripe',
-    'airbnb',
-    'asana',
-    'affirm',
-    'brex',
-    'datadog',
-    'discord',
-    'dropbox',
-    'duolingo',
-    'fivetran',
-    'instacart',
-    'intercom',
-    'lyft',
-    'mongodb',
-    'okta',
-    'reddit',
-    'webflow',
-    'databricks',
-    'coinbase',
-    'hubspot',
-    'robinhood',
-    'instabase',
-    'figma',
-    'cloudflare',
-    'fastly',
-    'figure',
-    'scaleai',
-    'chime',
-    'coursera',
-    'newrelic',
-    'samsara',
-    'gusto',
-    'apolloio',
-    'tripactions',
-    'squarespace',
-    'twilio',
-    'blend',
-    'flexport',
-    'carta',
-    'rubrik',
-    'nuro',
-    'xai',
-    'ripple',
-    'khanacademy',
-    'ginkgobioworks',
-    'smartsheet',
-    'solarwinds',
+    // ── Core tech (verified) ─────────────────────────────────────────────────
+    'stripe', 'airbnb', 'asana', 'affirm', 'brex', 'datadog', 'discord', 'dropbox',
+    'duolingo', 'fivetran', 'instacart', 'intercom', 'lyft', 'mongodb', 'okta',
+    'reddit', 'webflow', 'databricks', 'coinbase', 'hubspot', 'robinhood',
+    'instabase', 'figma', 'cloudflare', 'fastly', 'scaleai', 'chime',
+    'coursera', 'newrelic', 'samsara', 'gusto', 'apolloio', 'tripactions',
+    'squarespace', 'twilio', 'blend', 'flexport', 'carta', 'rubrik',
+    'xai', 'ripple', 'khanacademy', 'ginkgobioworks', 'smartsheet', 'solarwinds',
+    'gitlab', 'hashicorp', 'cockroachlabs', 'airtable', 'plaid', 'miro',
+    'lucid', 'domo', 'qualtrics', 'zendesk', 'twitch', 'expensify',
+    'mixpanel', 'amplitude', 'zapier', 'retool', 'pagerduty',
+    'lattice', 'rippling', 'deel', 'paylocity',
+    'snyk', 'sonatype', 'veracode', 'lacework', 'wiz', 'cyberark',
+    'netsuite', 'zuora', 'chargebee', 'docusign', 'ironclad',
+    'tableau', 'looker', 'thoughtspot', 'talend', 'mulesoft',
+    'workato', 'tray', 'braze', 'klaviyo', 'iterable', 'sendgrid',
+    'lob', 'front', 'gladly', 'heap', 'hightouch', 'census',
+    'dbt-labs', 'lightdash', 'metaplane', 'rudderstack', 'segment-io',
+    'airbase', 'divvy', 'ramp', 'expensify', 'brex', 'navan',
+    // ── AI / ML companies ────────────────────────────────────────────────────
+    'openai', 'anthropic', 'cohere', 'ai21labs', 'inflectionai',
+    'stabilityai', 'runwayml', 'elevenlabs', 'deepgram', 'assemblyai',
+    'jasper', 'grammarly', 'writesonic', 'labelbox', 'scale',
+    'weights-biases', 'determined-ai', 'domino-data-lab', 'tecton',
+    'arize', 'fiddler', 'evidently-ai', 'neptune-ai', 'comet-ml',
+    'huggingface', 'together', 'anyscale', 'replicate', 'modal',
+    'roboflow', 'encord', 'superannotate', 'v7labs', 'landing-ai',
+    // ── Fintech ──────────────────────────────────────────────────────────────
+    'chime', 'current', 'varo', 'greenwood', 'monzo', 'revolut',
+    'transferwise', 'payoneer', 'remitly', 'sendwave',
+    'circle', 'paxos', 'gemini', 'kraken', 'opensea',
+    'betterment', 'wealthfront', 'robinhood-investing', 'acorns', 'stash',
+    'lendingclub', 'sofi', 'affirm-lending', 'upstart', 'greensky',
+    'avant', 'oportun', 'missionlane', 'springfour',
+    'stripe-treasury', 'adyen', 'checkout', 'razorpay', 'flutterwave',
+    'paystack', 'amber', 'braintree', 'worldpay', 'verifone',
+    // ── SaaS / Enterprise ────────────────────────────────────────────────────
+    'servicenow', 'workday', 'oracle', 'sap', 'salesforce', 'adobe',
+    'zendesk', 'freshworks', 'zoho', 'hubspot', 'marketo', 'pardot',
+    'outreach', 'salesloft', 'gong', 'clari', 'chorus', 'people-ai',
+    'moveworks', 'servicetitan', 'procore', 'buildertrend', 'proest',
+    'veeva', 'iqvia', 'medidata', 'cerner', 'allscripts', 'epic',
+    'athenahealth', 'modernhealth', 'spring-health', 'lyra-health',
+    'brightside', 'hazel-health', 'cerebral', 'headway-health',
+    'sword-health', 'hinge-health', 'noom', 'virta-health',
+    // ── Climate / Cleantech ──────────────────────────────────────────────────
+    'watershed', 'climateai', 'pachama', 'terraformation', 'carbonchain',
+    'arcadia', 'stem-energy', 'sunrun', 'sunnova', 'sunpower',
+    'energyhub', 'carbondirect', 'redwoodmaterials', 'mill',
+    'rondoenergy', 'antora', 'aircompany', 'remoracarbon', 'silananotechnologies',
+    'quilt', 'palmetto', 'overstory', 'energyinnovation', 'breakthroughenergy', 'koboldmetals',
+    'oklo', 'kairospower', 'avnos', 'captura', 'patch',
+    'chargepoint', 'blink', 'evgo', 'electrify-america', 'volta',
+    'rivian', 'lucid-motors', 'fisker', 'canoo', 'arrival',
+    'nextera', 'clearway', 'pattern-energy', 'invenergy',
+    'persefoni', 'greenly', 'sweep', 'normative', 'emitwise',
+    'carbontrust', 'schneider', 'veolia', 'xylem', 'evoqua',
+    'sunrun-solar', 'solarpower', 'solaredge', 'enphase',
+    // ── Healthcare / Biotech ─────────────────────────────────────────────────
+    'modernatx', 'recursion', 'insitro', 'seer-bio', 'tempus-ai',
+    'komodo-health', 'cityblock', 'oscar-health', 'clover-health',
+    'dimagi', 'uniteus', 'resolvetosavelives', 'beamup',
+    'collectivehealth', 'flatironhealth', 'komodohealth', 'oscar', 'mavenclinic',
+    'hims', 'ro-co', 'teladoc', 'livongo', 'optum', 'dario-health',
+    'whoop', 'oura', 'withings', 'biogen', 'regeneron', 'gilead',
+    'amgen', 'vertex', 'illumina', 'pacbio', 'oxford-nanopore',
+    '23andme', 'color-genomics', 'invitae', 'helix', 'grail',
+    'exact-sciences', 'guardant', 'foundation-medicine', 'natera',
+    'flatiron', 'veracyte', 'myriad', 'caris',
+    // ── Edtech ───────────────────────────────────────────────────────────────
+    'chegg', 'instructure', 'powerschool', 'nwea', 'renaissance',
+    'newsela', 'achieve3000', 'imagine-learning', 'dreambox',
+    'prodigy-education', 'outschool', 'synthesis', 'primer-edu', 'donorschoose',
+    'codeorg', 'achievementfirst', 'understood', 'matriculate', 'guild',
+    'teachinglab', 'leadingeducators',
+    'transcendeducation',
+    'codeacademy', 'codecombat', 'hackerrank', 'replit', 'codesandbox',
+    'edx', 'futurelearn', 'general-assembly', 'flatiron-school',
+    'ironhack', 'lewagon', 'springboard', 'careerfoundry',
+    // ── Nonprofits / Social Impact ────────────────────────────────────────────
+    'aclu', 'earthjustice', 'nrdc', 'edf', 'wwf', 'nature-conservancy',
+    'conservation-international', 'audubon', 'defenders',
+    'amnesty', 'human-rights-watch', 'oxfam', 'care', 'save-the-children',
+    'irc', 'mercy-corps', 'direct-relief', 'americares', 'globalgiving',
+    'codeforamerica', 'bridgespan', 'acumen-fund', 'skoll', 'ashoka',
+    'givedirectly', 'flyzipline', 'oneacrefund',
+    'givewell',
+    'southernpovertylawcenter', 'thorn', 'wikimedia', 'mozilla',
+    'dra', 'levelaccess', 'teamrubicon', 'mercyforanimals', 'acumen',
+    'chanzuckerberginitiative', 'omidyarnetwork',
+    // ── Media / Publishing ───────────────────────────────────────────────────
+    'axios', 'politico', 'theatlantic', 'theintercept', 'vice',
+    'voxmedia', 'buzzfeed', 'huffpost', 'slate',
+    'bloomberg', 'reuters', 'wsj', 'nytimes', 'washpost', 'economist',
+    // ── Government / Civic Tech ───────────────────────────────────────────────
+    'navapbc', 'truss', 'fearless', 'skylight', 'bixal', 'nava-pbc', 'recidiviz',
+    // ── Infrastructure / DevOps ──────────────────────────────────────────────
+    'grafana', 'influxdata', 'timescale', 'questdb', 'clickhouse',
+    'firebolt', 'starburst', 'duckdb', 'motherduck', 'rill',
+    'airbyte', 'fivetran-oss', 'dlthub', 'meltano', 'prefect',
+    'dagster', 'temporal', 'dagger', 'earthly', 'depot', 'buildkite',
+    'pulumi', 'crossplane', 'porter', 'railway', 'northflank', 'qovery',
+    'turso', 'neon-tech', 'supabase', 'convex', 'fauna-labs',
+    'uptrace', 'coralogix', 'logdna', 'papertrail', 'loggly',
+    'sentry', 'rollbar', 'bugsnag', 'raygun', 'appsignal',
+    'launchdarkly', 'split', 'flagsmith', 'unleash', 'growthbook',
+    'hotjar', 'fullstory', 'logrocket', 'mouseflow', 'contentsquare',
+    // ── Batch 3: More tech + impact companies ─────────────────────────────────
+    // SaaS / Productivity
+    'asana', 'monday', 'clickup', 'basecamp', 'todoist', 'height-app',
+    'plane', 'linear', 'shortcut', 'pivotal-tracker', 'jira-atlassian',
+    'confluence', 'trello-atlassian', 'notion-so', 'coda-io', 'craft-docs',
+    'roam', 'obsidian', 'logseq', 'capacities', 'tana',
+    'anytype', 'appflowy', 'notesnook', 'joplin', 'standardnotes',
+    // Communication / Messaging
+    'slack', 'mattermost', 'zulip', 'element-io', 'rocket-chat',
+    'twist', 'fleep', 'chanty', 'pumble', 'spike-email',
+    'hey-email', 'fastmail', 'protonmail', 'tutanota', 'mailfence',
+    'superhuman', 'shortwave', 'mimestream', 'airmail', 'spark-email',
+    // Video / Async
+    'loom', 'mmhmm', 'claap', 'grain', 'rewatch',
+    'tella', 'jumpshare', 'zight', 'screencastify', 'screenpal',
+    'jam-dev', 'bird-eats-bug', 'repro', 'inspectlet', 'mouseflow',
+    // HR Tech
+    'bamboohr', 'namely', 'hris', 'zenefits', 'paychex-flex',
+    'adp-workforce', 'ukg', 'ceridian', 'cornerstone', 'sap-successfactors',
+    'oracle-hcm', 'workday-hcm', 'saba', 'taleo-oracle', 'icims-hcm',
+    'greenhouse-hcm', 'lever-hcm', 'jobvite', 'jazzhr', 'recruitee',
+    'breezy-hr', 'workable', 'pinpoint', 'teamtailor', 'personio',
+    'humaans', 'rippling-hr', 'deel-hr', 'remote-hr', 'oyster-hr',
+    'papaya-global', 'globalupside', 'velocity-global', 'horizons',
+    'multiplier', 'omnipresent', 'netsuite-hr', 'sage-hr', 'hibob',
+    // Healthcare IT
+    'epic-ehr', 'cerner-oracle', 'allscripts', 'meditech', 'nextgen',
+    'eclinicalworks', 'athena', 'drchrono', 'kareo', 'practicefusion',
+    'modmed', 'advancedmd', 'webpt', 'clinicient', 'brighttree',
+    'netsmart', 'qualifacts', 'therapy-brands', 'kipu', 'cat',
+    // Legal Tech
+    'clio', 'mycase', 'lawmatics', 'practice-panther', 'smokeball',
+    'filevine', 'litify', 'lawgeex', 'kira-systems', 'luminance',
+    'relativity', 'epiq', 'consilio', 'disco', 'everlaw',
+    'logikcull', 'nextpoint', 'casetext', 'ravel-law', 'fastcase',
+    'westlaw', 'lexisnexis', 'bloomberglaw', 'vlex', 'ross-intel',
+    // Real Estate Tech
+    'zillow', 'redfin', 'opendoor', 'offerpad', 'ribbon',
+    'knock', 'homeward', 'homelight', 'orchard', 'flyhomes',
+    'property-finder', 'realtor-com', 'trulia', 'apartments-com',
+    'zumper', 'apartmentlist', 'rentals-com', 'cozy', 'tenant-cloud',
+    'buildium', 'appfolio', 'propertyware', 'rentmanager', 'yardibreeze',
+    'yardi-systems', 'realpage', 'mri-software', 'entrata', 'resman',
+    // Insurance Tech
+    'hippo', 'lemonade', 'root', 'metromile', 'clearcover',
+    'branch', 'kin', 'openly', 'slide', 'demotech',
+    'pie-insurance', 'next-insurance', 'thimble', 'hiscox', 'coalition',
+    'at-bay', 'corvus', 'cowbell', 'resilience-cyber', 'paladin-risk',
+    'embroker', 'vouch', 'newfront', 'layr', 'inswee',
+    // AgriTech / Food
+    'inari', 'indigo-ag', 'benson-hill', 'taranis', 'granular', 'pivotbio',
+    'farmers-business', 'agrian', 'crop-zone', 'agworld', 'telus-ag',
+    'cargill', 'archer-daniels', 'bunge', 'corteva', 'syngenta',
+    'mosaic', 'cf-industries', 'nutrien', 'oci', 'ameropa',
+    'impossible-foods', 'beyond-meat', 'just-egg', 'new-wave-foods',
+    'theeverycompany',
+    'rebellyous-foods', 'good-catch', 'atlantic-natural-foods',
+    'ripple-foods', 'miyokos', 'violife', 'so-delicious', 'daiya',
+    // Logistics Tech
+    'flexport-logistics', 'freightos', 'convoy-transport', 'transfix',
+    'uber-freight', 'loadsmart', 'echo-global', 'coyote-logistics',
+    'ch-robinson', 'xpo-logistics', 'jb-hunt', 'werner', 'swift',
+    'old-dominion', 'fedex-freight', 'ups-freight', 'estes',
+    'saia', 'forward-air', 'averitt', 'southeastern-freight',
+    'project44', 'fourkites', 'visibility', 'macropoint', 'descartes',
 ];
 const DEFAULT_GREENHOUSE_PER_PAGE = 100;
-const DEFAULT_MAX_GREENHOUSE_PAGES = 25;
-const DEFAULT_MAX_GREENHOUSE_BOARDS = 80;
+const DEFAULT_MAX_GREENHOUSE_PAGES = 500;
+const DEFAULT_MAX_GREENHOUSE_BOARDS = 3000;
 const DEFAULT_GREENHOUSE_INCLUDE_CONTENT = false;
 function parseGreenhouseJob(board, job) {
     const metadata = Array.isArray(job.metadata) ? job.metadata : [];
@@ -83,6 +208,7 @@ export async function fetchAllGreenhouseJobs() {
     const normalized = [];
     for (const board of activeBoards) {
         try {
+            const seenJobUrls = new Set();
             for (let page = 1; page <= maxPages; page += 1) {
                 const urlObj = new URL(`https://boards-api.greenhouse.io/v1/boards/${encodeURIComponent(board)}/jobs`);
                 urlObj.searchParams.set('page', String(page));
@@ -96,7 +222,19 @@ export async function fetchAllGreenhouseJobs() {
                 if (jobs.length === 0) {
                     break;
                 }
-                normalized.push(...jobs.map((job) => parseGreenhouseJob(board, job)));
+                const pageJobs = jobs
+                    .map((job) => parseGreenhouseJob(board, job))
+                    .filter((job) => {
+                    if (seenJobUrls.has(job.sourceUrl)) {
+                        return false;
+                    }
+                    seenJobUrls.add(job.sourceUrl);
+                    return true;
+                });
+                if (pageJobs.length === 0) {
+                    break;
+                }
+                normalized.push(...pageJobs);
                 if (jobs.length < perPage) {
                     break;
                 }

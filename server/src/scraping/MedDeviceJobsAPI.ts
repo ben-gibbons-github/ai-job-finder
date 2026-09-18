@@ -24,6 +24,18 @@ function titleFromPath(path: string): string {
     .trim();
 }
 
+function firstCleanMatch(context: string, patterns: RegExp[]): string | undefined {
+  for (const pattern of patterns) {
+    const match = context.match(pattern);
+    const value = stripHtmlTags(match?.[1] || '').replace(/&amp;/gi, '&').trim();
+    if (value) {
+      return value;
+    }
+  }
+
+  return undefined;
+}
+
 function parseMedDeviceJobs(html: string): NormalizedPortalJob[] {
   const jobs: NormalizedPortalJob[] = [];
   const linkPattern = /<a[^>]+href="((?:https:\/\/www\.meddevicejobs\.com)?\/jobs\/(?!page\/|search\/|browse\/|explore\/|alerts\/|saved\/)[^"]+)"[^>]*>([\s\S]*?)<\/a>/gi;
@@ -43,13 +55,24 @@ function parseMedDeviceJobs(html: string): NormalizedPortalJob[] {
     }
 
     const from = match.index ?? 0;
-    const context = html.slice(Math.max(0, from - 320), from + 1400);
+    const context = html.slice(Math.max(0, from - 500), from + 2200);
+    const company = firstCleanMatch(context, [
+      /<a[^>]*class="post-company\s+meta-tag"[^>]*>\s*<h3[^>]*>([\s\S]*?)<\/h3>/i,
+      /<a[^>]*href="[^"]*\/company\/[^"/]+\/?"[^>]*class="post-company\s+meta-tag"[^>]*>([\s\S]*?)<\/a>/i,
+      /<a[^>]*class="post-company\s+meta-tag"[^>]*>([\s\S]*?)<\/a>/i,
+      /(?:company|employer)[^>]*>\s*([^<]{2,180})\s*</i,
+    ]);
+    const location = firstCleanMatch(context, [
+      /<a[^>]*class="post-location\s+meta-tag"[^>]*>([\s\S]*?)<\/a>/i,
+      /<a[^>]*href="[^"]*\/jobs-in\/[^"/]+\/?"[^>]*>([\s\S]*?)<\/a>/i,
+      /(?:location|city|state)[^>]*>\s*([^<]{2,180})\s*</i,
+    ]);
     const description = deriveDescriptionFromContext(context, title);
 
     jobs.push({
       title,
-      company: 'MedDeviceJobs Employer',
-      location: 'Unknown',
+      company: company || 'MedDeviceJobs Employer',
+      location: location || 'Unknown',
       remote: /\bremote\b|\bhybrid\b|work from home/i.test(context) ? 'Remote' : 'Unknown',
       type: 'Unknown',
       sourceUrl,

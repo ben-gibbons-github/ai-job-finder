@@ -5,9 +5,10 @@ import {
   type NormalizedPortalJob,
 } from './PortalIngestionUtils.js';
 import { capKeywords, getSharedJobTitleKeywords } from './SharedJobTitleKeywords.js';
+import { ALL_SCRAPE_COUNTRY_CODES } from './SharedCountries.js';
 
 const ADZUNA_API_BASE = 'https://api.adzuna.com/v1/api/jobs';
-const DEFAULT_ADZUNA_COUNTRIES = ['us', 'gb', 'ca', 'au', 'de', 'fr', 'nl', 'sg', 'in', 'br'];
+const DEFAULT_ADZUNA_COUNTRIES = ALL_SCRAPE_COUNTRY_CODES;
 const DEFAULT_ADZUNA_KEYWORDS = getSharedJobTitleKeywords([
   'software engineer',
   'data analyst',
@@ -15,8 +16,8 @@ const DEFAULT_ADZUNA_KEYWORDS = getSharedJobTitleKeywords([
   'operations manager',
   'registered nurse',
 ]);
-const DEFAULT_ADZUNA_MAX_KEYWORDS = 120;
-const DEFAULT_ADZUNA_MAX_PAGES = 12;
+const DEFAULT_ADZUNA_MAX_KEYWORDS = 400;
+const DEFAULT_ADZUNA_MAX_PAGES = 30;
 const DEFAULT_ADZUNA_RESULTS_PER_PAGE = 50;
 const DEFAULT_ADZUNA_REQUEST_DELAY_MS = 400;
 const DEFAULT_ADZUNA_RATE_LIMIT_COOLDOWN_MS = 10 * 60 * 1000;
@@ -26,6 +27,7 @@ let adzunaCooldownUntilMs = 0;
 interface AdzunaPageResult {
   jobs: NormalizedPortalJob[];
   rateLimited: boolean;
+  unsupportedCountry: boolean;
 }
 
 interface AdzunaJob {
@@ -120,7 +122,7 @@ async function fetchAdzunaPage(
 ): Promise<AdzunaPageResult> {
   const now = Date.now();
   if (now < adzunaCooldownUntilMs) {
-    return { jobs: [], rateLimited: true };
+    return { jobs: [], rateLimited: true, unsupportedCountry: false };
   }
 
   const requestDelayMs = Math.max(0, Number(process.env.ADZUNA_REQUEST_DELAY_MS || DEFAULT_ADZUNA_REQUEST_DELAY_MS));
@@ -150,7 +152,14 @@ async function fetchAdzunaPage(
         const cooldownMs = getCooldownMs(response);
         adzunaCooldownUntilMs = Date.now() + cooldownMs;
         console.warn(`[AdzunaAPI] Rate limited by Adzuna; pausing further requests for ${Math.round(cooldownMs / 1000)}s.`);
-        return { jobs: [], rateLimited: true };
+        return { jobs: [], rateLimited: true, unsupportedCountry: false };
+      }
+
+      if (response.status === 404) {
+        console.warn(
+          `[AdzunaAPI] Skipping unsupported country code "${country}" (404 from Adzuna).`,
+        );
+        return { jobs: [], rateLimited: false, unsupportedCountry: true };
       }
 
       throw new Error(`Fetch failed: ${response.status} ${response.statusText}`);
@@ -163,10 +172,11 @@ async function fetchAdzunaPage(
         .map((row) => mapAdzunaJob(row, keyword, country))
         .filter((row): row is NormalizedPortalJob => Boolean(row)),
       rateLimited: false,
+      unsupportedCountry: false,
     };
   } catch (error) {
     console.warn(`[AdzunaAPI] Failed country=${country} keyword="${keyword}" page=${page}:`, String(error));
-    return { jobs: [], rateLimited: false };
+    return { jobs: [], rateLimited: false, unsupportedCountry: false };
   }
 }
 
@@ -194,13 +204,25 @@ export async function fetchAllAdzunaJobs(): Promise<ScrapedJob[]> {
       break;
     }
 
+    let skipCountry = false;
+
     for (const keyword of usedKeywords) {
-      if (shouldStop) {
+      if (shouldStop || skipCountry) {
         break;
       }
 
       for (let page = 1; page <= maxPages; page += 1) {
-        const { jobs, rateLimited } = await fetchAdzunaPage(appId, appKey, country, keyword, page, resultsPerPage);
+        const {
+          jobs,
+          rateLimited,
+          unsupportedCountry,
+        } = await fetchAdzunaPage(appId, appKey, country, keyword, page, resultsPerPage);
+
+        if (unsupportedCountry) {
+          skipCountry = true;
+          break;
+        }
+
         if (rateLimited) {
           shouldStop = true;
           break;

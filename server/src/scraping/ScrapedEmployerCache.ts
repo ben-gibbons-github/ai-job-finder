@@ -7,10 +7,47 @@ import { CacheHandler } from '../utils/CacheHandler.js'
 const moduleDir = path.dirname(fileURLToPath(import.meta.url))
 const CACHE_FILE = path.resolve(moduleDir, '../../cache/scrapedemployers.json')
 const cacheHandler = new CacheHandler(CACHE_FILE)
+export const DEFAULT_COMPANY_PROMPT_VERSION = '1.0'
 
 interface CachedScrapedEmployer {
   employer: ScrapedEmployer
   timestamp?: number
+}
+
+function isGenericBuiltInEmployerName(name: string | undefined | null): boolean {
+  return /^built\s*in(?:\b|healthtech\b|greentech\b|social\s+impact\b)/i.test(String(name ?? '').trim())
+}
+
+function sanitizeBuiltInContamination(employer: ScrapedEmployer): ScrapedEmployer {
+  if (isGenericBuiltInEmployerName(employer.name)) {
+    return employer
+  }
+
+  const summary = String(employer.ai_summary ?? '').trim()
+  const impactSummary = String(employer.ai_impact_summary ?? '').trim()
+  const qualitySummary = String(employer.employeeQualityOfLifeSummary ?? '').trim()
+
+  const hasBuiltInLeak =
+    /^built\s*in\b/i.test(summary)
+    || /^built\s*in\b/i.test(impactSummary)
+    || /^built\s*in\b/i.test(qualitySummary)
+    || /\bnot built\s*in\b/i.test(qualitySummary)
+
+  if (!hasBuiltInLeak) {
+    return employer
+  }
+
+  return {
+    ...employer,
+    ai_summary: '',
+    ai_red_flag_summary: '',
+    ai_score: 0,
+    ai_red_flag_score: 0,
+    ai_impact_summary: '',
+    ai_impact_score: 0,
+    employeeQualityOfLifeScore: 0,
+    employeeQualityOfLifeSummary: '',
+  }
 }
 
 class ScrapedEmployerCache {
@@ -35,7 +72,12 @@ class ScrapedEmployerCache {
     }
 
     const cached = this.cache.get(key)
-    return cached ? { ...cached.employer } : null
+    return cached
+      ? {
+          ...cached.employer,
+          promptVersion: cached.employer.promptVersion?.trim() || DEFAULT_COMPANY_PROMPT_VERSION,
+        }
+      : null
   }
 
   getCachedEmployer(employer: ScrapedEmployer): ScrapedEmployer | null {
@@ -47,6 +89,11 @@ class ScrapedEmployerCache {
     if (!key) {
       return
     }
+
+    console.log(
+      `[ScrapedEmployerCache] setCachedEmployer key=${key} employer=${String(employer.name ?? '').trim()} ` +
+      `ai_summary=${String(employer.ai_summary ?? '').slice(0, 120)} impact=${String(employer.ai_impact_summary ?? '').slice(0, 120)} qol=${String(employer.employeeQualityOfLifeSummary ?? '').slice(0, 120)}`,
+    )
 
     this.cache.set(key, {
       employer: { ...employer },
@@ -121,23 +168,35 @@ class ScrapedEmployerCache {
         return value as Record<string, CachedScrapedEmployer | ScrapedEmployer>
       })
 
+      let didSanitize = false
       const normalizedEntries = Object.entries(parsed).map(([key, value]) => {
         if (value && typeof value === 'object' && 'employer' in value) {
           const cachedValue = value as CachedScrapedEmployer
-          return [key, cachedValue] as const
+          const sanitizedEmployer = sanitizeBuiltInContamination(cachedValue.employer)
+          if (sanitizedEmployer !== cachedValue.employer) {
+            didSanitize = true
+          }
+          return [key, { ...cachedValue, employer: sanitizedEmployer }] as const
         }
 
         const legacyValue = value as ScrapedEmployer
+        const sanitizedEmployer = sanitizeBuiltInContamination(legacyValue)
+        if (sanitizedEmployer !== legacyValue) {
+          didSanitize = true
+        }
         return [
           key,
           {
-            employer: legacyValue,
+            employer: sanitizedEmployer,
           },
         ] as const
       })
 
       this.cache = new Map(normalizedEntries)
       console.log(`[ScrapedEmployerCache] Loaded ${this.cache.size} cached employers from ${CACHE_FILE}`)
+      if (didSanitize) {
+        this.saveToFile()
+      }
     } catch (error) {
       console.warn(`[ScrapedEmployerCache] Failed to load cache from ${CACHE_FILE}:`, error)
       this.cache = new Map()
@@ -160,6 +219,8 @@ const scrapedEmployerCache = new ScrapedEmployerCache()
 
 export function getOrCreateEmployer(job: ScrapedJob): ScrapedEmployer {
   if (job.scrapedEmployer) {
+    job.scrapedEmployer.promptVersion = job.scrapedEmployer.promptVersion?.trim()
+      || DEFAULT_COMPANY_PROMPT_VERSION
     return job.scrapedEmployer
   }
 
@@ -175,6 +236,7 @@ export function getOrCreateEmployer(job: ScrapedJob): ScrapedEmployer {
     ai_impact_score: 0,
     employeeQualityOfLifeScore: 0,
     employeeQualityOfLifeSummary: '',
+    promptVersion: DEFAULT_COMPANY_PROMPT_VERSION,
   }
 
   job.scrapedEmployer = employer

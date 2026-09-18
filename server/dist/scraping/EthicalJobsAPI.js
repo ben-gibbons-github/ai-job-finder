@@ -40,6 +40,53 @@ function decodeHtmlEntities(value) {
 function cleanText(value) {
     return cleanupWhitespace(stripHtmlTags(decodeHtmlEntities(value)));
 }
+function decodeJsonString(value) {
+    try {
+        return JSON.parse(`"${value.replace(/"/g, '\\"')}"`);
+    }
+    catch {
+        return value;
+    }
+}
+function sourceSlugFromUrl(sourceUrl) {
+    const match = sourceUrl.match(/\/members\/([^?#]+)/i);
+    return (match?.[1] || '').replace(/^\/+|\/+$/g, '').toLowerCase();
+}
+function buildOrganisationLookup(html) {
+    const map = new Map();
+    const pattern = /"slug":"([^"]+)","organisationName":"([^"]+)"/gi;
+    for (const match of html.matchAll(pattern)) {
+        const slug = decodeJsonString(match[1] || '').trim().toLowerCase();
+        const organisation = cleanCompanyCandidate(decodeJsonString(match[2] || ''), '');
+        if (!slug || !organisation) {
+            continue;
+        }
+        map.set(slug, organisation);
+    }
+    return map;
+}
+function extractCompanyFromCard(cardHtml, title) {
+    const candidates = [];
+    const afterH2 = cardHtml.match(/<\/h2>\s*<div[^>]*>([\s\S]*?)<\/div>/i)?.[1] || '';
+    if (afterH2) {
+        candidates.push(afterH2);
+    }
+    const titleAdjacent = cardHtml.match(/<h2[^>]*>[\s\S]*?<\/h2>\s*<div[^>]*>\s*([^<]{2,220})\s*<\/div>/i)?.[1] || '';
+    if (titleAdjacent) {
+        candidates.push(titleAdjacent);
+    }
+    const genericOrg = cardHtml.match(/organisationName\"\s*:\s*\"([^\"]+)\"/i)?.[1] || '';
+    if (genericOrg) {
+        candidates.push(decodeJsonString(genericOrg));
+    }
+    for (const candidate of candidates) {
+        const cleaned = cleanCompanyCandidate(candidate, title);
+        if (cleaned) {
+            return cleaned;
+        }
+    }
+    return '';
+}
 function isGenericEthicalJobsTitle(value) {
     const normalized = cleanupWhitespace(value).toLowerCase();
     if (!normalized) {
@@ -108,6 +155,7 @@ function pageUrl(page) {
 }
 function parseEthicalJobs(html) {
     const jobs = [];
+    const organisationLookup = buildOrganisationLookup(html);
     const cardPattern = /<a[^>]*href="((?:https:\/\/www\.ethicaljobs\.com\.au)?\/members\/[^"\s]+)"[^>]*>([\s\S]{0,7000}?)<\/a>/gi;
     for (const match of html.matchAll(cardPattern)) {
         const rawUrl = (match[1] || '').trim();
@@ -123,8 +171,9 @@ function parseEthicalJobs(html) {
         if (/ethical jobs logo|job search|about us|career advice|save\b/i.test(title)) {
             continue;
         }
-        const companyMatch = cardHtml.match(/<\/h2>\s*<div[^>]*>([\s\S]*?)<\/div>/i);
-        const company = cleanCompanyCandidate(cleanText(companyMatch?.[1] || ''), title);
+        const slug = sourceSlugFromUrl(sourceUrl);
+        const companyFromLookup = slug ? organisationLookup.get(slug) || '' : '';
+        const company = companyFromLookup || extractCompanyFromCard(cardHtml, title);
         const location = extractLocationFromCard(cardHtml);
         const description = deriveDescriptionFromContext(cardHtml, title);
         jobs.push({

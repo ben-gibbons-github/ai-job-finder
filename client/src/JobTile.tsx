@@ -4,6 +4,10 @@ import JobTileDropdown from './JobTileDropdown';
 import JobTileStatsPopover from './JobTileStatsPopover';
 import type { CompanyTagColor, JobStatus, JobStatusRecord, UserJobNote } from './ClientSaveLoad';
 import { getScoreColors } from './scoreColors';
+import { EMPLOYER_IMPACT_CATEGORY_LABELS, EMPLOYER_IMPACT_CATEGORY_ICONS, type EmployerImpactCategory } from './EmployerImpactCategory';
+
+const JOB_TYPE_CLASSIFICATION_UI_ENABLED = import.meta.env.VITE_JOB_TYPE_CLASSIFICATION_UI_ENABLED === '1'
+  || import.meta.env.VITE_JOB_TYPE_CLASSIFICATION_UI_ENABLED === 'true';
 
 interface JobScores {
   resume: number;
@@ -43,12 +47,42 @@ interface RankedJobWrapper {
     description?: string;
     type?: string;
     source_url?: string;
+    last_scraped_at?: string | Date;
     ai_summary?: string;
+    job_type_classification_version?: string;
+    job_type_primary_category?: string;
+    job_type_categories?: string[];
+    job_type_classification_confidence?: number;
   };
   scores?: JobScores;
   totalScore?: number;
+  debug_flag?: string;
   aiPayload?: JobAiPayload;
-  debugInfo?: { lat: number | null; lon: number | null };
+  employerImpactCategories?: EmployerImpactCategory[];
+  isEligibleForEmployerImpactBadges?: boolean;
+  employerImpactBadgeEligibilityReason?: string;
+  debugInfo?: {
+    lat: number | null;
+    lon: number | null;
+    location: {
+      userLat: number | null;
+      userLon: number | null;
+      jobLat: number | null;
+      jobLon: number | null;
+      matchedLocation: string | null;
+      locationFallback: string | null;
+      userCountry: string | null;
+      jobCountry: string | null;
+      countryPenalty: string;
+      distanceKm: number | null;
+      distanceMiles: number | null;
+      locationScore: number;
+      calculation: string;
+    };
+    promptVersion: string;
+    aiPrompt?: string;
+    aiCacheKey?: string;
+  };
 }
 
 interface ResumeCatalogEntry {
@@ -90,6 +124,7 @@ interface JobTileProps {
   selectedResumeIds?: string[];
   resumeCatalogById?: Record<string, ResumeCatalogEntry>;
   onAuditRequest?: (key: AuditRequestKey, onResult: (result: AuditResult) => void) => void;
+  onRerollAiRequest?: (key: AuditRequestKey, onResult: (result: AuditResult & { error?: string }) => void) => void;
   auditResultOverride?: AuditResult;
   impactResultOverride?: ImpactResult;
   qualityOfLifeResultOverride?: QualityOfLifeResult;
@@ -125,10 +160,15 @@ interface JobTileProps {
     audit: number;
     qualityOfLife: number;
   };
+  searchDebugEnabled?: boolean;
 }
 
 const formatScore = (score: number): string => {
   return (score * 100).toFixed(1);
+};
+
+const formatDetectedCountry = (country: string | null): string => {
+  return country?.replace(/\b\w/g, (character) => character.toUpperCase()) ?? 'not detected';
 };
 
 const getPreview = (value: string, maxLength = 160): string => {
@@ -197,6 +237,12 @@ const getSourceHost = (sourceUrl?: string): string => {
   }
 };
 
+const formatClassificationLabel = (value: string): string => {
+  return value
+    .replace(/_/g, ' ')
+    .replace(/\b\w/g, (character) => character.toUpperCase());
+};
+
 const JobTile: React.FC<JobTileProps> = ({
   wrapper,
   isUserCreatedJob,
@@ -206,6 +252,7 @@ const JobTile: React.FC<JobTileProps> = ({
   selectedResumeIds,
   resumeCatalogById,
   onAuditRequest,
+  onRerollAiRequest,
   auditResultOverride,
   impactResultOverride,
   qualityOfLifeResultOverride,
@@ -227,21 +274,22 @@ const JobTile: React.FC<JobTileProps> = ({
   hasReadCompletionAwarded,
   onSaveUserCreatedJobDetails,
   scoreWeights,
+  searchDebugEnabled,
 }) => {
   const job = wrapper?.job;
   const scores = wrapper?.scores;
   const totalScore = wrapper?.totalScore;
+  const debugFlag = searchDebugEnabled ? String(wrapper?.debug_flag ?? '').trim() : '';
   const aiPayload = wrapper?.aiPayload;
   const debugInfo = wrapper?.debugInfo;
 
-  // Normalise the total score to 0–100% of the maximum achievable score
-  // (max = sum of all weights × 1.0 per category)
+  // Normalize the total score to the same 0-1 scale used by the category scores.
   const sumOfWeights = scoreWeights
     ? scoreWeights.resume + scoreWeights.impact + scoreWeights.location +
       scoreWeights.fresh + scoreWeights.audit + scoreWeights.qualityOfLife
     : 6
   const normalizedTotalScore = (totalScore !== undefined && sumOfWeights > 0)
-    ? (totalScore / sumOfWeights) * 100
+    ? totalScore / sumOfWeights
     : undefined
   const currentJobStatus = jobStatusRecord?.currentStatus ?? 'none';
   const payloadAuditHasData = Boolean(aiPayload?.audit?.hasData);
@@ -249,6 +297,8 @@ const JobTile: React.FC<JobTileProps> = ({
   const payloadQualityOfLifeHasData = Boolean(aiPayload?.qualityOfLife?.hasData);
 
   const [auditLoading, setAuditLoading] = useState(false);
+  const [rerollLoading, setRerollLoading] = useState(false);
+  const [rerollError, setRerollError] = useState<string | null>(null);
   const [auditScore, setAuditScore] = useState<number | null>(null);
   const [auditText, setAuditText] = useState<string | null>(null);
   const [auditError, setAuditError] = useState<string | null>(null);
@@ -259,7 +309,7 @@ const JobTile: React.FC<JobTileProps> = ({
     jobUserNote && (jobUserNote.notes.length > 0 || jobUserNote.userScore !== null),
   );
   const hasCompanyUserNotes = Boolean(
-    companyUserNote && companyUserNote.notes.length > 0,
+    companyUserNote && companyUserNote.notes && companyUserNote.notes.length > 0,
   );
 
   // auditResultOverride comes from the App-level job:audit:result listener;
@@ -288,6 +338,27 @@ const JobTile: React.FC<JobTileProps> = ({
           setAuditScore(result.auditScore);
           setAuditText(result.auditText);
         }
+      },
+    );
+  };
+
+  const handleRerollAi = () => {
+    if (!onRerollAiRequest || rerollLoading) return;
+    setRerollLoading(true);
+    setRerollError(null);
+    onRerollAiRequest(
+      { source_url: job?.source_url, name: job?.name, company_name: job?.company_name },
+      (result) => {
+        setRerollLoading(false);
+        if (result.error) {
+          setRerollError(result.error);
+          return;
+        }
+
+        setRerollError(null);
+        setAuditError(null);
+        setAuditScore(result.auditScore);
+        setAuditText(result.auditText);
       },
     );
   };
@@ -344,6 +415,15 @@ const JobTile: React.FC<JobTileProps> = ({
   const sourceHost = getSourceHost(job?.source_url);
   const companyNoteLink = getFirstLinkFromNotes(companyUserNote?.notes);
   const jobNoteLink = getFirstLinkFromNotes(jobUserNote?.notes);
+  const lastScrapedAt = job?.last_scraped_at ? new Date(job.last_scraped_at) : null;
+  const lastScrapedDisplay = lastScrapedAt && Number.isFinite(lastScrapedAt.getTime())
+    ? new Intl.DateTimeFormat(undefined, {
+        month: 'short',
+        day: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+      }).format(lastScrapedAt)
+    : null;
 
   const getFullAuditText = (): string => {
     if (!resolvedAuditText) {
@@ -358,16 +438,22 @@ const JobTile: React.FC<JobTileProps> = ({
     }
   };
 
-  const openSourceUrl = () => {
-    if (!job?.source_url) {
-      return;
-    }
-    window.open(job.source_url, '_blank', 'noopener,noreferrer');
-  };
-
   const openExternalUrl = (url: string) => {
     window.open(url, '_blank', 'noopener,noreferrer');
   };
+
+  const classificationCategories = Array.from(new Set((job?.job_type_categories ?? []).filter(Boolean)));
+  const primaryClassification = job?.job_type_primary_category?.trim() ?? '';
+  const classificationLabels = classificationCategories.length > 0
+    ? classificationCategories
+    : (primaryClassification ? [primaryClassification] : []);
+  const employerImpactCategoryBadges = (wrapper?.employerImpactCategories ?? [])
+    .map((category) => ({
+      category,
+      icon: EMPLOYER_IMPACT_CATEGORY_ICONS[category],
+      label: EMPLOYER_IMPACT_CATEGORY_LABELS[category],
+    }))
+    .filter((badge) => Boolean(badge.icon && badge.label));
 
   const handleNotesBubbleClick = (event: React.MouseEvent<HTMLElement>, url?: string | null) => {
     if (!url) {
@@ -436,14 +522,39 @@ const JobTile: React.FC<JobTileProps> = ({
       onKeyDown={handleTileKeyDown}
       aria-label={`Open details for ${job?.name ?? 'job'}`}
     >
+      {debugFlag && (
+        <div className="job-tile-debug-flag" aria-label={debugFlag}>
+          {debugFlag}
+        </div>
+      )}
       {debugInfo !== undefined && (
         <div className="job-debug-icon" onClick={(e) => e.stopPropagation()} role="presentation">
           <svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true" focusable="false" fill="currentColor">
             <path d="M8 1a7 7 0 1 0 0 14A7 7 0 0 0 8 1zm.75 10.5h-1.5v-5h1.5v5zm0-6.5h-1.5V3.5h1.5V5z"/>
           </svg>
           <div className="job-debug-icon__tooltip">
-            <div className="job-debug-icon__row"><span>lat</span><span>{typeof debugInfo.lat === 'number' ? debugInfo.lat.toFixed(5) : '—'}</span></div>
-            <div className="job-debug-icon__row"><span>lon</span><span>{typeof debugInfo.lon === 'number' ? debugInfo.lon.toFixed(5) : '—'}</span></div>
+            <div className="job-debug-icon__prompt-label job-debug-icon__prompt-label--first">Distance from user search</div>
+            <div className="job-debug-icon__row"><span>user lat / lon</span><span>{typeof debugInfo.location.userLat === 'number' && typeof debugInfo.location.userLon === 'number' ? `${debugInfo.location.userLat.toFixed(5)}, ${debugInfo.location.userLon.toFixed(5)}` : '—'}</span></div>
+            <div className="job-debug-icon__row"><span>job lat / lon</span><span>{typeof debugInfo.location.jobLat === 'number' && typeof debugInfo.location.jobLon === 'number' ? `${debugInfo.location.jobLat.toFixed(5)}, ${debugInfo.location.jobLon.toFixed(5)}` : '—'}</span></div>
+            {debugInfo.location.matchedLocation && <div className="job-debug-icon__row"><span>matched location</span><span>{debugInfo.location.matchedLocation}</span></div>}
+            {debugInfo.location.locationFallback && <div className="job-debug-icon__row"><span>fallback location</span><span>{debugInfo.location.locationFallback}</span></div>}
+            <div className="job-debug-icon__row"><span>job country</span><span>{formatDetectedCountry(debugInfo.location.jobCountry)}</span></div>
+            <div className="job-debug-icon__row"><span>search country</span><span>{formatDetectedCountry(debugInfo.location.userCountry)}</span></div>
+            <div className="job-debug-icon__row"><span>country penalty</span><span>{debugInfo.location.countryPenalty}</span></div>
+            <div className="job-debug-icon__row"><span>distance</span><span>{typeof debugInfo.location.distanceMiles === 'number' && typeof debugInfo.location.distanceKm === 'number' ? `${debugInfo.location.distanceMiles.toFixed(1)} mi / ${debugInfo.location.distanceKm.toFixed(1)} km` : 'not calculated'}</span></div>
+            <div className="job-debug-icon__row"><span>location score</span><span>{debugInfo.location.locationScore.toFixed(4)}</span></div>
+            <div className="job-debug-icon__calculation">{debugInfo.location.calculation}</div>
+            <div className="job-debug-icon__row"><span>prompt version</span><span>{debugInfo.promptVersion}</span></div>
+            {debugInfo.aiCacheKey && (
+              <div className="job-debug-icon__row" style={{ alignItems: 'flex-start' }}>
+                <span>AI lookup key</span>
+                <span style={{ wordBreak: 'break-all', textAlign: 'right' }}>{debugInfo.aiCacheKey}</span>
+              </div>
+            )}
+            <div className="job-debug-icon__prompt-label">AI search prompt</div>
+            <div className="job-debug-icon__prompt">
+              {debugInfo.aiPrompt?.trim() || 'Not saved for legacy company data.'}
+            </div>
           </div>
         </div>
       )}
@@ -482,6 +593,9 @@ const JobTile: React.FC<JobTileProps> = ({
             onRunAudit={handleRunAudit}
             canRunAudit={Boolean(onAuditRequest) && !auditLoading && !isAuditComplete}
             auditMenuLabel={auditLoading ? 'Running audit…' : isAuditComplete ? 'Audit complete' : auditNeedsRetry ? 'Retry audit' : 'Run audit'}
+            onRerollAi={searchDebugEnabled ? handleRerollAi : undefined}
+            canRerollAi={Boolean(searchDebugEnabled && onRerollAiRequest) && !rerollLoading}
+            rerollMenuLabel={rerollLoading ? 'Re-rolling AI…' : rerollError ? 'Retry AI re-roll' : 'Re-roll AI scores'}
             onHideJob={onHideJob}
             onHideCompany={onHideCompany}
             isHighlighted={Boolean(isHighlighted)}
@@ -543,7 +657,7 @@ const JobTile: React.FC<JobTileProps> = ({
           <div className="job-scores">
             <div className="scores-header">
               <strong>Match Scores:</strong>
-              {normalizedTotalScore !== undefined && <span className="total-score">Total: {normalizedTotalScore.toFixed(1)}%</span>}
+              {normalizedTotalScore !== undefined && <span className="total-score">Total: {formatScore(normalizedTotalScore)}%</span>}
             </div>
 
             <div className="score-bubbles-row">
@@ -611,15 +725,53 @@ const JobTile: React.FC<JobTileProps> = ({
 
             <div className="job-tile-actions-row job-tile-actions-row--compact">
               <span className="job-link-source">{sourceHost}</span>
-              <button
-                type="button"
-                className="job-link-btn job-link-btn--view job-link-btn--compact"
-                onClick={openSourceUrl}
-                disabled={!job?.source_url}
-                title={job?.source_url ? 'Open source job post' : 'No job URL available'}
-              >
-                Open posting
-              </button>
+              <div className="job-tile-actions-row__right">
+                {searchDebugEnabled && (
+                  <span
+                    className={`employer-impact-badge-eligibility${wrapper?.isEligibleForEmployerImpactBadges ? ' employer-impact-badge-eligibility--eligible' : ' employer-impact-badge-eligibility--ineligible'}`}
+                    tabIndex={0}
+                  >
+                    <span aria-hidden="true">{wrapper?.isEligibleForEmployerImpactBadges ? '✓' : '×'}</span>
+                    <span className="employer-impact-badge-eligibility__tooltip">
+                      {wrapper?.employerImpactBadgeEligibilityReason ?? 'Badge eligibility unavailable'}
+                    </span>
+                  </span>
+                )}
+                {JOB_TYPE_CLASSIFICATION_UI_ENABLED && (
+                  <div className="job-classification-panel" aria-label="Job classifications">
+                    <div className="job-classification-panel__labels">
+                      {classificationLabels.length > 0 ? (
+                        classificationLabels.map((label) => (
+                          <span
+                            key={label}
+                            className={`job-classification-label${label === primaryClassification ? ' job-classification-label--primary' : ''}`}
+                            title={label}
+                          >
+                            {formatClassificationLabel(label)}
+                          </span>
+                        ))
+                      ) : (
+                        <span className="job-classification-label job-classification-label--empty">Unclassified</span>
+                      )}
+                    </div>
+                  </div>
+                )}
+                {employerImpactCategoryBadges.length > 0 && (
+                  <div className="employer-impact-category-panel" aria-label="Employer impact categories">
+                    {employerImpactCategoryBadges.map(({ category, icon, label }) => (
+                      <span key={category} className="employer-impact-category-icon" tabIndex={0}>
+                        <span aria-hidden="true">{icon}</span>
+                        <span className="employer-impact-category-icon__tooltip">{label}</span>
+                      </span>
+                    ))}
+                  </div>
+                )}
+                {lastScrapedDisplay && (
+                  <span className="job-tile-last-updated" title={job?.last_scraped_at ? new Date(job.last_scraped_at).toISOString() : undefined}>
+                    Updated {lastScrapedDisplay}
+                  </span>
+                )}
+              </div>
             </div>
           </div>
         )}
@@ -627,15 +779,53 @@ const JobTile: React.FC<JobTileProps> = ({
         {!scores && (
           <div className="job-tile-actions-row job-tile-actions-row--compact">
             <span className="job-link-source">{sourceHost}</span>
-            <button
-              type="button"
-              className="job-link-btn job-link-btn--view job-link-btn--compact"
-              onClick={openSourceUrl}
-              disabled={!job?.source_url}
-              title={job?.source_url ? 'Open source job post' : 'No job URL available'}
-            >
-              Open posting
-            </button>
+            <div className="job-tile-actions-row__right">
+              {searchDebugEnabled && (
+                <span
+                  className={`employer-impact-badge-eligibility${wrapper?.isEligibleForEmployerImpactBadges ? ' employer-impact-badge-eligibility--eligible' : ' employer-impact-badge-eligibility--ineligible'}`}
+                  tabIndex={0}
+                >
+                  <span aria-hidden="true">{wrapper?.isEligibleForEmployerImpactBadges ? '✓' : '×'}</span>
+                  <span className="employer-impact-badge-eligibility__tooltip">
+                    {wrapper?.employerImpactBadgeEligibilityReason ?? 'Badge eligibility unavailable'}
+                  </span>
+                </span>
+              )}
+              {JOB_TYPE_CLASSIFICATION_UI_ENABLED && (
+                <div className="job-classification-panel" aria-label="Job classifications">
+                  <div className="job-classification-panel__labels">
+                    {classificationLabels.length > 0 ? (
+                      classificationLabels.map((label) => (
+                        <span
+                          key={label}
+                          className={`job-classification-label${label === primaryClassification ? ' job-classification-label--primary' : ''}`}
+                          title={label}
+                        >
+                          {formatClassificationLabel(label)}
+                        </span>
+                      ))
+                    ) : (
+                      <span className="job-classification-label job-classification-label--empty">Unclassified</span>
+                    )}
+                  </div>
+                </div>
+              )}
+              {employerImpactCategoryBadges.length > 0 && (
+                <div className="employer-impact-category-panel" aria-label="Employer impact categories">
+                  {employerImpactCategoryBadges.map(({ category, icon, label }) => (
+                    <span key={category} className="employer-impact-category-icon" tabIndex={0}>
+                      <span aria-hidden="true">{icon}</span>
+                      <span className="employer-impact-category-icon__tooltip">{label}</span>
+                    </span>
+                  ))}
+                </div>
+              )}
+              {lastScrapedDisplay && (
+                <span className="job-tile-last-updated" title={job?.last_scraped_at ? new Date(job.last_scraped_at).toISOString() : undefined}>
+                  Updated {lastScrapedDisplay}
+                </span>
+              )}
+            </div>
           </div>
         )}
       </div>
@@ -654,7 +844,7 @@ const JobTile: React.FC<JobTileProps> = ({
           remote={job?.remote}
           jobDescription={job?.description}
           jobSummary={job?.ai_summary}
-          totalScore={totalScore}
+          totalScore={normalizedTotalScore}
           resumeScore={scores?.resume}
           impactScore={displayedImpactScore}
           qualityOfLifeScore={displayedQualityOfLifeScore}

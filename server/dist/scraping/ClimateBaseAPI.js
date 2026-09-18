@@ -1,3 +1,4 @@
+import { recordScraperUrlTraversal } from './ScrapeDebugTelemetry.js';
 const CLIMATEBASE_JOBS_URL = 'https://climatebase.org/jobs';
 const FETCH_TIMEOUT = 30000;
 const ALGOLIA_BROWSE_ENDPOINT = 'https://8psnffqtxq-dsn.algolia.net/1/indexes/Job_production/browse';
@@ -134,6 +135,7 @@ async function fetchAllClimatebaseJobsRaw() {
     const deduped = new Map();
     let cursor;
     let requestCount = 0;
+    let stopReason = 'completed-no-cursor';
     while (requestCount < MAX_BROWSE_REQUESTS) {
         requestCount += 1;
         const res = await fetch(ALGOLIA_BROWSE_ENDPOINT, {
@@ -164,23 +166,55 @@ async function fetchAllClimatebaseJobsRaw() {
             }
         }
         if (!page.cursor) {
+            stopReason = 'completed-no-cursor';
             break;
         }
         cursor = page.cursor;
     }
     if (requestCount >= MAX_BROWSE_REQUESTS) {
+        stopReason = 'exceeded-safety-limit';
         throw new Error('Climatebase browse exceeded safety limit before completion.');
     }
-    return Array.from(deduped.values());
+    return {
+        jobs: Array.from(deduped.values()),
+        traversal: {
+            plannedUrlCount: MAX_BROWSE_REQUESTS,
+            actualUrlCount: requestCount,
+            stopReason,
+        },
+    };
 }
 export async function fetchAllClimatebaseJobs() {
     let jobs = [];
+    let traversal = {
+        plannedUrlCount: MAX_BROWSE_REQUESTS,
+        actualUrlCount: 0,
+        stopReason: 'not-started',
+    };
     try {
-        jobs = await fetchAllClimatebaseJobsRaw();
+        const algoliaResult = await fetchAllClimatebaseJobsRaw();
+        jobs = algoliaResult.jobs;
+        traversal = algoliaResult.traversal;
     }
     catch (err) {
         console.warn(`Climatebase Algolia pagination failed, using embedded payload fallback: ${String(err)}`);
-        jobs = await fetchEmbeddedJobsFromPage();
+        const fallbackJobs = await fetchEmbeddedJobsFromPage();
+        jobs = fallbackJobs;
+        traversal = {
+            plannedUrlCount: MAX_BROWSE_REQUESTS + 1,
+            actualUrlCount: Math.max(1, traversal.actualUrlCount + 1),
+            stopReason: fallbackJobs.length > 0
+                ? 'algolia-failed-used-embedded-page'
+                : 'algolia-failed-embedded-page-empty',
+        };
+    }
+    finally {
+        recordScraperUrlTraversal({
+            sourceName: 'ClimateBase',
+            plannedUrlCount: traversal.plannedUrlCount,
+            actualUrlCount: traversal.actualUrlCount,
+            stopReason: traversal.stopReason,
+        });
     }
     if (jobs.length === 0) {
         console.warn('Climatebase payload contained no jobs.');

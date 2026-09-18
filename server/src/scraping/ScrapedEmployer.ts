@@ -12,5 +12,10 @@ export interface ScrapedEmployer {
 
   employeeQualityOfLifeScore: number;
   employeeQualityOfLifeSummary: string;
+
+  location_fallback?: string;
+
+  promptVersion?: string;
+  aiPrompt?: string;
 }
 

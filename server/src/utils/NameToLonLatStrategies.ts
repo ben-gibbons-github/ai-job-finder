@@ -194,15 +194,6 @@ export async function hardcodedLocationsStrategy(placeName: string): Promise<Lat
     return result;
   }
   
-  // Try partial match (first word)
-  const firstWord = normalized.split(' ')[0];
-  for (const [key, value] of Object.entries(NORMALIZED_HARDCODED_LOCATIONS)) {
-    if (key.includes(firstWord) || firstWord.includes(key.split(' ')[0])) {
-      // console.log('[Hardcoded] Found partial match for', placeName, 'using:', key, '-> ', value, '(NOTE: This is a hardcoded fallback, less accurate)')
-      return value;
-    }
-  }
-  
   // console.log('[Hardcoded] No match found for:', placeName)
   throw new Error(`No hardcoded location match found for: ${placeName}`);
 }

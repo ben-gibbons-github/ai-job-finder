@@ -350,6 +350,16 @@ const STATE_ABBR: Record<string, string> = {
   wv:'west virginia', wi:'wisconsin', wy:'wyoming', dc:'district of columbia',
 }
 
+export function hasUnitedStatesStateAbbreviation(locationText: string): boolean {
+  return String(locationText ?? '')
+    .toLowerCase()
+    .split(',')
+    .some((part) => {
+      const match = part.trim().match(/^([a-z]{2})(?:\s+\d{5}(?:-\d{4})?)?$/)
+      return match !== null && Object.hasOwn(STATE_ABBR, match[1])
+    })
+}
+
 /**
  * Attempts to find approximate lat/lon for a location string using the
  * hardcoded fallback database.

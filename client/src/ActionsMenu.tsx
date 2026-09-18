@@ -23,12 +23,14 @@ interface ActionsMenuProps {
   onExportAllData: () => void
   onExportPageAsCsv: () => void
   onImportAllData: (xmlText: string) => void | Promise<void>
+  onExportPageAsPythonTestJobs?: () => void
   userRatingMode: UserRatingMode
   onUserRatingModeChange: (value: UserRatingMode) => void
   hideApplied: boolean
   onHideAppliedChange: (value: boolean) => void
   hideTagColors: CompanyTagColor[]
   onHideTagColorsChange: (colors: CompanyTagColor[]) => void
+  showBatchDebugActions?: boolean
   isEnabled: boolean
 }
 
@@ -43,12 +45,14 @@ export default function ActionsMenu({
   onExportAllData,
   onExportPageAsCsv,
   onImportAllData,
+  onExportPageAsPythonTestJobs,
   userRatingMode,
   onUserRatingModeChange,
   hideApplied,
   onHideAppliedChange,
   hideTagColors,
   onHideTagColorsChange,
+  showBatchDebugActions = false,
   isEnabled,
 }: ActionsMenuProps) {
   const importInputRef = useRef<HTMLInputElement | null>(null)
@@ -300,6 +304,11 @@ export default function ActionsMenu({
           <button type="button" className="insights-actions-menu__item" onClick={() => setIsAddJobDialogOpen(true)}>
             Add job
           </button>
+          {showBatchDebugActions && onExportPageAsPythonTestJobs && (
+            <button type="button" className="insights-actions-menu__item" onClick={onExportPageAsPythonTestJobs}>
+              Copy page AI jobs as Python TestJob
+            </button>
+          )}
           <button type="button" className="insights-actions-menu__item" onClick={onExportPageAsCsv}>
             Export page as CSV (Google Sheets)
           </button>

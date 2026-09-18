@@ -15,11 +15,12 @@ import type {
   RankedJobWrapper,
 } from './SearchInterfaces.js'
 import { auditJob } from './SearchAudit.js'
-import { geocodeUserLocation, geocodeJobLocations, isRemoteJob } from './SearchDistance.js'
+import { geocodeUserLocation, geocodeJobLocations, getLocationScoreDebugInfo, isRemoteJob, LOCATION_SCORING_VERSION, detectCountryFromLocation, getJobLocations } from './SearchDistance.js'
 import { calculateIndividualScores, jobMatchesQuery, type ScoreTimings } from './SearchUtils.js'
 import { calculateFreshnessScore, getJobFreshnessScore } from './SearchFreshness.js'
 import { tokenize } from './SearchResumeMatch.js'
 import { getOrCreateEmployer } from '../scraping/ScrapedEmployerCache.js'
+import { getEffectiveUnifiedCompanyAiScores } from './SearchCompanyAiUnified.js'
 import { setActiveOperation, clearActiveOperation } from '../utils/ServerActivityTracker.js'
 
 const SERVER_HIDDEN_EXCLUSIONS_ENABLED = true
@@ -81,9 +82,11 @@ function buildSearchFingerprint(payload: SearchPayload): string {
   const resumeFingerprint = `${resumeText.length}|${resumeText.slice(0, 64)}|${resumeText.slice(-64)}`
 
   return JSON.stringify({
+    locationScoringVersion: LOCATION_SCORING_VERSION,
     q: String(payload.query ?? '').trim().toLowerCase(),
     resume: resumeFingerprint,
     loc: String(payload.locationText ?? ''),
+    promptVersionFilter: String(payload.promptVersionFilter ?? '').trim(),
     remote: payload.includeRemoteJobs !== false,
     ratingMode: payload.userRatingMode ?? 'none',
     weights: payload.scoreWeights ?? null,
@@ -105,6 +108,23 @@ function normalizeExactUrl(value: unknown): string {
 
 function normalizeExactCompanyName(value: unknown): string {
   return String(value ?? '').trim().toLowerCase()
+}
+
+function normalizePromptVersion(value: unknown): string {
+  return String(value ?? '').trim() || '1.0'
+}
+
+export function getJobDebugFlag(job: ScrapedJob): string | undefined {
+  const promptVersion = normalizePromptVersion(job.scrapedEmployer?.promptVersion)
+  const impactScore = Number(job.scrapedEmployer?.ai_impact_score ?? 0)
+  if ((promptVersion === '3.0' || promptVersion === '4.0' || promptVersion === '5.0') && impactScore > 60) {
+    return 'AI recalculation'
+  }
+  return undefined
+}
+
+function normalizePromptVersionFilter(value: unknown): string {
+  return String(value ?? '').trim()
 }
 
 function parseUserRatingMode(value: unknown): UserRatingMode {
@@ -250,6 +270,18 @@ function mergeAddedJobs(baseJobs: ScrapedJob[], addedJobs: ScrapedJob[]): Scrape
   return Array.from(dedup.values())
 }
 
+function buildJobAiLookupKey(job: ScrapedJob): string {
+  const sourceUrl = String(job.source_url ?? '').trim()
+  const company = String(job.company_name ?? '').trim().toLowerCase()
+  const title = String(job.name ?? '').trim().toLowerCase()
+  const location = String(job.location ?? '').trim().toLowerCase()
+
+  if (sourceUrl) {
+    return `${sourceUrl}::${company}::${title}::${location}`
+  }
+  return `${title}::${company}::${location}`
+}
+
 function buildJobAiPayload(job: ScrapedJob): JobAiPayload | undefined {
   const employer = job.scrapedEmployer
   if (!employer) {
@@ -261,10 +293,11 @@ function buildJobAiPayload(job: ScrapedJob): JobAiPayload | undefined {
   const impactSummary = String(employer.ai_impact_summary ?? '').trim()
   const qualityOfLifeSummary = String(employer.employeeQualityOfLifeSummary ?? '').trim()
 
-  const auditScore = Number(employer.ai_score ?? 0)
-  const redFlagScore = Number(employer.ai_red_flag_score ?? 0)
-  const impactScore = Number(employer.ai_impact_score ?? 0)
-  const qualityOfLifeScore = Number(employer.employeeQualityOfLifeScore ?? 0)
+  const effectiveScores = getEffectiveUnifiedCompanyAiScores(employer)
+  const auditScore = Number(effectiveScores.auditScore)
+  const redFlagScore = Number(effectiveScores.redFlagScore)
+  const impactScore = Number(effectiveScores.impactScore)
+  const qualityOfLifeScore = Number(effectiveScores.qualityOfLifeScore)
 
   return {
     audit: {
@@ -318,15 +351,29 @@ function buildSearchAiCoverage(wrappers: RankedJobWrapper[]): SearchAiCoverage {
   }
 }
 
-function buildScoreDistribution(wrappers: RankedJobWrapper[]): SearchScoreBucket[] {
+export function buildScoreDistribution(
+  wrappers: RankedJobWrapper[],
+  scoreWeights?: ScoreWeights,
+): SearchScoreBucket[] {
   const buckets = new Map<number, number>()
+  const sumOfWeights = scoreWeights
+    ? scoreWeights.resume
+      + scoreWeights.impact
+      + scoreWeights.location
+      + scoreWeights.fresh
+      + scoreWeights.audit
+      + scoreWeights.qualityOfLife
+    : 6
 
   for (const wrapper of wrappers) {
-    const scorePercent = Number(wrapper.totalScore ?? 0) * 100
+    const totalScore = Number(wrapper.totalScore ?? 0)
+    const scorePercent = sumOfWeights > 0
+      ? Math.max(0, Math.min(100, (totalScore / sumOfWeights) * 100))
+      : 0
     if (!Number.isFinite(scorePercent)) {
       continue
     }
-    const bucketStart = Math.max(0, Math.floor(scorePercent / 10) * 10)
+    const bucketStart = Math.floor(scorePercent)
     buckets.set(bucketStart, (buckets.get(bucketStart) ?? 0) + 1)
   }
 
@@ -334,7 +381,7 @@ function buildScoreDistribution(wrappers: RankedJobWrapper[]): SearchScoreBucket
     .sort((a, b) => a[0] - b[0])
     .map(([start, count]) => ({
       start,
-      end: start + 9,
+      end: start,
       count,
     }))
 }
@@ -342,6 +389,12 @@ function buildScoreDistribution(wrappers: RankedJobWrapper[]): SearchScoreBucket
 class SearchMain {
   // LRU cache: Map preserves insertion order; on access we delete+re-insert to move to end
   private readonly searchCache = new Map<string, CachedSearch>()
+  private searchCacheGeneration = 0
+
+  clearCache(): void {
+    this.searchCache.clear()
+    this.searchCacheGeneration += 1
+  }
 
   private getCached(fingerprint: string): CachedSearch | undefined {
     const entry = this.searchCache.get(fingerprint)
@@ -368,6 +421,7 @@ class SearchMain {
 
   async search(jobs: ScrapedJob[], searchPayload: SearchPayload, debugEnabled = false): Promise<{ matched: RankedJobWrapper[]; size: number; meta: SearchResultMeta }> {
     const searchStart = performance.now()
+    const cacheGeneration = this.searchCacheGeneration
     const logFlags: SearchLogFlags = searchPayload.searchLogFlags ?? {}
     const logSearchMain = logFlags.searchMain === true
     const hiddenExclusionsEnabled = SERVER_HIDDEN_EXCLUSIONS_ENABLED
@@ -414,6 +468,7 @@ class SearchMain {
             exclusions: {
               hiddenByUrl: 0, hiddenByCompany: 0, remoteJobsFiltered: 0,
               userRatingFiltered: 0,
+              promptVersionFiltered: 0,
               userRatingFilterMode: String(searchPayload.userRatingMode ?? 'none'),
               queryMismatch: 0,
             },
@@ -469,6 +524,10 @@ class SearchMain {
     const companyRatingMap = userRatingMode !== 'none'
       ? buildUserRatingMap(searchPayload.userRatings?.companyRatingsByName, normalizeExactCompanyName)
       : new Map<string, number>()
+    const ratedJobMapForPreservation = buildUserRatingMap(searchPayload.userRatings?.jobRatingsByUrl, normalizeExactUrl)
+    const ratedCompanyMapForPreservation = buildUserRatingMap(searchPayload.userRatings?.companyRatingsByName, normalizeExactCompanyName)
+    const hasPreservedUserRating = (job: ScrapedJob): boolean =>
+      getEffectiveUserRating(job, ratedJobMapForPreservation, ratedCompanyMapForPreservation) !== null
     const ratedJobUrls = userRatingMode === 'ratedOnly' || userRatingMode === 'hideRated'
       ? new Set([
           ...Array.from(jobRatingMap.keys()),
@@ -494,6 +553,14 @@ class SearchMain {
       : userRatingMode === 'hideRated'
         ? await asyncFilter(remoteFilteredJobs, (job) => !hasAnyUserRating(job, ratedJobUrls, ratedCompanies))
         : remoteFilteredJobs
+
+    const promptVersionFilter = normalizePromptVersionFilter(searchPayload.promptVersionFilter)
+    const promptVersionFilteredJobs = promptVersionFilter.length > 0
+      ? await asyncFilter(
+          ratingFilteredJobs,
+          (job) => normalizePromptVersion(job.scrapedEmployer?.promptVersion) === promptVersionFilter,
+        )
+      : ratingFilteredJobs
     const filterMs = performance.now() - filterStart
     clearActiveOperation('search:filter')
 
@@ -523,6 +590,8 @@ class SearchMain {
         ratedJobUrls.size,
         'ratedCompanies:',
         ratedCompanies.size,
+        'promptVersionFilter:',
+        promptVersionFilter || 'all',
       )
     }
 
@@ -530,18 +599,65 @@ class SearchMain {
     setActiveOperation(`search:queryMatch (${ratingFilteredJobs.length} jobs, terms=${queryTerms.length})`)
     // Jobs are pre-sorted by quality at startup. asyncFilterFirstN stops once
     // we have 5000 candidates — so we always score the highest-quality matches.
-    const QUERY_MATCH_LIMIT = 5000
+    const QUERY_MATCH_LIMIT = 25000
     const matched = queryTerms.length > 0
-      ? await asyncFilterFirstN(ratingFilteredJobs, (job) => jobMatchesQuery(job, queryTerms, logFlags.query === true), QUERY_MATCH_LIMIT)
-      : ratingFilteredJobs.slice(0, QUERY_MATCH_LIMIT * 10) // empty query: take top N by quality
+      ? await asyncFilterFirstN(promptVersionFilteredJobs, (job) => jobMatchesQuery(job, queryTerms, logFlags.query === true), QUERY_MATCH_LIMIT)
+      : promptVersionFilteredJobs.slice(0, QUERY_MATCH_LIMIT) // empty query: take the top 5,000 by quality
     const queryMatchMs = performance.now() - queryMatchStart
-    clearActiveOperation('search:queryMatch')
 
-    const preFilteredJobs = matched
-    const preFilterDropped = 0
+
+
+    clearActiveOperation('search:queryMatch')
 
     const resumeText = typeof searchPayload.resumeText === 'string' ? searchPayload.resumeText : ''
     const locationText = typeof searchPayload.locationText === 'string' ? searchPayload.locationText : ''
+
+    const LARGE_MATCH_COUNTRY_FILTER_THRESHOLD = 5000
+    const LARGE_MATCH_COUNTRY_FILTER_MIN_KEEP = 1000
+    const sourceSearchCountry = detectCountryFromLocation(locationText)
+    const locationCountryCache = new Map<string, string | null>()
+    const largeMatchCountryFilteredJobs = matched.length >= LARGE_MATCH_COUNTRY_FILTER_THRESHOLD && sourceSearchCountry
+      ? await asyncFilter(matched, (job) => {
+          if (hasPreservedUserRating(job)) {
+            return true
+          }
+
+          const locations = getJobLocations(job)
+          const detectedCountries = locations.map((location) => {
+            if (!locationCountryCache.has(location)) {
+              locationCountryCache.set(location, detectCountryFromLocation(location))
+            }
+            return locationCountryCache.get(location)
+          })
+
+          const knownCountries = detectedCountries.filter((country): country is string => country !== null)
+          if (knownCountries.length === 0) {
+            return true
+          }
+
+          return knownCountries.includes(sourceSearchCountry)
+        })
+      : matched
+    const preFilterDropped = matched.length - largeMatchCountryFilteredJobs.length
+    const preFilteredJobs = matched.length >= LARGE_MATCH_COUNTRY_FILTER_THRESHOLD && sourceSearchCountry && largeMatchCountryFilteredJobs.length < LARGE_MATCH_COUNTRY_FILTER_MIN_KEEP
+      ? matched
+      : largeMatchCountryFilteredJobs
+
+    if (logSearchMain && matched.length >= LARGE_MATCH_COUNTRY_FILTER_THRESHOLD) {
+      console.log(
+        '[SearchMain] large-match country filter:',
+        'matched=',
+        matched.length,
+        'sourceSearchCountry=',
+        sourceSearchCountry,
+        'remaining=',
+        preFilteredJobs.length,
+        'dropped=',
+        matched.length - preFilteredJobs.length,
+        'fallbackApplied=',
+        preFilteredJobs === matched,
+      )
+    }
 
     // Geocode user location
     const userGeocodeStart = performance.now()
@@ -610,9 +726,17 @@ class SearchMain {
           job,
           scores,
           totalScore,
+          debug_flag: getJobDebugFlag(job),
           aiPayload: buildJobAiPayload(job),
           debugInfo: debugEnabled
-            ? { lat: typeof job.location_lat === 'number' ? job.location_lat : null, lon: typeof job.location_lon === 'number' ? job.location_lon : null }
+            ? {
+                lat: typeof job.location_lat === 'number' ? job.location_lat : null,
+                lon: typeof job.location_lon === 'number' ? job.location_lon : null,
+                location: getLocationScoreDebugInfo(userLat, userLon, job, locationText),
+                promptVersion: job.scrapedEmployer?.promptVersion?.trim() || '1.0',
+                aiPrompt: job.scrapedEmployer?.aiPrompt,
+                aiCacheKey: buildJobAiLookupKey(job),
+              }
             : undefined,
         }
       })
@@ -666,10 +790,11 @@ class SearchMain {
     const totalMs = performance.now() - searchStart
     const meta: SearchResultMeta = {
       aiCoverage: buildSearchAiCoverage(sortedByUserRatingWrappers),
-      scoreDistribution: buildScoreDistribution(sortedByUserRatingWrappers),
+      scoreDistribution: buildScoreDistribution(sortedByUserRatingWrappers, searchPayload.scoreWeights),
       appliedFilters: {
         includeRemoteJobs,
         userRatingMode,
+        promptVersionFilter: promptVersionFilter || null,
       },
       debugInfo: debugEnabled ? (() => {
         let hiddenByUrl = 0
@@ -715,8 +840,9 @@ class SearchMain {
             hiddenByCompany,
             remoteJobsFiltered: visibleJobs.length - remoteFilteredJobs.length,
             userRatingFiltered: remoteFilteredJobs.length - ratingFilteredJobs.length,
+            promptVersionFiltered: ratingFilteredJobs.length - promptVersionFilteredJobs.length,
             userRatingFilterMode: userRatingMode,
-            queryMismatch: ratingFilteredJobs.length - matched.length,
+            queryMismatch: promptVersionFilteredJobs.length - matched.length,
           },
         }
       })() : undefined,
@@ -742,7 +868,7 @@ class SearchMain {
     // })
 
     // Store in cache (exclude debugInfo — timing data is not stable across requests)
-    if (searchFingerprint !== null) {
+    if (searchFingerprint !== null && cacheGeneration === this.searchCacheGeneration) {
       this.setCached(searchFingerprint, {
         wrappers: sortedByUserRatingWrappers,
         size: sortedByUserRatingWrappers.length,

@@ -1,5 +1,6 @@
 import { normalizeJobsWithCoordinates } from './PortalIngestionUtils.js';
-import { collectPaginatedHtmlJobs, stripHtmlTags } from './PaginatedHtmlScrapeUtils.js';
+import { collectPaginatedHtmlJobs } from './PaginatedHtmlScrapeUtils.js';
+import { sanitizeJobDescription } from './ScrapeDescriptionUtils.js';
 const IMPACTPOOL_URL = 'https://www.impactpool.org/search';
 const MAX_IMPACTPOOL_PAGES = 250;
 function isGenericImpactPoolTitle(value) {
@@ -8,15 +9,20 @@ function isGenericImpactPoolTitle(value) {
 }
 function extractImpactPoolTitle(anchorHtml) {
     const cardTitleMatch = anchorHtml.match(/type=["']cardTitle["'][^>]*>([\s\S]*?)<\/div>/i);
-    const cardTitle = stripHtmlTags(cardTitleMatch?.[1] || '');
+    const cardTitle = sanitizeJobDescription(cardTitleMatch?.[1] || '');
     if (cardTitle && !isGenericImpactPoolTitle(cardTitle)) {
         return cardTitle;
     }
-    const fallback = stripHtmlTags(anchorHtml);
+    const fallback = sanitizeJobDescription(anchorHtml);
     if (fallback && !isGenericImpactPoolTitle(fallback)) {
         return fallback;
     }
     return '';
+}
+function extractImpactPoolBodyFields(anchorHtml) {
+    return Array.from(anchorHtml.matchAll(/<div[^>]+type=["']bodyEmphasis["'][^>]*>([\s\S]*?)<\/div>/gi))
+        .map((match) => sanitizeJobDescription(match[1] || ''))
+        .filter(Boolean);
 }
 function pageUrl(page) {
     const url = new URL(IMPACTPOOL_URL);
@@ -26,33 +32,30 @@ function pageUrl(page) {
     }
     return url.toString();
 }
-function parseImpactPoolJobs(html) {
+export function parseImpactPoolJobs(html) {
     const jobs = [];
-    const linkPattern = /<a[^>]+href="((?:https:\/\/www\.impactpool\.org)?\/jobs\/[0-9]+(?:\/[^"?#\s]+)?)"[^>]*>([\s\S]*?)<\/a>/gi;
+    const linkPattern = /<a[^>]+href=["']((?:https:\/\/www\.impactpool\.org)?\/jobs\/[0-9]+(?:\/[^"'?#\s]+)?)["'][^>]*>([\s\S]*?)<\/a>/gi;
     for (const match of html.matchAll(linkPattern)) {
         const rawUrl = (match[1] || '').trim();
         const sourceUrl = rawUrl.startsWith('http') ? rawUrl : `https://www.impactpool.org${rawUrl}`;
-        const title = extractImpactPoolTitle(match[2] || '');
+        const anchorHtml = match[2] || '';
+        const title = extractImpactPoolTitle(anchorHtml);
         if (!sourceUrl || !title) {
             continue;
         }
         if (/show more|get started|join now|post a job|privacy/i.test(title)) {
             continue;
         }
-        const from = match.index ?? 0;
-        const context = html.slice(Math.max(0, from - 400), from + 1000);
-        const companyMatch = context.match(/\b([A-Z][A-Za-z0-9&.,'()\- ]{2,80})\s+[A-Z][a-z]+\s*-\s*(?:Junior|Mid|Senior|Internship|Consultant|Level)/);
-        const locationMatch = context.match(/\b([A-Za-z .'-]+)\s*\|\s*([A-Za-z .'-]+)/);
-        let location = 'Unknown';
-        if (locationMatch) {
-            location = `${locationMatch[1].trim()} | ${locationMatch[2].trim()}`;
-        }
+        const bodyFields = extractImpactPoolBodyFields(anchorHtml);
+        const company = bodyFields[0] || 'Unknown Company';
+        const location = bodyFields[1] || 'Unknown';
+        const seniority = bodyFields[2] || 'Unknown';
         jobs.push({
             title,
-            company: (companyMatch?.[1] || 'ImpactPool').trim(),
+            company,
             location,
-            remote: /\bremote\b/i.test(context) ? 'Remote' : 'Unknown',
-            type: 'Unknown',
+            remote: /\bremote\b/i.test(location) ? 'Remote' : 'Unknown',
+            type: seniority,
             sourceUrl,
             description: '',
             tags: ['ImpactPool', 'Impact', 'International Development'],

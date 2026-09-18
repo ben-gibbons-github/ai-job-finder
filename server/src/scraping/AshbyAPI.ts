@@ -74,6 +74,7 @@ const DEFAULT_ASHBY_ORGS = [
   'correspondent', 'cortex', 'cosmos', 'cotton', 'craftwork',
   // ── Climate / sustainability ──────────────────────────────────────────────
   'watershed', 'terraformation', 'pachama', 'carbonplan', 'climateai',
+  'base-power', 'radiant', 'electronx', 'brimstone', 'twelve',
   'enerparc', 'lightsource', 'greenlight', 'sunrun', 'sunnova',
   'palmetto', 'arcadia', 'octopusenergy', 'gridx', 'volterra',
   'autogrid', 'oracle-utilities', 'itron', 'landis-gyr', 'sensus',

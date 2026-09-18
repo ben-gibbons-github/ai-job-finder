@@ -5,6 +5,7 @@ import {
   type NormalizedPortalJob,
 } from './PortalIngestionUtils.js';
 import { capKeywords, getSharedJobTitleKeywords } from './SharedJobTitleKeywords.js';
+import { capLocations, getUkFocusedLocationCatalog } from './SharedJobLocations.js';
 
 const REED_API_URL = 'https://www.reed.co.uk/api/1.0/search';
 const DEFAULT_REED_KEYWORDS = getSharedJobTitleKeywords([
@@ -14,10 +15,11 @@ const DEFAULT_REED_KEYWORDS = getSharedJobTitleKeywords([
   'operations manager',
   'business analyst',
 ]);
-const DEFAULT_REED_LOCATIONS = ['London', 'Manchester', 'Birmingham', 'Leeds', 'Bristol', 'Glasgow', 'Edinburgh', 'Liverpool', 'Nottingham', 'Leicester'];
-const DEFAULT_REED_MAX_PAGES = 12;
+const DEFAULT_REED_LOCATIONS = getUkFocusedLocationCatalog();
+const DEFAULT_REED_MAX_PAGES = 20;
 const DEFAULT_REED_RESULTS_PER_PAGE = 100;
-const DEFAULT_REED_MAX_KEYWORDS = 120;
+const DEFAULT_REED_MAX_KEYWORDS = 200;
+const DEFAULT_REED_MAX_LOCATIONS = 80;
 
 interface ReedJob {
   jobTitle?: string;
@@ -126,8 +128,9 @@ export async function fetchAllReedJobs(): Promise<ScrapedJob[]> {
   const keywords = parseCsvEnv(process.env.REED_KEYWORDS);
   const locations = parseCsvEnv(process.env.REED_LOCATIONS);
   const maxKeywords = Math.max(1, Number(process.env.REED_MAX_KEYWORDS || DEFAULT_REED_MAX_KEYWORDS));
+  const maxLocations = Math.max(1, Number(process.env.REED_MAX_LOCATIONS || DEFAULT_REED_MAX_LOCATIONS));
   const usedKeywords = capKeywords(keywords.length > 0 ? keywords : DEFAULT_REED_KEYWORDS, maxKeywords);
-  const usedLocations = locations.length > 0 ? locations : DEFAULT_REED_LOCATIONS;
+  const usedLocations = capLocations(locations.length > 0 ? locations : DEFAULT_REED_LOCATIONS, maxLocations);
   const maxPages = Math.max(1, Number(process.env.REED_MAX_PAGES || DEFAULT_REED_MAX_PAGES));
   const resultsPerPage = Math.max(10, Math.min(100, Number(process.env.REED_RESULTS_PER_PAGE || DEFAULT_REED_RESULTS_PER_PAGE)));
 

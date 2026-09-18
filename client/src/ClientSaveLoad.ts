@@ -4,6 +4,40 @@
  * backed by localStorage. All keys are namespaced to avoid collisions.
  */
 
+import { isEmployerImpactCategory, type EmployerImpactCategory } from './EmployerImpactCategory';
+
+const PRIORITIZED_EMPLOYER_IMPACT_CATEGORY_KEY = 'jobFinder_prioritizedEmployerImpactCategory_v1';
+
+export function loadPrioritizedEmployerImpactCategory(): EmployerImpactCategory | null {
+  if (typeof window === 'undefined') {
+    return null;
+  }
+
+  try {
+    const raw = window.localStorage.getItem(PRIORITIZED_EMPLOYER_IMPACT_CATEGORY_KEY);
+    return isEmployerImpactCategory(raw) ? raw : null;
+  } catch {
+    return null;
+  }
+}
+
+export function savePrioritizedEmployerImpactCategory(category: EmployerImpactCategory | null): void {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  try {
+    if (category) {
+      window.localStorage.setItem(PRIORITIZED_EMPLOYER_IMPACT_CATEGORY_KEY, category);
+    } else {
+      window.localStorage.removeItem(PRIORITIZED_EMPLOYER_IMPACT_CATEGORY_KEY);
+    }
+  } catch {
+    /* ignore */
+  }
+}
+
+
 export interface UserJobNote {
   notes: string;
   userScore: number | null;

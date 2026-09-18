@@ -68,6 +68,7 @@ const DEFAULT_LEVER_BOARDS = [
   'agios', 'agira', 'agis', 'agmatix', 'agni', 'agora',
   'brightmark', 'solugen', 'optera', 'c3ai', 'persefoni',
   'greenly', 'sweep', 'normative', 'emitwise', 'plan-a',
+  'voltus', 'charmindustrial', 'sila', 'cfsenergy',
   'cloverly', 'patch', 'terrapass', 'south-pole', 'climeaction',
   'sinai-technologies', 'carbontrust', 'carboncure', 'carbonfuture',
   'carbonhound', 'carbonfact', 'carbonsink', 'carbonx', 'treeapp',
@@ -78,6 +79,7 @@ const DEFAULT_LEVER_BOARDS = [
   'abiomed', 'abilisense', 'abiomed', 'abitibi', 'abivax', 'able',
   'ableto', 'abode', 'abodus', 'abpmp', 'abstracta', 'absa',
   'hims-and-hers', 'keeps', 'done-adhd', 'ahead-mental', 'ophelia-health',
+  'findhelp', 'includedhealth', 'lyrahealth',
   'groups-recover', 'ria-health', 'quit-genius', 'workit-health',
   'bicycle-health', 'boulder-care', 'brightview', 'recovery-one',
   'alto-pharmacy', 'capsule-pharmacy', 'truepill', 'nimble-rx',
@@ -91,6 +93,7 @@ const DEFAULT_LEVER_BOARDS = [
   'oreilly', 'linkedin-learning', 'skillshare', 'masterclass', 'brilliant',
   'busuu', 'babbel', 'rosetta-stone', 'pimsleur', 'fluent-u',
   'outschool', 'synthesis', 'primer-edu', 'schoolhouse',
+  'girlswhocode',
   'codeacademy', 'codecombat', 'codewars', 'hackerrank',
   'replit', 'codepen', 'glitch', 'stackblitz', 'codesandbox',
   'edx', 'futurelearn', 'udacity-edu', 'epam', 'flatiron-school',
@@ -178,6 +181,7 @@ const DEFAULT_LEVER_BOARDS = [
   'zynga', 'playtech', 'evolution-gaming', 'pragmatic-play',
   'netent', 'microgaming', 'yggdrasil', 'push-gaming',
   'planet-labs', 'spire-global', 'hawkeye360', 'iceye',
+  'zoox', 'waabi',
   'pixxel', 'satellogic', 'umbra-space', 'capella-space',
   'rocket-lab', 'astra-space', 'relativity-space', 'firefly',
   'ionq', 'rigetti', 'quantinuum', 'xanadu-quantum', 'q-ctrl',
@@ -214,7 +218,8 @@ const DEFAULT_LEVER_BOARDS = [
   'givewell-org', 'effective-altruism', 'gwwc', 'founders-pledge',
   'giving-what-we-can', 'animal-charity', 'strong-minds',
   'new-incentives', 'evidence-action', 'dispensers-safe-water',
-  'charity-water', 'water-org', 'water-aid', 'lifewater',
+  'charity-water', 'charitywater', 'water-org', 'water-aid', 'lifewater',
+  'retro', 'everbridge', 'brightmachines',
 ];
 
 interface LeverPosting {

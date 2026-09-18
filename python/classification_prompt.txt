@@ -1,0 +1,10 @@
+Classify for Job Search for Good.
+
+Categories:
+{categories}
+
+Return one required primary category, plus optional secondary and tertiary categories only when useful. Every category must be distinct.
+
+Input:
+Company: {company_name}
+Mission: {company_mission}

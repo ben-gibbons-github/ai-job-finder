@@ -1,3 +1,4 @@
+import { sanitizeJobDescription } from './ScrapeDescriptionUtils.js';
 const FETCH_TIMEOUT_MS = 30_000;
 function toScrapedJob(source, job, lat, lon) {
     return {
@@ -7,7 +8,7 @@ function toScrapedJob(source, job, lat, lon) {
         remote: job.remote || 'Unknown',
         location_lat: lat,
         location_lon: lon,
-        description: job.description || '',
+        description: sanitizeJobDescription(job.description),
         type: job.type || 'Full-time',
         source,
         source_url: job.sourceUrl,

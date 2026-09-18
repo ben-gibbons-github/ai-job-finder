@@ -1,8 +1,11 @@
-import { nameToLonLat } from '../utils/NameToLonLat.js';
+import { nameToLonLat, normalizeLocationName } from '../utils/NameToLonLat.js';
+import { hasUnitedStatesStateAbbreviation, lookupCityFallback } from '../utils/CityFallbackLookup.js';
+import { setActiveOperation, clearActiveOperation } from '../utils/ServerActivityTracker.js';
 /**
  * Distance and location-based scoring functionality
  * Handles geographic distance calculations and remote job detection
  */
+export const LOCATION_SCORING_VERSION = '7';
 /**
  * Helper function to convert degrees to radians
  */
@@ -39,7 +42,7 @@ function toSafeText(value) {
     return String(value).toLowerCase();
 }
 const COUNTRY_ALIASES = [
-    { canonical: 'united states', aliases: ['united states', 'united states of america', 'usa', 'us'] },
+    { canonical: 'united states', aliases: ['united states', 'united states of america', 'usa'] },
     { canonical: 'united kingdom', aliases: ['united kingdom', 'uk', 'great britain', 'britain', 'england'] },
     { canonical: 'canada', aliases: ['canada'] },
     { canonical: 'australia', aliases: ['australia'] },
@@ -58,7 +61,7 @@ const COUNTRY_ALIASES = [
     { canonical: 'austria', aliases: ['austria'] },
     { canonical: 'belgium', aliases: ['belgium'] },
     { canonical: 'portugal', aliases: ['portugal'] },
-    { canonical: 'poland', aliases: ['poland'] },
+    { canonical: 'poland', aliases: ['poland', 'polska'] },
     { canonical: 'czechia', aliases: ['czechia', 'czech republic'] },
     { canonical: 'romania', aliases: ['romania'] },
     { canonical: 'hungary', aliases: ['hungary'] },
@@ -89,6 +92,14 @@ const COUNTRY_ALIASES = [
     { canonical: 'colombia', aliases: ['colombia'] },
     { canonical: 'peru', aliases: ['peru'] },
 ];
+const LOCATION_COUNTRY_HINTS = [
+    { canonical: 'united kingdom', aliases: ['cambridgeshire', 'reading'] },
+    { canonical: 'belgium', aliases: ['brussels'] },
+];
+function containsAlias(text, alias) {
+    const escapedAlias = alias.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return new RegExp(`(^|[^a-z])${escapedAlias}([^a-z]|$)`, 'i').test(text);
+}
 function detectCountryFromText(text) {
     const normalized = toSafeText(text);
     if (!normalized) {
@@ -96,13 +107,68 @@ function detectCountryFromText(text) {
     }
     for (const entry of COUNTRY_ALIASES) {
         for (const alias of entry.aliases) {
-            const pattern = new RegExp(`(^|[^a-z])${alias.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}([^a-z]|$)`, 'i');
-            if (pattern.test(normalized)) {
+            if (containsAlias(normalized, alias)) {
                 return entry.canonical;
             }
         }
     }
     return null;
+}
+export function detectCountryFromLocation(text) {
+    const explicitCountry = detectCountryFromText(text);
+    if (explicitCountry !== null) {
+        return explicitCountry;
+    }
+    if (/(^|[^a-z])u\.?s\.?(?:a\.?)([^a-z]|$)/i.test(text) || hasUnitedStatesStateAbbreviation(text)) {
+        return 'united states';
+    }
+    for (const entry of LOCATION_COUNTRY_HINTS) {
+        if (entry.aliases.some((alias) => containsAlias(text, alias))) {
+            return entry.canonical;
+        }
+    }
+    return null;
+}
+export function parseJobLocations(location) {
+    const parts = String(location ?? '')
+        .split(';')
+        .map((part) => part.trim())
+        .filter(Boolean);
+    if (parts.length <= 1) {
+        return parts;
+    }
+    const finalPart = parts.at(-1) ?? '';
+    const sharedCountry = detectCountryFromLocation(finalPart);
+    const finalPartIsCountry = sharedCountry !== null
+        && COUNTRY_ALIASES.some((entry) => entry.canonical === sharedCountry && entry.aliases.some((alias) => finalPart.toLowerCase() === alias));
+    if (!finalPartIsCountry) {
+        return parts;
+    }
+    return parts.slice(0, -1).map((part) => detectCountryFromLocation(part) ? part : `${part}, ${finalPart}`);
+}
+function getLocationFallback(job) {
+    return String(job.scrapedEmployer?.location_fallback ?? '').trim();
+}
+function getEffectiveJobLocation(job) {
+    return hasGenericOrMissingLocation(job) ? getLocationFallback(job) : String(job.location ?? '').trim();
+}
+export function getJobLocations(job) {
+    return parseJobLocations(getEffectiveJobLocation(job));
+}
+function detectJobCountry(job, preferredLocation, preferredCountry) {
+    const preferredLocationCountry = preferredLocation ? detectCountryFromLocation(preferredLocation) : null;
+    if (preferredLocationCountry) {
+        return preferredLocationCountry;
+    }
+    const listedCountries = getJobLocations(job)
+        .map((location) => detectCountryFromLocation(location))
+        .filter((country) => country !== null);
+    if (preferredCountry && listedCountries.includes(preferredCountry)) {
+        return preferredCountry;
+    }
+    return listedCountries[0]
+        ?? detectCountryFromLocation(getLocationFallback(job))
+        ?? detectCountryFromText(`${job.description} ${job.type}`);
 }
 function isPurelyRemoteJob(job) {
     const loc = toSafeText(job.location);
@@ -118,19 +184,22 @@ function hasGenericOrMissingLocation(job) {
     }
     return /^(remote|anywhere|distributed|work from home|remote only|remote role|remote job)$/i.test(location);
 }
-function isRemoteSameCountryAsOrigin(job, locationText) {
-    const originCountry = detectCountryFromText(locationText);
-    if (!originCountry) {
-        return false;
-    }
-    const jobCountry = detectCountryFromText(`${job.location} ${job.description} ${job.type}`);
-    return jobCountry !== null && jobCountry === originCountry;
+function isUnknownText(value) {
+    const normalized = toSafeText(value).trim();
+    return normalized.length === 0
+        || normalized === 'unknown'
+        || normalized === 'unkown'
+        || normalized === 'n/a'
+        || normalized === 'na';
+}
+function hasUnknownLocationAndRemote(job) {
+    return isUnknownText(job.location) && isUnknownText(job.remote);
 }
 function isRemoteWithNoCountryAttached(job) {
     if (!isPurelyRemoteJob(job) || !hasGenericOrMissingLocation(job)) {
         return false;
     }
-    const jobCountry = detectCountryFromText(`${job.location} ${job.description} ${job.type}`);
+    const jobCountry = detectJobCountry(job);
     return jobCountry === null;
 }
 /**
@@ -149,13 +218,187 @@ export function isRemoteJob(job) {
     const desc = toSafeText(job.description);
     return remoteKeywords.some((kw) => loc.includes(kw) || rem.includes(kw) || typ.includes(kw) || desc.includes(kw));
 }
+function buildLocationScoreDebugInfo(userLat, userLon, job, locationText, shouldLog) {
+    const hasValidJobCoordinates = typeof job.location_lat === 'number'
+        && typeof job.location_lon === 'number'
+        && Number.isFinite(job.location_lat)
+        && Number.isFinite(job.location_lon)
+        && !(job.location_lat === 0 && job.location_lon === 0);
+    const primaryJobLat = hasValidJobCoordinates
+        ? job.location_lat
+        : null;
+    const primaryJobLon = hasValidJobCoordinates
+        ? job.location_lon
+        : null;
+    const coordinateCandidates = Array.isArray(job.location_coordinates)
+        ? job.location_coordinates.filter((candidate) => Number.isFinite(candidate.lat) && Number.isFinite(candidate.lon))
+        : [];
+    const listedLocations = getJobLocations(job);
+    const normalizedUserLocationText = toSafeText(locationText).trim();
+    const textMatchedLocation = normalizedUserLocationText
+        ? listedLocations.find((candidate) => {
+            const normalizedCandidate = toSafeText(candidate).trim();
+            return normalizedCandidate.includes(normalizedUserLocationText)
+                || normalizedUserLocationText.includes(normalizedCandidate);
+        }) ?? null
+        : null;
+    const hasUsableUserCoordinates = userLat !== null
+        && userLon !== null
+        && Number.isFinite(userLat)
+        && Number.isFinite(userLon);
+    const nearestCandidate = hasUsableUserCoordinates && coordinateCandidates.length > 0
+        ? coordinateCandidates.reduce((nearest, candidate) => (haversineDistance(userLat, userLon, candidate.lat, candidate.lon)
+            < haversineDistance(userLat, userLon, nearest.lat, nearest.lon)
+            ? candidate
+            : nearest))
+        : null;
+    const jobLat = nearestCandidate?.lat ?? primaryJobLat;
+    const jobLon = nearestCandidate?.lon ?? primaryJobLon;
+    const scoringLocation = nearestCandidate?.label ?? textMatchedLocation;
+    const matchedLocation = listedLocations.length > 1 ? scoringLocation : null;
+    const locationFallback = getLocationFallback(job) || null;
+    const userCountry = detectCountryFromLocation(locationText);
+    const jobCountry = detectJobCountry(job, scoringLocation, isPurelyRemoteJob(job) ? userCountry : null);
+    const countriesDiffer = userCountry !== null && jobCountry !== null && userCountry !== jobCountry;
+    const base = {
+        userLat,
+        userLon,
+        jobLat,
+        jobLon,
+        matchedLocation,
+        locationFallback,
+        userCountry,
+        jobCountry,
+        countryPenalty: countriesDiffer
+            ? (isPurelyRemoteJob(job) ? 'Remote different-country override: score = 0.40' : '50% reduction')
+            : (userCountry === null || jobCountry === null ? 'None; one or both countries were not detected' : 'None'),
+        distanceKm: null,
+        distanceMiles: null,
+    };
+    if (hasUnknownLocationAndRemote(job)) {
+        if (shouldLog) {
+            console.log(`Location score hard-zero for job "${job.name}": location and remote are both unknown`);
+        }
+        return {
+            ...base,
+            locationScore: 0,
+            calculation: 'Location and remote are both unknown: score = 0.0000.',
+        };
+    }
+    if (isPurelyRemoteJob(job)) {
+        if (countriesDiffer) {
+            if (shouldLog) {
+                console.log(`Location score override for remote different-country job "${job.name}": 0.4000`);
+            }
+            return {
+                ...base,
+                locationScore: 0.4,
+                calculation: `Remote job country (${jobCountry}) differs from user country (${userCountry}): score = 04000.`,
+            };
+        }
+        if (isRemoteWithNoCountryAttached(job)) {
+            if (shouldLog) {
+                console.log(`Location score override for remote unknown-country job "${job.name}": 0.9500`);
+            }
+            return { ...base, locationScore: 0.95, calculation: 'Remote job without a country: score = 0.9500; geographic distance not used.' };
+        }
+        if (shouldLog) {
+            console.log(`Location score override for remote same-country job "${job.name}": 1.0000`);
+        }
+        const countryDetail = userCountry !== null && jobCountry !== null
+            ? ` Both are in ${userCountry}.`
+            : ' No different-country restriction was detected.';
+        return { ...base, locationScore: 1, calculation: `Remote-job override: score = 1.0000; geographic distance not used.${countryDetail}` };
+    }
+    const effectiveJobLocation = getEffectiveJobLocation(job);
+    if (!effectiveJobLocation && !isRemoteJob(job)) {
+        if (shouldLog) {
+            console.log(`Location score hard-zero for non-remote job "${job.name}": location is unknown`);
+        }
+        return { ...base, locationScore: 0, calculation: 'Non-remote job has an unknown location: score = 0.0000.' };
+    }
+    let distanceScore = 0;
+    let calculation = 'No usable coordinates or location-text match: score = 0.0000.';
+    const normalizedJobLocation = toSafeText(effectiveJobLocation);
+    const normalizedJobDescription = toSafeText(job.description);
+    const hasUsableCoordinates = userLat !== null
+        && userLon !== null
+        && Number.isFinite(userLat)
+        && Number.isFinite(userLon)
+        && jobLat !== null
+        && jobLon !== null;
+    if (hasUsableCoordinates) {
+        if (shouldLog) {
+            console.log(`Calculating location score for job "${job.name}" at "${job.location}" with user location "${locationText} ${userLat}, ${userLon} job.location_lat: ${jobLat} job.location_lon: ${jobLon}"`);
+        }
+        const latDelta = Math.abs(jobLat - userLat);
+        const rawLonDelta = Math.abs(jobLon - userLon);
+        const lonDelta = Math.min(rawLonDelta, 340 - rawLonDelta);
+        if (latDelta >= 100 || lonDelta >= 100) {
+            if (shouldLog) {
+                console.log(`Location score hard-zero for job "${job.name}": lat delta ${latDelta.toFixed(2)}° lon delta ${lonDelta.toFixed(2)}° (wrap-adjusted) exceed 100° threshold`);
+            }
+            return {
+                ...base,
+                locationScore: 0,
+                calculation: `Coordinate sanity check: latitude delta ${latDelta.toFixed(2)}°, longitude delta ${lonDelta.toFixed(2)}°; delta >= 100°, so score = 0.0000.`,
+            };
+        }
+        const distanceKm = haversineDistance(userLat, userLon, jobLat, jobLon);
+        const distanceMiles = distanceKm * 0.621371;
+        distanceScore = Math.max(0, Math.min(1, (100 - Math.sqrt(distanceKm)) / 100));
+        const nearestDetail = matchedLocation ? ` Nearest listed job location: ${matchedLocation}.` : '';
+        calculation = `Haversine great-circle distance (Earth radius 6,371 km); score = clamp((100 - sqrt(${distanceKm.toFixed(2)} km)) / 100, 0, 1) = ${distanceScore.toFixed(4)}.${nearestDetail}`;
+        if (countriesDiffer) {
+            distanceScore *= 0.5;
+            calculation += ` Job country (${jobCountry}) differs from user country (${userCountry}), so score is cut by 50% to ${distanceScore.toFixed(4)}.`;
+        }
+        if (shouldLog) {
+            console.log(`Calculated distance for job "${job.name}" at "${job.location}": ${distanceKm.toFixed(2)} km -> distanceScore: ${distanceScore.toFixed(4)}`);
+        }
+        return { ...base, distanceKm, distanceMiles, locationScore: distanceScore, calculation };
+    }
+    if (normalizedUserLocationText.length > 0) {
+        if (textMatchedLocation) {
+            distanceScore = 0.4;
+            calculation = `Coordinate lookup unavailable; listed location "${textMatchedLocation}" matches the user location, giving score = 0.4000.`;
+        }
+        else if (normalizedJobLocation.includes(normalizedUserLocationText) ||
+            normalizedUserLocationText.includes(normalizedJobLocation)) {
+            distanceScore = 0.4;
+            calculation = 'Coordinate lookup unavailable; full location-text overlap gives score = 0.4000.';
+        }
+        else {
+            const userLocationTerms = normalizedUserLocationText.split(/\s+/).filter((term) => term.length >= 3);
+            const hitCount = userLocationTerms.filter((term) => normalizedJobLocation.includes(term) || normalizedJobDescription.includes(term)).length;
+            if (hitCount > 0 && userLocationTerms.length > 0) {
+                distanceScore = Math.min(0.5, hitCount / userLocationTerms.length);
+                calculation = `Coordinate lookup unavailable; ${hitCount}/${userLocationTerms.length} location terms matched, capped at 0.5000, giving score = ${distanceScore.toFixed(4)}.`;
+            }
+            else {
+                calculation = 'Coordinate lookup unavailable and no location terms matched: score = 0.0000.';
+            }
+        }
+    }
+    if (countriesDiffer) {
+        distanceScore *= 0.5;
+        calculation += ` Job country (${jobCountry}) differs from user country (${userCountry}), so score is cut by 50% to ${distanceScore.toFixed(4)}.`;
+    }
+    if (shouldLog) {
+        console.log(`Final location score for job "${job.name}" at "${job.location}": ${distanceScore.toFixed(4)}`);
+    }
+    return { ...base, matchedLocation, locationScore: distanceScore, calculation };
+}
+export function getLocationScoreDebugInfo(userLat, userLon, job, locationText) {
+    return buildLocationScoreDebugInfo(userLat, userLon, job, locationText, false);
+}
 /**
  * Calculates the location score based on geographic distance and remote status
  *
  * Score is normalized to 0-1 range:
- * - Remote jobs get a base score of 0.5
- * - Distance-based score is calculated using Haversine distance
- * - Takes the maximum of both approaches
+ * - Remote jobs use an override score
+ * - Jobs with coordinates use Haversine distance
+ * - Jobs without coordinates fall back to location-text matching
  *
  * @param userLat - User's latitude (or null if not available)
  * @param userLon - User's longitude (or null if not available)
@@ -164,60 +407,7 @@ export function isRemoteJob(job) {
  * @returns Location score between 0 and 1
  */
 export function calculateLocationScore(userLat, userLon, job, locationText, shouldLog = false) {
-    if (isPurelyRemoteJob(job)) {
-        if (shouldLog) {
-            console.log(`Location score override for remote same-country job "${job.name}": 1.0000`);
-        }
-        return 1;
-    }
-    if (isRemoteWithNoCountryAttached(job)) {
-        if (shouldLog) {
-            console.log(`Location score override for remote unknown-country job "${job.name}": 0.9500`);
-        }
-        return 0.95;
-    }
-    let distanceScore = 0;
-    const normalizedUserLocationText = toSafeText(locationText).trim();
-    const normalizedJobLocation = toSafeText(job.location);
-    const normalizedJobDescription = toSafeText(job.description);
-    // Calculate distance-based score if coordinates are available
-    if (userLat !== null &&
-        userLon !== null &&
-        Number.isFinite(userLat) &&
-        Number.isFinite(userLon) &&
-        typeof job.location_lat === 'number' &&
-        typeof job.location_lon === 'number' &&
-        Number.isFinite(job.location_lat) &&
-        Number.isFinite(job.location_lon)) {
-        if (shouldLog) {
-            console.log(`Calculating location score for job "${job.name}" at "${job.location}" with user location "${locationText} ${userLat}, ${userLon} job.location_lat: ${job.location_lat} job.location_lon: ${job.location_lon}"`);
-        }
-        const distanceKm = haversineDistance(userLat, userLon, job.location_lat, job.location_lon);
-        // Clamp to keep location score in [0, 1]
-        distanceScore = Math.max(0, Math.min(1, (100 - Math.sqrt(distanceKm)) / 100));
-        if (shouldLog) {
-            console.log(`Calculated distance for job "${job.name}" at "${job.location}": ${distanceKm.toFixed(2)} km -> distanceScore: ${distanceScore.toFixed(4)}`);
-        }
-    }
-    else if (normalizedUserLocationText.length > 0) {
-        // Geocoding fallback: award a text-match score when user/job locations overlap.
-        if (normalizedJobLocation.includes(normalizedUserLocationText) ||
-            normalizedUserLocationText.includes(normalizedJobLocation)) {
-            distanceScore = Math.max(0.6, distanceScore);
-        }
-        else {
-            const userLocationTerms = normalizedUserLocationText.split(/\s+/).filter((t) => t.length >= 3);
-            const hitCount = userLocationTerms.filter((term) => normalizedJobLocation.includes(term) || normalizedJobDescription.includes(term)).length;
-            if (hitCount > 0 && userLocationTerms.length > 0) {
-                distanceScore = Math.max(distanceScore, Math.min(0.5, hitCount / userLocationTerms.length));
-            }
-        }
-    }
-    if (shouldLog) {
-        const remote = isRemoteJob(job) || normalizedUserLocationText.includes('remote');
-        console.log(`Final location score for job "${job.name}" at "${job.location}": ${distanceScore.toFixed(4)}`);
-    }
-    return distanceScore;
+    return buildLocationScoreDebugInfo(userLat, userLon, job, locationText, shouldLog).locationScore;
 }
 /**
  * Geocodes the user's location text to latitude/longitude coordinates
@@ -229,15 +419,43 @@ export async function geocodeUserLocation(locationText, shouldLog = false) {
     if (locationText.trim().length === 0) {
         return null;
     }
+    // Race the real geocoder against a 5-second timeout.
+    // If the geocoder wins → use its result (it also self-caches to disk).
+    // If the timeout wins → use the city fallback table as a temporary
+    // substitute for this search only (NOT cached to disk).
+    const GEOCODE_TIMEOUT_MS = 5000;
+    const timeoutPromise = new Promise((resolve) => setTimeout(() => resolve('timeout'), GEOCODE_TIMEOUT_MS));
     try {
-        const userLoc = await nameToLonLat(locationText);
-        if (shouldLog) {
-            console.log('Geocoding user location:', locationText, '->', userLoc);
+        const geoLabel = `geocode:userLocation "${locationText}"`;
+        setActiveOperation(geoLabel);
+        const result = await Promise.race([nameToLonLat(locationText), timeoutPromise]);
+        clearActiveOperation(geoLabel);
+        if (result === 'timeout') {
+            // Primary geocoder stalled — try city fallback without caching
+            const fallback = lookupCityFallback(locationText);
+            if (fallback) {
+                if (shouldLog) {
+                    console.warn(`[geocodeUserLocation] Geocoder timed out for "${locationText}", using city fallback: ${JSON.stringify(fallback)}`);
+                }
+                return fallback;
+            }
+            console.warn(`[geocodeUserLocation] Geocoder timed out for "${locationText}" and no city fallback found`);
+            return null;
         }
-        return { lat: userLoc.lat, lon: userLoc.lon };
+        if (shouldLog) {
+            console.log('Geocoding user location:', locationText, '->', result);
+        }
+        return { lat: result.lat, lon: result.lon };
     }
     catch (e) {
-        // console.warn('Failed to geocode user location:', locationText, e)
+        // Geocoder threw — try city fallback without caching
+        const fallback = lookupCityFallback(locationText);
+        if (fallback) {
+            if (shouldLog) {
+                console.warn(`[geocodeUserLocation] Geocoder failed for "${locationText}", using city fallback: ${JSON.stringify(fallback)}`);
+            }
+            return fallback;
+        }
         return null;
     }
 }
@@ -251,46 +469,63 @@ export async function geocodeUserLocation(locationText, shouldLog = false) {
  */
 export async function geocodeJobLocations(jobs, shouldLog = false) {
     const inFlightByLocation = new Map();
-    const normalizeLocationKey = (value) => String(value).trim().toLowerCase();
+    const hasValidCoords = (job) => {
+        const { location_lat: lat, location_lon: lon } = job;
+        return typeof lat === 'number' && typeof lon === 'number' && !isNaN(lat) && !isNaN(lon) && !(lat === 0 && lon === 0);
+    };
+    const hasAllLocationCoordinates = (job) => {
+        const locations = getJobLocations(job);
+        return locations.length <= 1 || (Array.isArray(job.location_coordinates)
+            && job.location_coordinates.length === locations.length
+            && job.location_coordinates.every((candidate) => Number.isFinite(candidate.lat) && Number.isFinite(candidate.lon)));
+    };
     const shouldSkipGeocodeForJob = (job) => {
-        if (!job.location) {
+        const effectiveLocation = getEffectiveJobLocation(job);
+        if (!effectiveLocation) {
             return true;
         }
         // Remote/generic locations do not benefit from geocoding and often create noisy lookups.
-        if (isPurelyRemoteJob(job) || hasGenericOrMissingLocation(job)) {
+        if (isPurelyRemoteJob(job)) {
             return true;
         }
         return false;
     };
-    await Promise.all(jobs.map(async (job) => {
-        let lat = job.location_lat;
-        let lon = job.location_lon;
-        // Check if coordinates are missing or invalid
-        if ((typeof lat !== 'number' ||
-            typeof lon !== 'number' ||
-            isNaN(lat) ||
-            isNaN(lon) ||
-            (lat === 0 && lon === 0))) {
-            if (shouldSkipGeocodeForJob(job)) {
-                return;
-            }
-            const locationKey = normalizeLocationKey(job.location);
+    // Filter to only jobs that actually need geocoding — avoids creating async
+    // closures for the (majority of) jobs that already have valid coordinates.
+    setActiveOperation(`geocode:filterNeeding (${jobs.length} jobs)`);
+    const jobsNeedingGeocode = jobs.filter((job) => (!hasValidCoords(job) || !hasAllLocationCoordinates(job)) && !shouldSkipGeocodeForJob(job));
+    clearActiveOperation('geocode:filterNeeding');
+    if (jobsNeedingGeocode.length === 0) {
+        return jobs;
+    }
+    setActiveOperation(`geocode:lookupLocations (${jobsNeedingGeocode.length} jobs)`);
+    await Promise.all(jobsNeedingGeocode.map(async (job) => {
+        const locations = getJobLocations(job);
+        const resolvedLocations = await Promise.all(locations.map(async (location) => {
+            const locationKey = normalizeLocationName(location);
             try {
                 if (!inFlightByLocation.has(locationKey)) {
-                    inFlightByLocation.set(locationKey, nameToLonLat(job.location));
+                    inFlightByLocation.set(locationKey, nameToLonLat(location));
                 }
-                const loc = await inFlightByLocation.get(locationKey);
-                lat = loc.lat;
-                lon = loc.lon;
+                const coordinates = await inFlightByLocation.get(locationKey);
+                return { label: location, lat: coordinates.lat, lon: coordinates.lon };
             }
-            catch (e) {
-                lat = NaN;
-                lon = NaN;
-                // console.warn('Failed to geocode job location:', job.location, 'for job:', job.name, e)
+            catch {
+                return null;
             }
+        }));
+        const validLocations = resolvedLocations.filter((location) => location !== null);
+        if (validLocations.length > 0) {
+            job.location_lat = validLocations[0].lat;
+            job.location_lon = validLocations[0].lon;
+            job.location_coordinates = locations.length > 1 ? validLocations : undefined;
         }
-        job.location_lat = lat;
-        job.location_lon = lon;
+        else {
+            job.location_lat = NaN;
+            job.location_lon = NaN;
+            job.location_coordinates = undefined;
+        }
     }));
+    clearActiveOperation('geocode:lookupLocations');
     return jobs;
 }

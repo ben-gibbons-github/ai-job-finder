@@ -25,6 +25,17 @@ function titleFromPath(path: string): string {
     .trim();
 }
 
+function firstCleanMatch(context: string, patterns: RegExp[]): string | undefined {
+  for (const pattern of patterns) {
+    const value = stripHtmlTags(context.match(pattern)?.[1] || '').replace(/&amp;/gi, '&').trim();
+    if (value) {
+      return value;
+    }
+  }
+
+  return undefined;
+}
+
 function parseIdealistVolunteerOpportunities(html: string): NormalizedPortalJob[] {
   const jobs: NormalizedPortalJob[] = [];
   const linkPattern = /<a[^>]+href="(\/en\/volunteer-opportunity\/[^"\s]+)"[^>]*>([\s\S]*?)<\/a>/gi;
@@ -40,12 +51,22 @@ function parseIdealistVolunteerOpportunities(html: string): NormalizedPortalJob[
     }
 
     const from = match.index ?? 0;
-    const context = html.slice(Math.max(0, from - 220), from + 900);
+    const context = html.slice(Math.max(0, from - 700), from + 2200);
+    const host = firstCleanMatch(context, [
+      /data-qa-id="search-result-link"[\s\S]*?<\/h3>\s*<h4[^>]*>\s*<div[^>]*>([\s\S]*?)<\/div>/i,
+      /<h4[^>]*>\s*<div[^>]*>([\s\S]*?)<\/div>\s*<\/h4>/i,
+      /(?:organization|organisation|host|company|employer)\s*<\/span>\s*<span[^>]*>\s*([^<]{2,180})\s*<\/span>/i,
+      /(?:organization|organisation|host|company|employer)[^>]*>\s*([^<]{2,180})\s*</i,
+    ]);
+    const location = firstCleanMatch(context, [
+      /aria-label="location-filled icon"[\s\S]*?<span[^>]*>([\s\S]*?)<\/span>/i,
+      /<span[^>]*class="[^"]*sc-1ptiz4-2[^"]*"[^>]*>\s*([A-Za-z][^<]{2,120},\s*[A-Za-z][^<]{1,80})\s*<\/span>/i,
+    ]);
 
     jobs.push({
       title,
-      company: 'Idealist Volunteer Host',
-      location: 'Unknown',
+      company: host || 'Idealist Volunteer Host',
+      location: location || 'Unknown',
       remote: /\bremote\b|\bvirtual\b|\bonline\b/i.test(context) ? 'Remote' : 'Unknown',
       type: 'Volunteer',
       sourceUrl,

@@ -2,6 +2,16 @@ import { normalizeJobsWithCoordinates } from './PortalIngestionUtils.js';
 import { collectPaginatedHtmlJobs, stripHtmlTags } from './PaginatedHtmlScrapeUtils.js';
 const GLOBALJOBS_URL = 'https://www.globaljobs.org/jobs/';
 const MAX_GLOBALJOBS_PAGES = 300;
+function cleanText(value) {
+    return stripHtmlTags(value).replace(/\s+/g, ' ').trim();
+}
+function cleanCompany(value) {
+    const company = cleanText(value);
+    if (!company || /^global\s*jobs?$/i.test(company)) {
+        return '';
+    }
+    return company;
+}
 function pageUrl(page) {
     const url = new URL(GLOBALJOBS_URL);
     if (page > 1) {
@@ -15,7 +25,7 @@ function parseGlobalJobs(html) {
     for (const match of html.matchAll(linkPattern)) {
         const rawUrl = (match[1] || '').trim();
         const sourceUrl = rawUrl.startsWith('http') ? rawUrl : `https://www.globaljobs.org${rawUrl}`;
-        const title = stripHtmlTags(match[2] || '');
+        const title = cleanText(match[2] || '');
         if (!sourceUrl || !title) {
             continue;
         }
@@ -23,12 +33,16 @@ function parseGlobalJobs(html) {
             continue;
         }
         const from = match.index ?? 0;
-        const context = html.slice(from, from + 500);
-        const locationMatch = context.match(/([A-Za-z .'-]+,\s*[A-Za-z .'-]+)/i);
-        const location = locationMatch?.[1]?.trim() || 'Unknown';
+        const context = html.slice(Math.max(0, from - 450), from + 1400);
+        const companyMatch = context.match(/<div[^>]+class="[^"]*\batlas-job-org\b[^"]*"[^>]*>([\s\S]*?)<\/div>/i);
+        const company = cleanCompany(companyMatch?.[1] || '');
+        const locationBlock = context.match(/<div[^>]+class="[^"]*\batlas-job-location\b[^"]*"[^>]*>([\s\S]*?)<\/div>/i);
+        const locationFromBlock = cleanText(locationBlock?.[1] || '').replace(/^(remote|hybrid|onsite)$/i, '').trim();
+        const locationMatch = context.match(/\bjob in\s+([^<\n\r]{2,160})/i) || context.match(/([A-Za-z .'-]+,\s*[A-Za-z .'-]+)/i);
+        const location = locationFromBlock || locationMatch?.[1]?.trim() || 'Unknown';
         jobs.push({
             title,
-            company: 'GlobalJobs',
+            company: company || 'GlobalJobs',
             location,
             remote: /remote/i.test(context) ? 'Remote' : 'Unknown',
             type: 'Unknown',

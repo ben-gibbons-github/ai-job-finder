@@ -112,13 +112,16 @@ export default function JobDistributionGraph({ meta }: JobDistributionGraphProps
       ...buckets.map((bucket) => {
         const count = Number(bucket.count) || 0
         const heightPercent = Math.max(3, (count / maxCount) * 100)
+        const bucketLabel = bucket.start === bucket.end
+          ? `Score ${bucket.start}`
+          : `${bucket.start}-${bucket.end}`
 
         return createElement(
           'div',
           {
             key: `${bucket.start}-${bucket.end}`,
             className: 'job-distribution-graph__bucket',
-            'aria-label': `${bucket.start}-${bucket.end}: ${count} jobs`,
+            'aria-label': `${bucketLabel}: ${count} jobs`,
           },
           createElement('div', {
             className: 'job-distribution-graph__bar',
@@ -127,7 +130,7 @@ export default function JobDistributionGraph({ meta }: JobDistributionGraphProps
           createElement(
             'div',
             { className: 'job-distribution-graph__tooltip' },
-            `${bucket.start}-${bucket.end}: ${count} jobs`,
+            `${bucketLabel}: ${count} jobs`,
           ),
         )
       }),

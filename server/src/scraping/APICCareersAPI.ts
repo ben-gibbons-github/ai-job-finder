@@ -45,8 +45,8 @@ function parseApicCareersJobs(html: string): NormalizedPortalJob[] {
 
     const from = match.index ?? 0;
     const context = html.slice(Math.max(0, from - 350), from + 1600);
-    const companyMatch = context.match(/(?:company|employer)\s*<\/span>\s*<span[^>]*>\s*([^<]{2,160})\s*</i);
-    const locationMatch = context.match(/(?:location)\s*<\/span>\s*<span[^>]*>\s*([^<]{2,160})\s*</i);
+      const companyMatch = context.match(/(?:company|employer)\s*<\/span>\s*<span[^>]*>\s*([^<]{2,160})\s*<\/span>/i);
+      const locationMatch = context.match(/(?:location)\s*<\/span>\s*<span[^>]*>\s*([^<]{2,160})\s*<\/span>/i);
     const description = deriveDescriptionFromContext(context, title);
 
     jobs.push({

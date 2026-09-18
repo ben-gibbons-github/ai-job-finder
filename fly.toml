@@ -11,10 +11,13 @@ primary_region = 'dfw'
 
 [env]
   CLIENT_DIST_DIR = '/app/client/dist'
-  CACHE_SEED_MODE = 'overwrite'
+  CACHE_ONLY_SCRAPING = 'true'
+  SQL_ONLY_CACHE_LOADING = 'true'
   NODE_ENV = 'production'
+  NODE_OPTIONS = '--max-old-space-size=6144'
   PORT = '8080'
   HAYSTACK_WARMUP_ENABLED = 'true'
+  TAG_CLOUD_WARMUP_ENABLED = 'false'
 
 [[mounts]]
   source = 'cache_data'

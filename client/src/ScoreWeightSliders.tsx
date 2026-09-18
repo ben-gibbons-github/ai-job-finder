@@ -50,7 +50,6 @@ const ScoreWeightSliders: React.FC<ScoreWeightSlidersProps> = ({ weights, onChan
 
   return (
     <div className="score-weight-sliders">
-      <h3 className="score-weight-sliders__title">Score Weights</h3>
       <div className="score-weight-sliders__list">
         {SLIDERS.map(({ key, label }) => (
           <div key={key} className="score-weight-slider">

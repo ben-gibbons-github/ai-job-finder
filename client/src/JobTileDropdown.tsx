@@ -39,6 +39,9 @@ interface JobTileDropdownProps {
   onRunAudit?: () => void;
   canRunAudit?: boolean;
   auditMenuLabel?: string;
+  onRerollAi?: () => void;
+  canRerollAi?: boolean;
+  rerollMenuLabel?: string;
   onHideJob?: (jobUrl?: string) => void;
   onHideCompany?: (companyName?: string) => void;
   isHighlighted?: boolean;
@@ -67,6 +70,9 @@ const JobTileDropdown: React.FC<JobTileDropdownProps> = ({
   onRunAudit,
   canRunAudit,
   auditMenuLabel,
+  onRerollAi,
+  canRerollAi,
+  rerollMenuLabel,
   onHideJob,
   onHideCompany,
   isHighlighted,
@@ -319,6 +325,14 @@ Be specific, direct, and high quality. Treat this as a real application I intend
     setOpen(false);
   };
 
+  const handleRerollAi = () => {
+    if (!canRerollAi) {
+      return;
+    }
+    onRerollAi?.();
+    setOpen(false);
+  };
+
   const handleToggleHighlight = () => {
     onToggleHighlightJob?.();
     setOpen(false);
@@ -381,6 +395,19 @@ Be specific, direct, and high quality. Treat this as a real application I intend
             <span className="dropdown-item-icon">🤖</span>
             <span className="dropdown-item-label">{auditMenuLabel || 'Run audit'}</span>
           </button>
+
+          {onRerollAi && (
+            <button
+              className="job-tile-dropdown-item"
+              role="menuitem"
+              onClick={handleRerollAi}
+              disabled={!canRerollAi}
+              title={canRerollAi ? 'Force re-calculate and cache fresh AI scores for this company' : 'AI re-roll unavailable'}
+            >
+              <span className="dropdown-item-icon">🎲</span>
+              <span className="dropdown-item-label">{rerollMenuLabel || 'Re-roll AI scores'}</span>
+            </button>
+          )}
 
           <div className="job-tile-dropdown-divider" role="separator" />
 

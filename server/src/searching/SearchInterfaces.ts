@@ -1,4 +1,6 @@
-import type { ScrapedJob } from '../scraping/ScrapedJob.js'
+import type { ScrapedJob } from '../scraping/core/ScrapedJob.js'
+import type { LocationScoreDebugInfo } from './searchDistance/SearchDistance.js'
+import type { EmployerImpactCategory } from './EmployerImpactCategory.js'
 
 /**
  * Weights for scoring different aspects of job matches
@@ -57,6 +59,7 @@ export interface SearchPayload {
   query?: string
   resumeText?: string
   locationText?: string
+  promptVersionFilter?: string
   includeRemoteJobs?: boolean
   userRatingMode?: UserRatingMode
   userRatings?: UserRatingsPayload
@@ -69,6 +72,7 @@ export interface SearchPayload {
   searchLogFlags?: SearchLogFlags
   hiddenJobUrls?: string[]
   hiddenCompanies?: string[]
+  prioritizedEmployerImpactCategory?: EmployerImpactCategory | null
   addedJobs?: AddedJobPayload[]
   command?: SearchCommand
   [key: string]: any
@@ -129,6 +133,7 @@ export interface SearchResultMeta {
   appliedFilters: {
     includeRemoteJobs: boolean
     userRatingMode: UserRatingMode
+    promptVersionFilter: string | null
   }
   debugInfo?: SearchDebugInfo
 }
@@ -169,6 +174,7 @@ export interface SearchDebugInfo {
     hiddenByCompany: number
     remoteJobsFiltered: number
     userRatingFiltered: number
+    promptVersionFiltered: number
     userRatingFilterMode: string
     queryMismatch: number
   }
@@ -181,6 +187,17 @@ export interface RankedJobWrapper {
   job: ScrapedJob
   scores: JobScores
   totalScore: number
+  debug_flag?: string
   aiPayload?: JobAiPayload
-  debugInfo?: { lat: number | null; lon: number | null }
+  employerImpactCategories?: EmployerImpactCategory[]
+  isEligibleForEmployerImpactBadges?: boolean
+  employerImpactBadgeEligibilityReason?: string
+  debugInfo?: {
+    lat: number | null
+    lon: number | null
+    location: LocationScoreDebugInfo
+    promptVersion: string
+    aiPrompt?: string
+    aiCacheKey?: string
+  }
 }

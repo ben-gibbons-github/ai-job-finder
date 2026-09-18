@@ -15,6 +15,15 @@ const STOP_WORDS = new Set([
   'with',
 ])
 
+const GENERIC_COMPANY_NAMES = new Set([
+  'company confidential',
+  'confidential',
+  'jooble employer',
+  'unknown',
+  'unknown company',
+  'unknown employer',
+])
+
 interface SuggestionStats {
   display: string
   score: number
@@ -43,8 +52,20 @@ class SearchSuggestionIndex {
 
   rebuildFromJobs(jobs: ScrapedJob[]): void {
     this.suggestionByNormalized.clear()
+    const indexedCompanies = new Set<string>()
 
     for (const job of jobs) {
+      const companyRaw = String(job?.company_name ?? '').trim().replace(/\s+/g, ' ')
+      const companyNormalized = normalizeText(companyRaw)
+      if (
+        companyNormalized.length >= 2
+        && !GENERIC_COMPANY_NAMES.has(companyNormalized)
+        && !indexedCompanies.has(companyNormalized)
+      ) {
+        indexedCompanies.add(companyNormalized)
+        this.upsert(companyNormalized, companyRaw, 8)
+      }
+
       const titleRaw = String(job?.name ?? '').trim()
       if (!titleRaw) {
         continue
@@ -88,12 +109,22 @@ class SearchSuggestionIndex {
           suggestion: stats.display,
           score: stats.score + matchBoost,
           length: normalized.length,
+          wordCount: normalized.split(/\s+/).filter(Boolean).length,
         }
       })
-      .filter((entry): entry is { suggestion: string; score: number; length: number } => entry !== null)
+      .filter((entry): entry is { suggestion: string; score: number; length: number; wordCount: number } => entry !== null)
       .sort((a, b) => {
+        let aWeighted = a.score - (a.wordCount * 10) - (a.length * 1)
+        let bWeighted = b.score - (b.wordCount * 10) - (b.length * 1)
+        if (aWeighted !== bWeighted) {
+          return bWeighted - aWeighted
+        }
+
         if (b.score !== a.score) {
           return b.score - a.score
+        }
+        if (a.wordCount !== b.wordCount) {
+          return a.wordCount - b.wordCount
         }
         return a.length - b.length
       })

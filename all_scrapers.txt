@@ -60,3 +60,16 @@ WeWorkRemotelyDesign.ts
 WeWorkRemotelyProduct.ts
 WeWorkRemotelyProgramming.ts
 WeWorkRemotelySalesMarketing.ts
+
+# Additional broad / non-tech / generalist sources to match wider job variety
+DynamiteJobsRSS.ts
+GeneralistCraigslistRSS.ts
+GeneralistIndeedRSS.ts
+JobicyRSS.ts
+JSearch.ts
+LinkedInJobs.ts
+Reed.ts
+RemoteCoRSS.ts
+Remotive.ts
+TheMuse.ts
+USAJobs.ts

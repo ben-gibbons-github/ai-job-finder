@@ -4,11 +4,11 @@
 Do some background research on this job posting and return ONLY valid JSON. Summarize the research you found on the company. Highlight any red flags about the company or the job posting.
 
 Rate both values from 0 to 100:
-- jobQuality: higher is better quality
+- companyQuality: higher is better company quality
 - redFlags: higher means more red flags
 
 JSON shape:
-{"summary": "string", "jobQuality": number, "redFlags": number}
+{"summary": "string", "companyQuality": number, "redFlags": number}
 
 jobName: {{jobName}}
 company: {{company}}

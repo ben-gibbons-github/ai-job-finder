@@ -1,6 +1,8 @@
 import type { ScrapedJob } from './ScrapedJob.js';
 import { normalizeJobsWithCoordinates, parseCsvEnv, type NormalizedPortalJob } from './PortalIngestionUtils.js';
+import { isRateLimitedScrapeError } from './ScraperHttpCache.js';
 import { capKeywords, getSharedJobTitleKeywords } from './SharedJobTitleKeywords.js';
+import { capLocations, getGlobalLocationCatalog } from './SharedJobLocations.js';
 
 // LinkedIn exposes public RSS feeds for job searches.
 // URL format: https://www.linkedin.com/jobs-guest/jobs/api/seeMoreJobPostings/search?keywords={kw}&location={loc}&start={offset}
@@ -13,13 +15,10 @@ const DEFAULT_LINKEDIN_KEYWORDS = getSharedJobTitleKeywords([
   'data scientist',
   'product manager',
 ]);
-const DEFAULT_LINKEDIN_MAX_KEYWORDS = 60;
-const DEFAULT_LINKEDIN_LOCATIONS = [
-  'United States', 'United Kingdom', 'Canada', 'Australia',
-  'Germany', 'Netherlands', 'Remote',
-];
-const DEFAULT_LINKEDIN_MAX_LOCATIONS = 5;
-const DEFAULT_LINKEDIN_PAGES_PER_COMBO = 3; // 25 results per page
+const DEFAULT_LINKEDIN_MAX_KEYWORDS = 100;
+const DEFAULT_LINKEDIN_LOCATIONS = getGlobalLocationCatalog();
+const DEFAULT_LINKEDIN_MAX_LOCATIONS = 80;
+const DEFAULT_LINKEDIN_PAGES_PER_COMBO = 6; // 25 results per page
 const DEFAULT_LINKEDIN_DELAY_MS = 600;
 
 interface LinkedInJobCard {
@@ -70,17 +69,28 @@ export async function fetchAllLinkedInJobs(): Promise<ScrapedJob[]> {
   );
 
   const envLocations = parseCsvEnv(process.env.LINKEDIN_LOCATIONS);
-  const locations = (envLocations.length > 0 ? envLocations : DEFAULT_LINKEDIN_LOCATIONS)
-    .slice(0, Math.max(1, Number(process.env.LINKEDIN_MAX_LOCATIONS || DEFAULT_LINKEDIN_MAX_LOCATIONS)));
+  const locations = capLocations(
+    envLocations.length > 0 ? envLocations : DEFAULT_LINKEDIN_LOCATIONS,
+    Math.max(1, Number(process.env.LINKEDIN_MAX_LOCATIONS || DEFAULT_LINKEDIN_MAX_LOCATIONS)),
+  );
 
   const pagesPerCombo = Math.max(1, Number(process.env.LINKEDIN_PAGES_PER_COMBO || DEFAULT_LINKEDIN_PAGES_PER_COMBO));
   const delayMs = Math.max(100, Number(process.env.LINKEDIN_DELAY_MS || DEFAULT_LINKEDIN_DELAY_MS));
 
   const normalized: NormalizedPortalJob[] = [];
   const seen = new Set<string>();
+  let shouldStopScraping = false;
 
   for (const keyword of keywords) {
+    if (shouldStopScraping) {
+      break;
+    }
+
     for (const location of locations) {
+      if (shouldStopScraping) {
+        break;
+      }
+
       for (let page = 0; page < pagesPerCombo; page++) {
         const start = page * 25;
         try {
@@ -99,7 +109,8 @@ export async function fetchAllLinkedInJobs(): Promise<ScrapedJob[]> {
 
           if (!response.ok) {
             if (response.status === 429 || response.status === 403) {
-              console.warn(`[LinkedInJobsAPI] Rate limited (${response.status}) — stopping combo "${keyword}"/"${location}".`);
+              console.warn(`[LinkedInJobsAPI] Rate limited (${response.status}) — stopping the entire LinkedIn scrape.`);
+              shouldStopScraping = true;
               break;
             }
             break;
@@ -120,7 +131,17 @@ export async function fetchAllLinkedInJobs(): Promise<ScrapedJob[]> {
           if (elements.length < 25) break;
           await delay(delayMs);
         } catch (error) {
+          if (isRateLimitedScrapeError(error)) {
+            console.warn('[LinkedInJobsAPI] Rate limited (429) — stopping the entire LinkedIn scrape.');
+            shouldStopScraping = true;
+            break;
+          }
+
           console.warn(`[LinkedInJobsAPI] Error for "${keyword}"/"${location}" page ${page}:`, String(error));
+          break;
+        }
+
+        if (shouldStopScraping) {
           break;
         }
       }

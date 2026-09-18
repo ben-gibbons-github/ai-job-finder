@@ -9,12 +9,18 @@ class SearchAuditCache {
     constructor() {
         this.loadFromFile();
     }
+    normalizeJobKeyPart(value) {
+        return String(value ?? '').trim().toLowerCase();
+    }
     getJobKey(job) {
         const sourceUrl = job.source_url?.trim();
+        const company = this.normalizeJobKeyPart(job.company_name);
+        const title = this.normalizeJobKeyPart(job.name);
+        const location = this.normalizeJobKeyPart(job.location);
         if (sourceUrl) {
-            return sourceUrl;
+            return `${sourceUrl}::${company}::${title}::${location}`;
         }
-        return `${job.name}::${job.company_name}::${job.location}`;
+        return `${title}::${company}::${location}`;
     }
     getCachedAudit(job) {
         const key = this.getJobKey(job);
@@ -60,13 +66,13 @@ class SearchAuditCache {
         }
     }
     saveToFile() {
-        try {
+        setImmediate(() => {
             const obj = Object.fromEntries(this.cache);
-            cacheHandler.saveSync(JSON.stringify(obj, null, 2));
-        }
-        catch (error) {
-            console.error(`[SearchAuditCache] Failed to save cache to ${CACHE_FILE}:`, error);
-        }
+            const payload = JSON.stringify(obj);
+            cacheHandler.save(payload).catch((error) => {
+                console.error(`[SearchAuditCache] Failed to save cache to ${CACHE_FILE}:`, error);
+            });
+        });
     }
 }
 export default new SearchAuditCache();

@@ -1,5 +1,5 @@
-import type { ScrapedJob } from '../scraping/ScrapedJob.js'
-import SearchMain, { type SearchPayload, type RankedJobWrapper, type SearchResultMeta } from './SearchMain.js'
+import type { ScrapedJob } from '../scraping/core/ScrapedJob.js'
+import SearchMain, { type SearchPayload, type RankedJobWrapper, type SearchResultMeta } from './searchMain/SearchMain.js'
 
 export interface Top100SearchResponse {
   results: RankedJobWrapper[]
@@ -24,6 +24,10 @@ export class Top100Search {
       console.log('[Top100Search] Cache miss: no cached top-100 response yet.')
     }
     return this.cachedResponse
+  }
+
+  clearCache(): void {
+    this.cachedResponse = null
   }
 
   async refresh(jobs: ScrapedJob[]): Promise<Top100SearchResponse> {

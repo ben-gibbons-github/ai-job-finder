@@ -25,6 +25,18 @@ function titleFromPath(path: string): string {
     .trim();
 }
 
+function firstCleanMatch(context: string, patterns: RegExp[]): string | undefined {
+  for (const pattern of patterns) {
+    const match = context.match(pattern);
+    const value = stripHtmlTags(match?.[1] || '').replace(/&amp;/gi, '&').trim();
+    if (value) {
+      return value;
+    }
+  }
+
+  return undefined;
+}
+
 function parseRsnaJobs(html: string): NormalizedPortalJob[] {
   const jobs: NormalizedPortalJob[] = [];
   const decodedHtml = html.replace(/\\\//g, '/');
@@ -45,13 +57,31 @@ function parseRsnaJobs(html: string): NormalizedPortalJob[] {
     }
 
     const from = match.index ?? 0;
-    const context = decodedHtml.slice(Math.max(0, from - 350), from + 1600);
+    const context = decodedHtml.slice(Math.max(0, from - 500), from + 2600);
+    const company = firstCleanMatch(context, [
+      /id="job-results-employer"[^>]*>([\s\S]*?)<\/span>/i,
+      /itemprop="hiringOrganization"[\s\S]*?itemprop="name"[^>]*>([\s\S]*?)<\//i,
+      /"hiringOrganization"\s*:\s*\{[^{}]*"name"\s*:\s*"([^"]{2,180})"/i,
+      /class="[^"]*job-vendor[^"]*"[\s\S]*?<a[^>]*>([\s\S]*?)<\/a>/i,
+      /class="[^"]*(?:company|employer)[^"]*"[^>]*>([\s\S]*?)<\/[^>]+>/i,
+      /(?:company|employer)\s*<\/span>\s*<span[^>]*>\s*([^<]{2,180})\s*<\/span>/i,
+      /(?:company|employer)[^>]*>\s*([^<]{2,180})\s*</i,
+    ]);
+    const location = firstCleanMatch(context, [
+      /id="job-results-location"[^>]*>([\s\S]*?)<\/span>/i,
+      /class="[^"]*job-location[^"]*"[\s\S]*?<span[^>]*>([\s\S]*?)<\/span>/i,
+      /"addressLocality"\s*:\s*"([^"]{2,180})"/i,
+      /"jobLocation"\s*:\s*\{[\s\S]*?"address"\s*:\s*\{[\s\S]*?"addressLocality"\s*:\s*"([^"]{2,180})"/i,
+      /data-location="([^"]{2,180})"/i,
+      /(?:location|city|state)\s*<\/span>\s*<span[^>]*>\s*([^<]{2,180})\s*<\/span>/i,
+      /(?:location|city|state)[^>]*>\s*([^<]{2,180})\s*</i,
+    ]);
     const description = deriveDescriptionFromContext(context, title);
 
     jobs.push({
       title,
-      company: 'RSNA Employer',
-      location: 'Unknown',
+      company: company || 'RSNA Employer',
+      location: location || 'Unknown',
       remote: /\bremote\b|\bhybrid\b|work from home/i.test(context) ? 'Remote' : 'Unknown',
       type: 'Unknown',
       sourceUrl,

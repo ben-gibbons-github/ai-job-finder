@@ -29,7 +29,7 @@ const DEFAULT_CRAIGSLIST_AREAS = [
 ];
 
 const DEFAULT_CRAIGSLIST_CATEGORIES = ['jjj'];
-const MAX_JOBS_PER_FEED = 250;
+const MAX_JOBS_PER_FEED = 5000;
 
 class HttpStatusError extends Error {
   status: number;

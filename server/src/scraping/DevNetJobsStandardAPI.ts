@@ -8,6 +8,14 @@ function stripHtmlTags(value: string): string {
   return value.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
 }
 
+function cleanCompany(value: string): string | undefined {
+  const company = stripHtmlTags(value || '').trim();
+  if (!company || /^\(Value Members only\)$/i.test(company)) {
+    return undefined;
+  }
+  return company;
+}
+
 function parseDevNetJobs(html: string): NormalizedPortalJob[] {
   const jobs: NormalizedPortalJob[] = [];
   const linkPattern =
@@ -27,15 +35,16 @@ function parseDevNetJobs(html: string): NormalizedPortalJob[] {
     }
 
     const from = match.index ?? 0;
-    const context = html.slice(from, from + 700);
-    const companyMatch = context.match(/\n\s*([A-Z][A-Za-z0-9&.,'()\-\/ ]{2,100})\s*\n\s*\n\s*Location:/i);
+    const context = html.slice(Math.max(0, from - 260), from + 1200);
+    const companyMatch = context.match(/id="[^"]*lblJobCo"[^>]*>([\s\S]*?)<\/span>/i);
+    const fallbackCompanyMatch = context.match(/\n\s*([A-Z][A-Za-z0-9&.,'()\-\/ ]{2,140})\s*\n\s*\n\s*Location:/i);
     const locationMatch = context.match(/Location:\s*([^\n\r]{2,120})/i);
     const applyMatch = context.match(/Apply by:\s*([^\n\r]{4,40})/i);
     const description = deriveDescriptionFromContext(context, title);
 
     jobs.push({
       title,
-      company: (companyMatch?.[1] || 'DevNetJobs').trim(),
+      company: cleanCompany(companyMatch?.[1] || '') || cleanCompany(fallbackCompanyMatch?.[1] || '') || 'DevNetJobs',
       location: locationMatch?.[1]?.trim() || 'Unknown',
       remote: /remote|home based|regional \/ global/i.test(context) ? 'Remote' : 'Unknown',
       type: 'Unknown',

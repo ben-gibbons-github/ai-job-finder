@@ -3,12 +3,23 @@ import {
   getCachedLocation,
   hasCachedLocation,
   cacheLocation,
+  normalizeLocationName,
   initializeCache,
   clearLocationCache,
   getCacheSize,
 } from './NameToLonLatCache.js';
-import { geocodingStrategies } from './NameToLonLatStrategies.js';
+import { geocodingStrategies } from './NameToLonLat/NameToLonLatStrategies.js';
 import { enqueueNameToLonLatRetry, startNameToLonLatRetryWorker } from './NameToLonLatRetryQueue.js';
+
+const NAME_TO_LON_LAT_PHASE_LOG_ENABLED = String(process.env.NAME_TO_LONLAT_PHASE_LOG ?? '').toLowerCase() === 'true';
+
+function logNameToLonLatTimings(event: string, details: Record<string, unknown>): void {
+  if (!NAME_TO_LON_LAT_PHASE_LOG_ENABLED) {
+    return;
+  }
+
+  console.log(`[NameToLonLat][timing] ${event} ${JSON.stringify(details)}`);
+}
 
 startNameToLonLatRetryWorker();
 
@@ -20,48 +31,97 @@ startNameToLonLatRetryWorker();
  * @returns Promise resolving to {lat, lon} pair
  */
 export async function nameToLonLat(placeName: string): Promise<LatLonPair> {
-  // console.log('Geocoding place name 1:', placeName);
+  const totalStart = performance.now();
+  const phasesMs: Record<string, number> = {};
+  const strategyAttempts: Array<{ strategy: string; ms: number; ok: boolean; error?: string }> = [];
+  const markPhase = (phase: string, startedAt: number): void => {
+    phasesMs[phase] = Number((performance.now() - startedAt).toFixed(2));
+  };
 
+  const initializeStart = performance.now();
   await initializeCache();
+  markPhase('initializeCache', initializeStart);
 
-  const normalizedName = placeName.trim().toLowerCase();
+  const normalizeStart = performance.now();
+  const normalizedName = normalizeLocationName(placeName);
+  markPhase('normalize', normalizeStart);
+  if (!normalizedName) {
+    markPhase('total', totalStart);
+    logNameToLonLatTimings('invalid-input', {
+      placeName,
+      phasesMs,
+      attempts: strategyAttempts,
+    });
+    throw new Error('Cannot geocode an empty location');
+  }
 
-  // console.log('Geocoding place name 2:', normalizedName);
-
-  // Check cache first
+  const cacheLookupStart = performance.now();
   if (hasCachedLocation(normalizedName)) {
-
-    // console.log('Found cached location for:', normalizedName);
+    markPhase('cacheLookup', cacheLookupStart);
+    markPhase('total', totalStart);
+    logNameToLonLatTimings('cache-hit', {
+      placeName,
+      normalizedName,
+      phasesMs,
+      attempts: strategyAttempts,
+    });
     return getCachedLocation(normalizedName)!;
   }
-  // console.log('Not found in cache for:', normalizedName);
+  markPhase('cacheLookup', cacheLookupStart);
 
-  // Try each geocoding strategy in order
   let lastError: any = null;
   for (const strategy of geocodingStrategies) {
+    const strategyStart = performance.now();
     try {
-      // console.log('Attempting geocoding with strategy:', strategy.name, 'for location:', normalizedName);
-      const latLon = await strategy(placeName);
-      // Store in cache
-      console.log('Caching location for:', normalizedName, '->', latLon);
-      cacheLocation(normalizedName, latLon);
+      const latLon = await strategy(normalizedName);
+      strategyAttempts.push({
+        strategy: strategy.name || 'anonymousStrategy',
+        ms: Number((performance.now() - strategyStart).toFixed(2)),
+        ok: true,
+      });
+
+      // Store only non-fallback results in cache.
+      if (latLon.isHardcoded !== true) {
+        const cacheWriteStart = performance.now();
+        cacheLocation(normalizedName, latLon);
+        markPhase('cacheWrite', cacheWriteStart);
+      }
+
+      markPhase('total', totalStart);
+      logNameToLonLatTimings('strategy-success', {
+        placeName,
+        normalizedName,
+        strategy: strategy.name || 'anonymousStrategy',
+        isHardcoded: latLon.isHardcoded === true,
+        phasesMs,
+        attempts: strategyAttempts,
+      });
       return latLon;
     } catch (err) {
-      /*
-      console.warn(
-        'Geocoding strategy failed:',
-        strategy.name,
-        'for location:',
-        normalizedName,
-        'error:',
-        err instanceof Error ? err.message : String(err)
-      );*/
+      strategyAttempts.push({
+        strategy: strategy.name || 'anonymousStrategy',
+        ms: Number((performance.now() - strategyStart).toFixed(2)),
+        ok: false,
+        error: err instanceof Error ? err.message : String(err),
+      });
       lastError = err;
     }
   }
-  enqueueNameToLonLatRetry(placeName);
+
+  const enqueueRetryStart = performance.now();
+  enqueueNameToLonLatRetry(normalizedName);
+  markPhase('enqueueRetry', enqueueRetryStart);
+  markPhase('total', totalStart);
+  logNameToLonLatTimings('all-strategies-failed', {
+    placeName,
+    normalizedName,
+    phasesMs,
+    attempts: strategyAttempts,
+    lastError: lastError instanceof Error ? lastError.message : String(lastError),
+  });
+
   throw new Error(`Failed to geocode location "${placeName}" with all providers: ${lastError instanceof Error ? lastError.message : String(lastError)}`);
 }
 
 // Re-export cache functions for backwards compatibility
-export { clearLocationCache, getCacheSize } from './NameToLonLatCache.js';
+export { clearLocationCache, getCacheSize, normalizeLocationName } from './NameToLonLatCache.js';

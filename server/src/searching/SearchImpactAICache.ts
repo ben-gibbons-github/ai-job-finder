@@ -20,12 +20,19 @@ class SearchImpactAICache {
     this.loadFromFile()
   }
 
+  private normalizeJobKeyPart(value: unknown): string {
+    return String(value ?? '').trim().toLowerCase()
+  }
+
   private getJobKey(job: ScrapedJob): string {
     const sourceUrl = job.source_url?.trim()
+    const company = this.normalizeJobKeyPart(job.company_name)
+    const title = this.normalizeJobKeyPart(job.name)
+    const location = this.normalizeJobKeyPart(job.location)
     if (sourceUrl) {
-      return sourceUrl
+      return `${sourceUrl}::${company}::${title}::${location}`
     }
-    return `${job.name}::${job.company_name}::${job.location}`
+    return `${title}::${company}::${location}`
   }
 
   getCachedImpact(job: ScrapedJob): CachedImpact | null {

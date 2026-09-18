@@ -36,6 +36,50 @@ function extractBuiltInCompanyName(obj, fallback = 'BuiltIn') {
 function isGenericBuiltInCompany(company) {
     return /^BuiltIn(?:\b|\s)/i.test(company.trim());
 }
+function collectBuiltInCardRowsFromHtml(html) {
+    const rows = [];
+    const jobAnchorPattern = /<a[^>]*data-id="job-card-title"[^>]*data-alias="([^"]+)"[^>]*>([^<]+)<\/a>/gi;
+    const companyAnchorPattern = /<a[^>]*data-id="company-title"[^>]*>\s*<span>([^<]+)<\/span>\s*<\/a>/gi;
+    const PAIRING_WINDOW_CHARS = 2_000;
+    for (const match of html.matchAll(jobAnchorPattern)) {
+        const alias = (match[1] || '').trim();
+        const title = (match[2] || '').trim();
+        const absoluteIndex = match.index ?? -1;
+        if (!alias || absoluteIndex < 0) {
+            continue;
+        }
+        const windowStart = Math.max(0, absoluteIndex - PAIRING_WINDOW_CHARS);
+        const windowEnd = Math.min(html.length, absoluteIndex + PAIRING_WINDOW_CHARS);
+        const windowText = html.slice(windowStart, windowEnd);
+        const localJobIndex = absoluteIndex - windowStart;
+        const preceding = windowText.slice(0, localJobIndex);
+        const lastJobAnchorBefore = preceding.lastIndexOf('data-id="job-card-title"');
+        let company = '';
+        for (const companyMatch of preceding.matchAll(companyAnchorPattern)) {
+            const candidate = (companyMatch[1] || '').trim();
+            const candidateIndex = companyMatch.index ?? -1;
+            if (!candidate || candidateIndex <= lastJobAnchorBefore) {
+                continue;
+            }
+            company = candidate;
+        }
+        if (!company) {
+            continue;
+        }
+        const sourceUrl = alias.startsWith('http') ? alias : `https://builtin.com${alias}`;
+        rows.push({
+            title: title || 'BuiltIn Job',
+            company,
+            location: 'Remote',
+            remote: 'Unknown',
+            type: 'Full-time',
+            sourceUrl,
+            description: '',
+            tags: ['BuiltIn'],
+        });
+    }
+    return rows;
+}
 function collectBuiltInEntries(value) {
     if (Array.isArray(value)) {
         return value.flatMap((item) => collectBuiltInEntries(item));
@@ -123,26 +167,7 @@ async function fetchBuiltInPageJobs() {
                     tags: ['BuiltIn'],
                 });
             }
-            const cardPattern = /<a[^>]*data-id="company-title"[^>]*>\s*<span>([^<]+)<\/span>[\s\S]*?<a[^>]*data-id="job-card-title"[^>]*data-alias="([^"]+)"[^>]*>([^<]+)<\/a>/gi;
-            for (const match of html.matchAll(cardPattern)) {
-                const company = (match[1] || '').trim();
-                const alias = (match[2] || '').trim();
-                const title = (match[3] || '').trim();
-                if (!company || !alias) {
-                    continue;
-                }
-                const sourceUrl = alias.startsWith('http') ? alias : `https://builtin.com${alias}`;
-                pageRows.push({
-                    title: title || 'BuiltIn Job',
-                    company,
-                    location: 'Remote',
-                    remote: 'Unknown',
-                    type: 'Full-time',
-                    sourceUrl,
-                    description: '',
-                    tags: ['BuiltIn'],
-                });
-            }
+            pageRows.push(...collectBuiltInCardRowsFromHtml(html));
             if (pageRows.length === 0) {
                 break;
             }

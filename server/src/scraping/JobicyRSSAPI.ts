@@ -16,6 +16,31 @@ function stripHtml(value: string): string {
   return decodeXmlEntities(String(value || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim());
 }
 
+function firstCleanTag(item: string, patterns: RegExp[]): string {
+  for (const pattern of patterns) {
+    const value = stripHtml(item.match(pattern)?.[1] || '');
+    if (value) {
+      return value;
+    }
+  }
+
+  return '';
+}
+
+function companyFromTitle(title: string): string {
+  const separatorMatch = title.match(/\s[\-–—|]\s([^|]{2,120})$/);
+  if (separatorMatch?.[1]) {
+    return separatorMatch[1].trim();
+  }
+
+  const atMatch = title.match(/\bat\s+([A-Z][A-Za-z0-9&.,'()\-\/ ]{2,140})$/i);
+  if (atMatch?.[1]) {
+    return atMatch[1].trim();
+  }
+
+  return '';
+}
+
 function parseJobicyRss(xml: string): NormalizedPortalJob[] {
   const jobs: NormalizedPortalJob[] = [];
   const itemPattern = /<item>([\s\S]*?)<\/item>/gi;
@@ -26,6 +51,13 @@ function parseJobicyRss(xml: string): NormalizedPortalJob[] {
     const sourceUrl = stripHtml(item.match(/<link>([\s\S]*?)<\/link>/i)?.[1] || '');
     const description = stripHtml(item.match(/<description>([\s\S]*?)<\/description>/i)?.[1] || '');
     const posted = stripHtml(item.match(/<pubDate>([\s\S]*?)<\/pubDate>/i)?.[1] || '');
+    const company =
+      firstCleanTag(item, [
+        /<job_listing:company><!\[CDATA\[([\s\S]*?)\]\]><\/job_listing:company>/i,
+        /<job_listing:company>([\s\S]*?)<\/job_listing:company>/i,
+        /<dc:creator><!\[CDATA\[([\s\S]*?)\]\]><\/dc:creator>/i,
+        /<dc:creator>([\s\S]*?)<\/dc:creator>/i,
+      ]) || companyFromTitle(title);
 
     if (!title || !sourceUrl) {
       continue;
@@ -33,7 +65,7 @@ function parseJobicyRss(xml: string): NormalizedPortalJob[] {
 
     jobs.push({
       title,
-      company: 'Jobicy Employer',
+      company: company || 'Jobicy Employer',
       location: /remote/i.test(title + ' ' + description) ? 'Remote' : 'Unknown',
       remote: /remote/i.test(title + ' ' + description) ? 'Remote' : 'Unknown',
       type: 'Unknown',

@@ -6,6 +6,10 @@
 # Build output
 dist/
 
+# Generated caches are local or volume-backed; deploy the SQLite corpus directly to Fly.
+cache/
+pending_llm_requests/
+
 # Logs
 *.log
 

@@ -1,10 +1,20 @@
-import type { ScrapedJob } from '../scraping/ScrapedJob.js'
+import type { ScrapedJob } from '../scraping/core/ScrapedJob.js'
 import type { JobScores, SearchLogFlags } from './SearchInterfaces.js'
-import { calculateFreshnessScore, getJobFreshnessScore } from './SearchFreshness.js'
-import { calculateLocationScore } from './SearchDistance.js'
-import { calculateImpactScore } from './SearchImpact.js'
-import { toSafeText, tokenize, calculateResumeScore } from './SearchResumeMatch.js'
-import { getOrCreateEmployer } from '../scraping/ScrapedEmployerCache.js'
+import { getJobFreshnessScore } from './SearchFreshness.js'
+import { calculateLocationScore } from './searchDistance/SearchDistance.js'
+import { tokenize, calculateResumeScore } from './SearchResumeMatch.js'
+import { getOrCreateEmployer } from '../scraping/core/ScrapedEmployerCache.js'
+import { getEffectiveUnifiedCompanyAiScores } from './SearchCompanyAiUnified.js'
+
+export interface QueryMatchTelemetry {
+  calls: number
+  haystackCacheHits: number
+  haystackCacheMisses: number
+  haystackBuildMs: number
+  termChecks: number
+  termCheckMs: number
+  unknownTokenTerms: number
+}
 
 // Per-job haystack token sets — built once per job object lifetime, reused across searches.
 // Uses integer token IDs (not strings) to minimize heap usage.
@@ -45,27 +55,31 @@ function capRaw(value: unknown): string {
   return s.length > HAYSTACK_FIELD_CAP ? s.slice(0, HAYSTACK_FIELD_CAP) : s
 }
 
-function getJobHaystackTokens(job: ScrapedJob): Set<number> {
+function getJobHaystackTokens(job: ScrapedJob, telemetry?: QueryMatchTelemetry): Set<number> {
   const cached = jobHaystackCache.get(job)
   if (cached !== undefined) {
+    if (telemetry !== undefined) {
+      telemetry.haystackCacheHits += 1
+    }
     return cached
   }
+  const buildStart = telemetry !== undefined ? performance.now() : 0
   // Cap each field BEFORE lowercasing/regex — avoids O(n) cost on huge descriptions.
   const raw = [
     capRaw(job.name),
     capRaw(job.company_name),
-    capRaw(job.location),
     capRaw(job.description),
-    capRaw(job.type),
     capRaw(job.source),
-    capRaw(job.source_url),
-    capRaw(job.posted),
     job.tags.map((tag) => capRaw(tag)).join(' '),
   ].join(' ')
   // Final cap on the total to bound tokenize() input regardless of field count.
   const bounded = raw.length > HAYSTACK_TOTAL_CAP ? raw.slice(0, HAYSTACK_TOTAL_CAP) : raw
   const ids = new Set(tokenize(bounded).map(internToken))
   jobHaystackCache.set(job, ids)
+  if (telemetry !== undefined) {
+    telemetry.haystackCacheMisses += 1
+    telemetry.haystackBuildMs += performance.now() - buildStart
+  }
   return ids
 }
 
@@ -80,24 +94,25 @@ export function warmJobHaystachCache(jobs: ScrapedJob[]): void {
 }
 
 /**
- * Computes a cheap quality score for a job: avg of (impact, qol, fresh, audit).
- * Used to pre-sort the master job list so high-quality matches surface first.
+ * Computes a company-quality score with job freshness: avg of (impact, qol, fresh, audit).
+ * Used to pre-sort the master job list so strong-company matches surface first.
  */
-export function getJobQualityScore(job: ScrapedJob): number {
+export function getCompanyQualityScore(job: ScrapedJob): number {
   const employer = getOrCreateEmployer(job)
-  const impact = Math.min((Number(employer.ai_impact_score) || 0) / 100, 1.0)
-  const qol   = Math.min((Number(employer.employeeQualityOfLifeScore) || 0) / 100, 1.0)
-  const audit = Math.min((Number(employer.ai_score) || 0) / 100, 1.0)
+  const effectiveScores = getEffectiveUnifiedCompanyAiScores(employer)
+  const impact = Math.min(effectiveScores.impactScore / 100, 1.0)
+  const qol   = Math.min(effectiveScores.qualityOfLifeScore / 100, 1.0)
+  const audit = Math.min(effectiveScores.auditScore / 100, 1.0)
   const fresh = getJobFreshnessScore(job)
   return (impact + qol + audit + fresh) / 4
 }
 
 /**
- * Sorts the jobs array in-place by descending quality score.
+ * Sorts the jobs array in-place by descending company-quality score.
  * Call once after the master job list is loaded so all searches see the best jobs first.
  */
-export function sortJobsByQuality(jobs: ScrapedJob[]): void {
-  jobs.sort((a, b) => getJobQualityScore(b) - getJobQualityScore(a))
+export function sortJobsByCompanyQuality(jobs: ScrapedJob[]): void {
+  jobs.sort((a, b) => getCompanyQualityScore(b) - getCompanyQualityScore(a))
 }
 
 /**
@@ -150,15 +165,18 @@ export function calculateIndividualScores(
   // Get the employer related to this job:
   t = timingAcc !== undefined ? performance.now() : 0
   const employer = getOrCreateEmployer(job)
-  const auditScore = Math.min(employer.ai_score / 100, 1.0)
+  const effectiveScores = getEffectiveUnifiedCompanyAiScores(employer)
+  const auditScore = Math.min(effectiveScores.auditScore / 100, 1.0)
   if (timingAcc !== undefined) timingAcc.auditMs += performance.now() - t
 
   t = timingAcc !== undefined ? performance.now() : 0
-  const qualityOfLifeScore = employer.employeeQualityOfLifeScore ? Math.min(employer.employeeQualityOfLifeScore / 100, 1.0) : 0
+  const qualityOfLifeScore = effectiveScores.qualityOfLifeScore
+    ? Math.min(effectiveScores.qualityOfLifeScore / 100, 1.0)
+    : 0
   if (timingAcc !== undefined) timingAcc.qolMs += performance.now() - t
 
   t = timingAcc !== undefined ? performance.now() : 0
-  const impactScore = Math.min(employer.ai_impact_score / 100, 1.0)
+  const impactScore = Math.min(effectiveScores.impactScore / 100, 1.0)
   if (timingAcc !== undefined) timingAcc.impactMs += performance.now() - t
 
   if (logFlags.audit === true || logFlags.searchMain === true) {
@@ -194,20 +212,36 @@ export function calculateIndividualScores(
  * @param queryTerms - Array of search terms (already lowercased)
  * @returns true if job matches all query terms
  */
-export function jobMatchesQuery(job: ScrapedJob, queryTerms: string[], shouldLog = false): boolean {
+export function jobMatchesQuery(
+  job: ScrapedJob,
+  queryTerms: string[],
+  shouldLog = false,
+  telemetry?: QueryMatchTelemetry,
+): boolean {
   if (queryTerms.length === 0) {
     return false
   }
 
-  const haystackIds = getJobHaystackTokens(job)
-  // Normalize each query term the same way the tokenizer does, then look up its vocab ID.
-  // If the term has never appeared in any job's haystack, its ID is -1 → instant false.
+  if (telemetry !== undefined) {
+    telemetry.calls += 1
+  }
+
+  const haystackIds = getJobHaystackTokens(job, telemetry)
+  const termCheckStart = telemetry !== undefined ? performance.now() : 0
+  // queryTerms are pre-normalized/non-empty upstream; just resolve vocab IDs and test membership.
   const matches = queryTerms.every((term) => {
-    const normalized = term.toLowerCase().replace(/[^a-z0-9]/g, '')
-    if (normalized.length === 0) return true // ignore empty terms after normalization
-    const id = lookupToken(normalized)
+    if (telemetry !== undefined) {
+      telemetry.termChecks += 1
+    }
+    const id = lookupToken(term)
+    if (telemetry !== undefined && id === -1) {
+      telemetry.unknownTokenTerms += 1
+    }
     return id !== -1 && haystackIds.has(id)
   })
+  if (telemetry !== undefined) {
+    telemetry.termCheckMs += performance.now() - termCheckStart
+  }
   if (shouldLog) {
     console.log('Query match check:', {
       jobName: job.name,

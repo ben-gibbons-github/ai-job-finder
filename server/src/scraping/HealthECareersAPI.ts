@@ -26,6 +26,18 @@ function titleFromPath(path: string): string {
     .trim();
 }
 
+function firstCleanMatch(context: string, patterns: RegExp[]): string | undefined {
+  for (const pattern of patterns) {
+    const match = context.match(pattern);
+    const value = stripHtmlTags(match?.[1] || '').replace(/&amp;/gi, '&').trim();
+    if (value) {
+      return value;
+    }
+  }
+
+  return undefined;
+}
+
 function parseHealthECareersJobs(html: string): NormalizedPortalJob[] {
   const jobs: NormalizedPortalJob[] = [];
   const linkPattern = /<a[^>]+href="((?:https:\/\/www\.healthecareers\.com)?\/job\/[^"\s?#]+(?:\?[^"\s]*)?)"[^>]*>([\s\S]*?)<\/a>/gi;
@@ -45,16 +57,28 @@ function parseHealthECareersJobs(html: string): NormalizedPortalJob[] {
     }
 
     const from = match.index ?? 0;
-    const context = html.slice(Math.max(0, from - 250), from + 1400);
-    const companyMatch = context.match(/(?:company|employer)[^>]*>\s*([^<]{2,140})\s*</i);
-    const locationMatch = context.match(/(?:location|city|state)[^>]*>\s*([^<]{2,140})\s*</i);
+    const context = html.slice(Math.max(0, from - 450), from + 2600);
+    const company = firstCleanMatch(context, [
+      /id="job-results-employer"[^>]*>([\s\S]*?)<\/span>/i,
+      /itemprop="hiringOrganization"[\s\S]*?itemprop="name"[^>]*>([\s\S]*?)<\//i,
+      /class="job-vendor"[\s\S]*?<a[^>]*>([\s\S]*?)<\/a>/i,
+      /(?:company|employer)\s*<\/span>\s*<span[^>]*>\s*([^<]{2,180})\s*</i,
+      /(?:company|employer)[^>]*>\s*([^<]{2,180})\s*</i,
+    ]);
+    const location = firstCleanMatch(context, [
+      /id="job-results-location"[^>]*>([\s\S]*?)<\/span>/i,
+      /class="job-location"[\s\S]*?<span[^>]*>([\s\S]*?)<\/span>/i,
+      /data-location="([^"]{2,180})"/i,
+      /(?:location|city|state)\s*<\/span>\s*<span[^>]*>\s*([^<]{2,180})\s*</i,
+      /(?:location|city|state)[^>]*>\s*([^<]{2,180})\s*</i,
+    ]);
     const postedMatch = context.match(/(?:posted|date)[^>]*>\s*([^<]{3,60})\s*</i);
     const description = deriveDescriptionFromContext(context, title);
 
     jobs.push({
       title,
-      company: (companyMatch?.[1] || 'Health eCareers Employer').trim(),
-      location: locationMatch?.[1]?.trim() || 'Unknown',
+      company: company || 'Health eCareers Employer',
+      location: location || 'Unknown',
       remote: /\bremote\b|\bhybrid\b|work from home/i.test(context) ? 'Remote' : 'Unknown',
       type: 'Unknown',
       sourceUrl,

@@ -5,6 +5,7 @@ import {
   type NormalizedPortalJob,
 } from './PortalIngestionUtils.js';
 import { capKeywords, getSharedJobTitleKeywords } from './SharedJobTitleKeywords.js';
+import { capLocations, getGlobalLocationCatalog } from './SharedJobLocations.js';
 
 const DEFAULT_INDEED_RSS_QUERIES = getSharedJobTitleKeywords([
   'software engineer',
@@ -14,30 +15,15 @@ const DEFAULT_INDEED_RSS_QUERIES = getSharedJobTitleKeywords([
   'project manager',
 ]);
 
-const DEFAULT_INDEED_RSS_LOCATIONS = [
-  'United States',
-  'New York, NY',
-  'Los Angeles, CA',
-  'Chicago, IL',
-  'Houston, TX',
-  'Atlanta, GA',
-  'Phoenix, AZ',
-  'Dallas, TX',
-  'Austin, TX',
-  'Miami, FL',
-  'Seattle, WA',
-  'San Francisco, CA',
-  'Boston, MA',
-  'Denver, CO',
-  'Remote',
-];
+const DEFAULT_INDEED_RSS_LOCATIONS = getGlobalLocationCatalog();
 
-const DEFAULT_INDEED_MAX_QUERIES = 140;
+const DEFAULT_INDEED_MAX_QUERIES = 2200;
+const DEFAULT_INDEED_MAX_LOCATIONS = 80;
 const MAX_INDEED_COMBINATIONS = Math.max(
   1,
-  Number(process.env.INDEED_RSS_MAX_COMBINATIONS || 2500),
+  Number(process.env.INDEED_RSS_MAX_COMBINATIONS || 50000),
 );
-const MAX_JOBS_PER_QUERY = 120;
+const MAX_JOBS_PER_QUERY = 2500;
 
 class HttpStatusError extends Error {
   status: number;
@@ -158,15 +144,17 @@ async function fetchIndeedQueryJobs(query: string, location: string): Promise<No
 export async function fetchAllGeneralistIndeedRssJobs(): Promise<ScrapedJob[]> {
   const envQueries = parseCsvEnv(process.env.INDEED_RSS_QUERIES);
   const maxQueries = Math.max(1, Number(process.env.INDEED_RSS_MAX_QUERIES || DEFAULT_INDEED_MAX_QUERIES));
+  const maxLocations = Math.max(1, Number(process.env.INDEED_RSS_MAX_LOCATIONS || DEFAULT_INDEED_MAX_LOCATIONS));
   const queries = capKeywords(envQueries.length > 0 ? envQueries : DEFAULT_INDEED_RSS_QUERIES, maxQueries);
   const envLocations = parseCsvEnv(process.env.INDEED_RSS_LOCATIONS);
   const singleLocation = String(process.env.INDEED_RSS_LOCATION || '').trim();
-  const locations =
+  const locationPool =
     envLocations.length > 0
       ? envLocations
       : singleLocation.length > 0
         ? [singleLocation]
         : DEFAULT_INDEED_RSS_LOCATIONS;
+  const locations = capLocations(locationPool, maxLocations);
 
   const combinations: Array<{ query: string; location: string }> = [];
   for (const query of queries) {

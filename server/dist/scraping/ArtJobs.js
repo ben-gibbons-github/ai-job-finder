@@ -5,7 +5,7 @@ export default class ArtJobsScraper {
             return await fetchAllArtJobs();
         }
         catch (error) {
-            console.error('Error scraping Art jobs:', error);
+            console.error('Error scraping ArtJobs:', error);
             return [];
         }
     }

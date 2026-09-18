@@ -1,8 +1,11 @@
 import type { ScrapedJob } from './ScrapedJob.js';
 import { normalizeJobsWithCoordinates, type NormalizedPortalJob } from './PortalIngestionUtils.js';
+import { sanitizeJobDescription } from './ScrapeDescriptionUtils.js';
 
 const BUILTIN_SOCIAL_IMPACT_JOBS_URL = 'https://www.builtin.com/jobs/social-impact';
 const MAX_BUILTIN_SOCIAL_IMPACT_PAGES = 50;
+const BUILTIN_BASE_URL = 'https://builtin.com';
+const BUILTIN_COMPANY_ANCHOR_DISTANCE_LIMIT = 1_500;
 
 function extractBuiltInCompanyName(obj: Record<string, unknown>, fallback = 'BuiltIn Social Impact'): string {
   const directCompany =
@@ -15,6 +18,21 @@ function extractBuiltInCompanyName(obj: Record<string, unknown>, fallback = 'Bui
           : '';
   if (directCompany.trim()) {
     return directCompany.trim();
+  }
+
+  if (obj.company && typeof obj.company === 'object') {
+    const companyObj = obj.company as Record<string, unknown>;
+    const nestedCompanyName =
+      typeof companyObj.name === 'string'
+        ? companyObj.name
+        : typeof companyObj.legalName === 'string'
+          ? companyObj.legalName
+          : typeof companyObj.alternateName === 'string'
+            ? companyObj.alternateName
+            : '';
+    if (nestedCompanyName.trim()) {
+      return nestedCompanyName.trim();
+    }
   }
 
   const org = obj.hiringOrganization ?? obj.organization;
@@ -44,6 +62,169 @@ function isGenericBuiltInCompany(company: string): boolean {
   return /^BuiltIn(?:\b|\s)/i.test(company.trim());
 }
 
+interface BuiltInAnchorMatch {
+  href: string;
+  text: string;
+  index: number;
+}
+
+function isBuiltInCompanyHref(href: string): boolean {
+  return /^(?:https?:\/\/(?:www\.)?builtin\.com)?\/company\//i.test(href.trim());
+}
+
+function isBuiltInJobHref(href: string): boolean {
+  return /^(?:https?:\/\/(?:www\.)?builtin\.com)?\/job\//i.test(href.trim());
+}
+
+function normalizeBuiltInHref(href: string): string {
+  const trimmed = href.trim();
+  if (!trimmed) {
+    return '';
+  }
+
+  if (/^https?:\/\//i.test(trimmed)) {
+    return trimmed.replace(/^https?:\/\/www\.builtin\.com/i, BUILTIN_BASE_URL);
+  }
+
+  return `${BUILTIN_BASE_URL}${trimmed.startsWith('/') ? '' : '/'}${trimmed}`;
+}
+
+function normalizeBuiltInAnchorText(rawHtml: string): string {
+  return sanitizeJobDescription(rawHtml)
+    .replace(/\s+logo$/i, '')
+    .trim();
+}
+
+function collectBuiltInAnchors(html: string, kind: 'company' | 'job'): BuiltInAnchorMatch[] {
+  const anchors: BuiltInAnchorMatch[] = [];
+  const anchorPattern = /<a\b[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/gi;
+
+  for (const match of html.matchAll(anchorPattern)) {
+    const href = normalizeBuiltInHref(match[1] || '');
+    if (!href) {
+      continue;
+    }
+
+    const isMatch = kind === 'company' ? isBuiltInCompanyHref(href) : isBuiltInJobHref(href);
+    if (!isMatch) {
+      continue;
+    }
+
+    const text = normalizeBuiltInAnchorText(match[2] || '');
+    if (!text) {
+      continue;
+    }
+
+    anchors.push({
+      href,
+      text,
+      index: match.index ?? 0,
+    });
+  }
+
+  return anchors;
+}
+
+function findNearestCompanyAnchor(jobAnchor: BuiltInAnchorMatch, companyAnchors: BuiltInAnchorMatch[]): BuiltInAnchorMatch | null {
+  let nearest: BuiltInAnchorMatch | null = null;
+  let nearestDistance = Number.POSITIVE_INFINITY;
+
+  for (const companyAnchor of companyAnchors) {
+    const distance = Math.abs(companyAnchor.index - jobAnchor.index);
+    if (distance > BUILTIN_COMPANY_ANCHOR_DISTANCE_LIMIT) {
+      continue;
+    }
+
+    if (distance < nearestDistance) {
+      nearest = companyAnchor;
+      nearestDistance = distance;
+    }
+  }
+
+  return nearest;
+}
+
+export function collectBuiltInCompanyJobPairsFromHtml(html: string): NormalizedPortalJob[] {
+  const companyAnchors = collectBuiltInAnchors(html, 'company');
+  const jobAnchors = collectBuiltInAnchors(html, 'job');
+  const rows: NormalizedPortalJob[] = [];
+  const seenSourceUrls = new Set<string>();
+
+  for (const jobAnchor of jobAnchors) {
+    const sourceUrl = normalizeBuiltInHref(jobAnchor.href);
+    if (!sourceUrl || seenSourceUrls.has(sourceUrl)) {
+      continue;
+    }
+
+    const companyAnchor = findNearestCompanyAnchor(jobAnchor, companyAnchors);
+    if (!companyAnchor) {
+      continue;
+    }
+
+    rows.push({
+      title: jobAnchor.text,
+      company: companyAnchor.text,
+      location: 'Remote',
+      remote: 'Unknown',
+      type: 'Full-time',
+      sourceUrl,
+      description: '',
+      tags: ['BuiltIn', 'Social Impact', 'TechForGood'],
+    });
+    seenSourceUrls.add(sourceUrl);
+  }
+
+  return rows;
+}
+
+function collectBuiltInCompanyJobPairsByTrackId(html: string): NormalizedPortalJob[] {
+  const companyByTrackId = new Map<string, string>();
+  const jobByTrackId = new Map<string, { title: string; sourceUrl: string }>();
+
+  const companyPattern =
+    /<a[^>]*data-id="company-title"[^>]*data-builtin-track-job-id="([^"]+)"[^>]*>([\s\S]*?)<\/a>/gi;
+  for (const match of html.matchAll(companyPattern)) {
+    const trackId = (match[1] || '').trim();
+    const company = normalizeBuiltInAnchorText(match[2] || '');
+    if (!trackId || !company) {
+      continue;
+    }
+    companyByTrackId.set(trackId, company);
+  }
+
+  const jobPattern =
+    /<a[^>]*data-id="job-card-title"[^>]*data-builtin-track-job-id="([^"]+)"[^>]*data-alias="([^"]+)"[^>]*>([\s\S]*?)<\/a>/gi;
+  for (const match of html.matchAll(jobPattern)) {
+    const trackId = (match[1] || '').trim();
+    const sourceUrl = normalizeBuiltInHref(match[2] || '');
+    const title = normalizeBuiltInAnchorText(match[3] || '');
+    if (!trackId || !sourceUrl || !title) {
+      continue;
+    }
+    jobByTrackId.set(trackId, { title, sourceUrl });
+  }
+
+  const rows: NormalizedPortalJob[] = [];
+  for (const [trackId, job] of jobByTrackId.entries()) {
+    const company = companyByTrackId.get(trackId);
+    if (!company) {
+      continue;
+    }
+    rows.push({
+      title: job.title,
+      company,
+      location: 'Remote',
+      remote: 'Unknown',
+      type: 'Full-time',
+      sourceUrl: job.sourceUrl,
+      description: '',
+      tags: ['BuiltIn', 'Social Impact', 'TechForGood'],
+    });
+  }
+
+  return rows;
+}
+
 function collectBuiltInEntries(value: unknown): NormalizedPortalJob[] {
   if (Array.isArray(value)) {
     return value.flatMap((item) => collectBuiltInEntries(item));
@@ -53,10 +234,25 @@ function collectBuiltInEntries(value: unknown): NormalizedPortalJob[] {
   }
   const obj = value as Record<string, unknown>;
   const entries: NormalizedPortalJob[] = [];
-  const url = typeof obj.url === 'string' ? obj.url : '';
-  const title = typeof obj.name === 'string' ? obj.name : typeof obj.title === 'string' ? obj.title : '';
+  const rawUrl =
+    typeof obj.url === 'string'
+      ? obj.url
+      : typeof obj.jobUrl === 'string'
+        ? obj.jobUrl
+        : typeof obj.canonicalUrl === 'string'
+          ? obj.canonicalUrl
+          : '';
+  const url = normalizeBuiltInHref(rawUrl);
+  const title =
+    typeof obj.name === 'string'
+      ? obj.name
+      : typeof obj.title === 'string'
+        ? obj.title
+        : typeof obj.headline === 'string'
+          ? obj.headline
+          : '';
 
-  if (url.includes('builtin.com') && title) {
+  if (isBuiltInJobHref(url) && title) {
     entries.push({
       title: title.trim(),
       company: extractBuiltInCompanyName(obj, 'BuiltIn Social Impact'),
@@ -109,10 +305,15 @@ export async function fetchAllBuiltInSocialImpactJobs(): Promise<ScrapedJob[]> {
         }
       }
 
+      pageRows.push(...collectBuiltInCompanyJobPairsByTrackId(html));
+      pageRows.push(...collectBuiltInCompanyJobPairsFromHtml(html));
+
+      const pageSeenSourceUrls = new Set(pageRows.map((row) => row.sourceUrl));
+
       const urlPattern = /https:\/\/builtin\.com\/job\/[^"<\s]+/gi;
       for (const match of html.matchAll(urlPattern)) {
         const sourceUrl = (match[0] || '').trim();
-        if (!sourceUrl) continue;
+        if (!sourceUrl || pageSeenSourceUrls.has(sourceUrl)) continue;
         const slugPart = sourceUrl.split('/job/')[1] || '';
         const slugTitle = slugPart.split('/')[0]?.replace(/[-_]+/g, ' ').trim() || 'BuiltIn Job';
         pageRows.push({
@@ -136,6 +337,7 @@ export async function fetchAllBuiltInSocialImpactJobs(): Promise<ScrapedJob[]> {
         if (!company || !alias) continue;
 
         const sourceUrl = alias.startsWith('http') ? alias : `https://builtin.com${alias}`;
+        if (pageSeenSourceUrls.has(sourceUrl)) continue;
         pageRows.push({
           title: titleFromCard || 'BuiltIn Job',
           company,
@@ -146,6 +348,7 @@ export async function fetchAllBuiltInSocialImpactJobs(): Promise<ScrapedJob[]> {
           description: '',
           tags: ['BuiltIn', 'Social Impact', 'TechForGood'],
         });
+        pageSeenSourceUrls.add(sourceUrl);
       }
 
       if (pageRows.length === 0) break;

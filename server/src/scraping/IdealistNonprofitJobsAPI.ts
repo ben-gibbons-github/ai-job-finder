@@ -26,6 +26,17 @@ function titleFromPath(path: string): string {
     .trim();
 }
 
+function firstCleanMatch(context: string, patterns: RegExp[]): string | undefined {
+  for (const pattern of patterns) {
+    const value = stripHtmlTags(context.match(pattern)?.[1] || '').replace(/&amp;/gi, '&').trim();
+    if (value) {
+      return value;
+    }
+  }
+
+  return undefined;
+}
+
 function parseIdealistNonprofitJobs(html: string): NormalizedPortalJob[] {
   const jobs: NormalizedPortalJob[] = [];
   const linkPattern = /<a[^>]+href="(\/en\/nonprofit-job\/[^"\s]+)"[^>]*>([\s\S]*?)<\/a>/gi;
@@ -41,15 +52,29 @@ function parseIdealistNonprofitJobs(html: string): NormalizedPortalJob[] {
     }
 
     const from = match.index ?? 0;
-    const context = html.slice(Math.max(0, from - 220), from + 900);
+    const context = html.slice(Math.max(0, from - 700), from + 2200);
+    const company = firstCleanMatch(context, [
+      /data-qa-id="search-result-link"[\s\S]*?<\/h3>\s*<h4[^>]*>\s*<div[^>]*>([\s\S]*?)<\/div>/i,
+      /<h4[^>]*>\s*<div[^>]*>([\s\S]*?)<\/div>\s*<\/h4>/i,
+      /(?:organization|organisation|company|employer)\s*<\/span>\s*<span[^>]*>\s*([^<]{2,180})\s*<\/span>/i,
+      /(?:organization|organisation|company|employer)[^>]*>\s*([^<]{2,180})\s*</i,
+    ]);
+    const location = firstCleanMatch(context, [
+      /aria-label="location-filled icon"[\s\S]*?<span[^>]*>([\s\S]*?)<\/span>/i,
+      /<span[^>]*class="[^"]*sc-1ptiz4-2[^"]*"[^>]*>\s*([A-Za-z][^<]{2,120},\s*[A-Za-z][^<]{1,80})\s*<\/span>/i,
+      /(?:location|city|state)\s*<\/span>\s*<span[^>]*>\s*([^<]{2,180})\s*<\/span>/i,
+    ]);
+    const roleType = firstCleanMatch(context, [
+      /<span[^>]*class="[^"]*sc-1ptiz4-2[^"]*"[^>]*>\s*((?:Full|Part)[\s-]*Time|Contract|Temporary|Internship)\s*<\/span>/i,
+    ]);
     const description = deriveDescriptionFromContext(context, title);
 
     jobs.push({
       title,
-      company: 'Idealist Nonprofit Employer',
-      location: 'Unknown',
+      company: company || 'Idealist Nonprofit Employer',
+      location: location || 'Unknown',
       remote: /\bremote\b|\bhybrid\b/i.test(context) ? 'Remote' : 'Unknown',
-      type: 'Unknown',
+      type: roleType || 'Unknown',
       sourceUrl,
       description,
       tags: ['Idealist', 'Nonprofit'],

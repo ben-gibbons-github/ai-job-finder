@@ -1,6 +1,20 @@
 import path from 'node:path';
+import { promises as fs } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { CacheHandler } from './CacheHandler.js';
+import {
+  CACHE_DB_FILE,
+  deleteLocationLatLonCacheRow,
+  readAllLocationLatLonCacheRows,
+  upsertLocationLatLonCacheRow,
+} from '../database/CacheDatabase.js';
+import {
+  recordDatabaseRead,
+  recordDatabaseWrite,
+  recordHybridCacheFlow,
+  registerDatabasePath,
+} from './CacheIoTelemetry.js';
+import { decodeLegacyCachePayload } from './LegacyCacheDecode.js';
+import { logBackgroundTaskEnd, logBackgroundTaskStart } from './BackgroundTaskTiming.js';
 
 export interface LatLonPair {
   lat: number;
@@ -8,14 +22,30 @@ export interface LatLonPair {
   isHardcoded?: boolean; // Flag to indicate if this is from hardcoded fallback (less accurate)
 }
 
+const EVICT_HARDCODED_CACHE_VALUES = String(process.env.EVICT_HARDCODED_CACHE_VALUES ?? '').toLowerCase() === 'true'
+const SKIP_LOCATION_CACHE_LOAD = String(process.env.SKIP_LOCATION_CACHE_LOAD ?? '').toLowerCase() === 'true'
+
 // Global cache for storing location name -> lat/lon mappings
 const locationCache: Map<string, LatLonPair> = new Map();
 const moduleDir = path.dirname(fileURLToPath(import.meta.url));
 const cacheFilePath = path.resolve(moduleDir, '../../cache/locations.json');
-const cacheHandler = new CacheHandler(cacheFilePath);
-console.log("Location cache file path:", cacheFilePath);
+registerDatabasePath(cacheFilePath, 'sqlite', CACHE_DB_FILE)
 
 let cacheLoadPromise: Promise<void> | null = null;
+const CACHE_WRITE_DEBOUNCE_MS = 250;
+let cacheWriteTimer: ReturnType<typeof setTimeout> | null = null;
+let cacheWriteInFlight = false;
+let cacheWriteQueuedAfterInFlight = false;
+const dirtyLocationKeys: Set<string> = new Set();
+
+export function normalizeLocationName(placeName: string): string {
+  return String(placeName ?? '')
+    .normalize('NFKC')
+    .replace(/[^\p{L}\p{N}\s,.'’&()\/-]/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
+}
 
 function serializeCache(): Record<string, LatLonPair> {
   const obj: Record<string, LatLonPair> = {};
@@ -26,49 +56,185 @@ function serializeCache(): Record<string, LatLonPair> {
 }
 
 async function persistCacheToDisk(): Promise<void> {
-  const payload = JSON.stringify(serializeCache(), null, 2);
-  await cacheHandler.save(payload);
-  console.log("persistCacheToDisk::", cacheFilePath);
-  console.trace("persistCacheToDisk:: stack trace");
+  const persistStart = logBackgroundTaskStart('NameToLonLatCache:persistCacheToDisk', {
+    cacheEntries: locationCache.size,
+    dirtyLocationKeys: dirtyLocationKeys.size,
+  });
+  const keysToFlush = Array.from(dirtyLocationKeys);
+  dirtyLocationKeys.clear();
+  for (const locationKey of keysToFlush) {
+    const value = locationCache.get(locationKey);
+    if (!value) {
+      continue;
+    }
+    upsertLocationLatLonCacheRow({
+      locationKey,
+      lat: value.lat,
+      lon: value.lon,
+      isHardcoded: value.isHardcoded === true,
+    });
+  }
+  if (keysToFlush.length > 0) {
+    recordDatabaseWrite(cacheFilePath)
+    recordHybridCacheFlow(cacheFilePath, 'db-direct-write')
+  }
+  logBackgroundTaskEnd('NameToLonLatCache:persistCacheToDisk', persistStart, {
+    cacheEntries: locationCache.size,
+    flushedLocationKeys: keysToFlush.length,
+    dirtyLocationKeysRemaining: dirtyLocationKeys.size,
+  });
+}
+
+function scheduleCacheWrite(): void {
+  if (cacheWriteTimer !== null) {
+    clearTimeout(cacheWriteTimer);
+    cacheWriteTimer = null;
+  }
+
+  if (cacheWriteInFlight) {
+    cacheWriteQueuedAfterInFlight = true;
+    return;
+  }
+
+  cacheWriteTimer = setTimeout(() => {
+    const debounceFlushStart = logBackgroundTaskStart('NameToLonLatCache:debouncedFlush', {
+      cacheEntries: locationCache.size,
+    });
+    cacheWriteTimer = null;
+    cacheWriteInFlight = true;
+
+    void persistCacheToDisk()
+      .catch((error) => {
+        console.warn('Failed to persist location cache:', error);
+      })
+      .finally(() => {
+        logBackgroundTaskEnd('NameToLonLatCache:debouncedFlush', debounceFlushStart, {
+          cacheEntries: locationCache.size,
+          queuedAfterInFlight: cacheWriteQueuedAfterInFlight,
+        });
+        cacheWriteInFlight = false;
+        if (cacheWriteQueuedAfterInFlight) {
+          cacheWriteQueuedAfterInFlight = false;
+          scheduleCacheWrite();
+        }
+      });
+  }, CACHE_WRITE_DEBOUNCE_MS);
 }
 
 function queueCacheWrite(): Promise<void> {
-  return persistCacheToDisk()
-    .catch((error) => {
-      console.warn('Failed to persist location cache:', error);
-    });
+  scheduleCacheWrite();
+  return Promise.resolve();
 }
 
 async function loadCacheFromDisk(): Promise<void> {
+  if (SKIP_LOCATION_CACHE_LOAD) {
+    locationCache.clear()
+    console.log(`[Cache] SKIP_LOCATION_CACHE_LOAD=true, loaded 0 locations from database cache.`)
+    console.log('[Cache] SKIP_LOCATION_CACHE_LOAD=true, loaded 0 locations from .json cache file.')
+    return
+  }
+
+  let loadedFromDatabase = 0
+  let loadedFromJson = 0
+  let evictedHardcodedValues = 0
+  let hydratedDatabaseRows = 0
+
   try {
-    const parsed = await cacheHandler.loadWithFallback((raw) => {
-      const value = JSON.parse(raw) as unknown;
-      if (!value || typeof value !== 'object' || Array.isArray(value)) {
-        throw new Error('Cache payload is not a valid object');
+    const dbRows = readAllLocationLatLonCacheRows()
+    recordDatabaseRead(cacheFilePath, dbRows.length > 0)
+    recordHybridCacheFlow(cacheFilePath, dbRows.length > 0 ? 'db-read-hit' : 'db-read-miss')
+
+    for (const row of dbRows) {
+      const value: LatLonPair = {
+        lat: row.lat,
+        lon: row.lon,
+        isHardcoded: row.isHardcoded,
       }
-      return value as Record<string, LatLonPair>;
-    });
-    for (const [key, value] of Object.entries(parsed)) {
-      if (
-        value &&
-        typeof value.lat === 'number' &&
-        typeof value.lon === 'number' &&
-        Number.isFinite(value.lat) &&
-        Number.isFinite(value.lon)
-      ) {
-        // IMPORTANT: Reject poisoned coordinates from BigDataCloud IP geolocation
-        // This coordinate pair (San Mateo area) was incorrectly cached for many locations
-        // temp
-        if (value.lat === 37.529998779296875 && value.lon === -122.29000091552734) {
-          console.log(`[Cache] Skipping poisoned coordinate entry for: ${key}`);
-          continue; // Skip this entry, forces re-geocoding via API strategies
-        }
-        locationCache.set(key, { lat: value.lat, lon: value.lon });
+      if (EVICT_HARDCODED_CACHE_VALUES && value.isHardcoded === true) {
+        evictedHardcodedValues += 1
+        deleteLocationLatLonCacheRow(row.locationKey)
+        continue
+      }
+      if (value.lat === 37.529998779296875 && value.lon === -122.29000091552734) {
+        deleteLocationLatLonCacheRow(row.locationKey)
+        continue
+      }
+      const normalizedKey = normalizeLocationName(row.locationKey)
+      if (normalizedKey && !locationCache.has(normalizedKey)) {
+        locationCache.set(normalizedKey, { lat: value.lat, lon: value.lon })
+        loadedFromDatabase += 1
       }
     }
   } catch (error) {
-    console.warn('Failed to load location cache from disk:', error);
+    console.warn('Failed to load location cache from database:', error)
   }
+
+  try {
+    const raw = await fs.readFile(cacheFilePath, 'utf8')
+    const value = JSON.parse(decodeLegacyCachePayload(raw)) as unknown
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+      throw new Error('Cache payload is not a valid object')
+    }
+
+    const parsed = value as Record<string, LatLonPair>
+    for (const [key, value] of Object.entries(parsed)) {
+      if (
+        !value ||
+        typeof value.lat !== 'number' ||
+        typeof value.lon !== 'number' ||
+        !Number.isFinite(value.lat) ||
+        !Number.isFinite(value.lon)
+      ) {
+        continue
+      }
+
+      if (EVICT_HARDCODED_CACHE_VALUES && value.isHardcoded === true) {
+        evictedHardcodedValues += 1
+        console.log(`[Cache] Evicting hardcoded location entry for: ${key}`)
+        continue
+      }
+
+      // IMPORTANT: Reject poisoned coordinates from BigDataCloud IP geolocation
+      // This coordinate pair (San Mateo area) was incorrectly cached for many locations
+      if (value.lat === 37.529998779296875 && value.lon === -122.29000091552734) {
+        console.log(`[Cache] Skipping poisoned coordinate entry for: ${key}`)
+        continue
+      }
+
+      const normalizedKey = normalizeLocationName(key)
+      if (!normalizedKey || locationCache.has(normalizedKey)) {
+        continue
+      }
+
+      locationCache.set(normalizedKey, { lat: value.lat, lon: value.lon })
+      loadedFromJson += 1
+      upsertLocationLatLonCacheRow({
+        locationKey: normalizedKey,
+        lat: value.lat,
+        lon: value.lon,
+        isHardcoded: value.isHardcoded === true,
+      })
+      hydratedDatabaseRows += 1
+    }
+  } catch (error) {
+    console.warn('Failed to load location cache from .json file:', error)
+  }
+
+  if (evictedHardcodedValues > 0 || hydratedDatabaseRows > 0) {
+    recordDatabaseWrite(cacheFilePath)
+    recordHybridCacheFlow(cacheFilePath, 'db-direct-write')
+  }
+  if (hydratedDatabaseRows > 0) {
+    recordHybridCacheFlow(cacheFilePath, 'legacy-read-hit')
+    recordHybridCacheFlow(cacheFilePath, 'db-hydrate-write')
+  }
+  if (EVICT_HARDCODED_CACHE_VALUES && evictedHardcodedValues > 0) {
+    console.log(`[Cache] Evicted ${evictedHardcodedValues} hardcoded location entries; rewriting cache without them.`)
+    await persistCacheToDisk()
+  }
+
+  console.log(`[Cache] Loaded ${loadedFromDatabase} locations from database cache.`)
+  console.log(`[Cache] Loaded ${loadedFromJson} locations from .json cache file at ${cacheFilePath}.`)
 }
 
 async function ensureCacheLoaded(): Promise<void> {
@@ -81,24 +247,29 @@ async function ensureCacheLoaded(): Promise<void> {
 /**
  * Gets a cached location by its normalized name
  */
-export function getCachedLocation(normalizedName: string): LatLonPair | undefined {
-  return locationCache.get(normalizedName);
+export function getCachedLocation(placeName: string): LatLonPair | undefined {
+  return locationCache.get(normalizeLocationName(placeName));
 }
 
 /**
  * Checks if a location is in the cache
  */
-export function hasCachedLocation(normalizedName: string): boolean {
-  return locationCache.has(normalizedName);
+export function hasCachedLocation(placeName: string): boolean {
+  return locationCache.has(normalizeLocationName(placeName));
 }
 
 /**
  * Stores a location in the cache and queues a write to disk
  */
-export function cacheLocation(normalizedName: string, latLon: LatLonPair): void {
+export function cacheLocation(placeName: string, latLon: LatLonPair): void {
+    const normalizedName = normalizeLocationName(placeName);
+    if (!normalizedName) {
+      return;
+    }
     console.log('Caching location:', normalizedName, '->', latLon);
     locationCache.set(normalizedName, latLon);
-    void queueCacheWrite();
+    dirtyLocationKeys.add(normalizedName);
+    queueCacheWrite();
 }
 
 /**
@@ -112,8 +283,13 @@ export async function initializeCache(): Promise<void> {
  * Clears the location cache
  */
 export function clearLocationCache(): void {
+  for (const key of locationCache.keys()) {
+    deleteLocationLatLonCacheRow(key)
+  }
+  recordDatabaseWrite(cacheFilePath)
+  recordHybridCacheFlow(cacheFilePath, 'db-direct-write')
   locationCache.clear();
-  void queueCacheWrite();
+  queueCacheWrite();
 }
 
 /**

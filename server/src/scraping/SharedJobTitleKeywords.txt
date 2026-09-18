@@ -2011,3 +2011,322 @@ film program coordinator
 arts grant writer
 artist residency coordinator
 culture center manager
+museum educator
+museum curator
+gallery assistant
+exhibit designer
+art teacher
+music teacher
+dance instructor
+theater teacher
+history teacher
+english teacher
+literature teacher
+philosophy instructor
+anthropology instructor
+sociology instructor
+communications instructor
+public speaking instructor
+art director
+creative director
+set designer
+costume designer
+production designer
+wardrobe stylist
+sound designer
+lighting technician
+stage manager
+production assistant
+film editor
+broadcast technician
+audio editor
+video editor
+documentary producer
+photo editor
+creative producer
+content producer
+story editor
+copywriter
+editor
+communications specialist
+writer
+journalist
+editorial assistant
+content specialist
+
+# ── Blue Collar / Skilled Trades / Labor ─────────────────────────────────────
+production worker
+assembly line worker
+machine operator
+press operator
+forklift operator
+material handler
+shipping and receiving associate
+warehouse associate
+warehouse worker
+warehouse supervisor
+distribution associate
+dock worker
+yard worker
+loader
+packer
+picker
+packaging technician
+shipping coordinator
+receiving coordinator
+production associate
+factory worker
+industrial technician
+maintenance technician
+maintenance mechanic
+maintenance supervisor
+facility technician
+building maintenance technician
+repair technician
+field service technician
+service technician
+service electrician
+appliance repair technician
+automotive technician
+diesel technician
+mechanic
+truck mechanic
+fleet technician
+transportation technician
+heavy equipment technician
+construction laborer
+general laborer
+laborer
+ground worker
+yard laborer
+loader operator
+concrete finisher
+concrete worker
+mason
+carpenter
+roofer
+painter
+ironworker
+steelworker
+sheet metal worker
+welder
+pipefitter
+steamfitter
+plumber
+electrician
+journeyman electrician
+low voltage technician
+instrumentation technician
+hvac technician
+refrigeration technician
+boilermaker
+millwright
+machinist
+cnc machinist
+cnc operator
+tool and die maker
+elevator mechanic
+crane operator
+forklift driver
+truck driver
+delivery driver
+bus driver
+transit driver
+school bus driver
+courier
+postal worker
+mail carrier
+custodian
+janitor
+cleaner
+housekeeping attendant
+housekeeping supervisor
+building service worker
+groundskeeper
+landscaper
+garden center associate
+farm worker
+agricultural worker
+harvester
+field worker
+orchard worker
+nursery worker
+forest technician
+wildland firefighter
+firefighter
+emergency responder
+paramedic
+emergency medical technician
+emt
+
+# ── Medical / Clinical / Allied Health ────────────────────────────────────────
+medical assistant
+medical office assistant
+patient services representative
+patient access specialist
+clinic coordinator
+care coordinator
+care navigator
+case manager
+social worker
+licensed clinical social worker
+mental health counselor
+therapist
+psychologist
+psychiatrist
+physician assistant
+nurse practitioner
+registered nurse
+licensed practical nurse
+dental hygienist
+dental assistant
+phlebotomist
+medical coder
+medical biller
+health information specialist
+health information technician
+medical records specialist
+medical transcriptionist
+clinical research coordinator
+clinical lab scientist
+medical laboratory technologist
+laboratory technician
+lab technologist
+radiologic technologist
+mri technologist
+ct technologist
+ultrasound technologist
+sonographer
+nuclear medicine technologist
+radiation therapist
+respiratory therapist
+occupational therapist
+physical therapist
+speech language pathologist
+pharmacist
+pharmacy technician
+surgical technologist
+biomedical equipment technician
+clinical nurse specialist
+nurse anesthetist
+nursing assistant
+certified nursing assistant
+patient care technician
+home health aide
+behavior technician
+applied behavior analyst
+rehabilitation specialist
+therapy aide
+clinical pharmacist
+medical device technician
+medical sales representative
+healthcare coordinator
+practice manager
+clinic manager
+hospital administrator
+healthcare administrator
+patient advocate
+health coach
+wellness coach
+medical writer
+medical editor
+coding specialist
+quality improvement coordinator
+infection preventionist
+sterile processing technician
+sterile processing supervisor
+transplant coordinator
+oncology nurse
+palliative care nurse
+wound care nurse
+nephrology nurse
+cardiac cath lab technologist
+interventional radiology technologist
+eeg technician
+ecg technician
+sleep technician
+physical medicine and rehabilitation specialist
+orthotics and prosthetics specialist
+telehealth coordinator
+remote patient monitoring specialist
+population health analyst
+
+# ── Humanities / Social sciences / Public service ────────────────────────────
+history teacher
+english teacher
+literature teacher
+philosophy instructor
+sociology instructor
+anthropology instructor
+political science instructor
+economics instructor
+archivist
+historian
+museum educator
+public historian
+cultural heritage specialist
+community organizer
+public service specialist
+social services specialist
+community engagement coordinator
+citizen services specialist
+public defender
+legal aid attorney
+advocacy specialist
+government relations specialist
+public affairs specialist
+policy coordinator
+community relations specialist
+research assistant
+research associate
+fundraising specialist
+development specialist
+program coordinator
+community health worker
+outreach worker
+caseworker
+family support specialist
+housing specialist
+youth advocate
+community liaison
+workforce development specialist
+employment specialist
+career coach
+job coach
+human services specialist
+social services coordinator
+public interest specialist
+
+# ── Hospitality / Service / Retail ─────────────────────────────────────────────
+restaurant host
+cashier
+retail associate
+store associate
+sales associate
+store manager
+customer service representative
+guest services agent
+front desk agent
+hotel clerk
+concierge
+reservation agent
+housekeeping attendant
+housekeeping supervisor
+food and beverage staff
+banquet server
+barista
+bartender
+catering coordinator
+event coordinator
+venue manager
+travel consultant
+tour guide
+recreation coordinator
+fitness instructor
+personal trainer
+club manager
+beautician
+cosmetologist
+nail technician
+massage therapist
+spa coordinator

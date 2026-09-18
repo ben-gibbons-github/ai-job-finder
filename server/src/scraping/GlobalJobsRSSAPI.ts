@@ -32,10 +32,14 @@ function parseGlobalJobsRss(xml: string): NormalizedPortalJob[] {
     }
 
     const locationMatch = title.match(/\bjob in\s+(.+)$/i);
+    const imageAltMatch = item.match(/<img[^>]+alt='([^']{2,180})'/i) || item.match(/<img[^>]+alt="([^"]{2,180})"/i);
+    const companyFromImage = stripHtmlTags(imageAltMatch?.[1] || '');
+    const companyFromTitle = title.match(/^(.+?)\s+job in\s+/i)?.[1]?.trim() || '';
+    const inferredCompany = companyFromImage || companyFromTitle;
 
     jobs.push({
       title: title.replace(/\s+job in\s+.+$/i, '').trim(),
-      company: 'GlobalJobs RSS',
+      company: inferredCompany || 'GlobalJobs RSS',
       location: locationMatch?.[1]?.trim() || 'Unknown',
       remote: /\bremote\b/i.test(title) || /\bremote\b/i.test(description) ? 'Remote' : 'Unknown',
       type: 'Unknown',

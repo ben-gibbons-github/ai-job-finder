@@ -53,6 +53,30 @@ describe('mergeJobsForCache', () => {
     expect(merged).toHaveLength(1);
     expect(merged[0]?.description).toBe('fresh description');
   });
+
+  it('replaces the malformed historical ImpactPool snapshot', () => {
+    const scraped = [makeJob('https://www.impactpool.org/jobs/new', 'fresh')];
+    const cached = [
+      {
+        ...makeJob('https://www.impactpool.org/jobs/old', 'stale'),
+        company_name: 'ImpactPool',
+      },
+    ];
+
+    expect(mergeJobsForCache(scraped, cached, 'ImpactPool')).toEqual(scraped);
+  });
+
+  it('replaces the malformed historical CharityJob snapshot', () => {
+    const scraped = [makeJob('https://www.charityjob.co.uk/jobs/acme/new-role/123', 'fresh')];
+    const cached = [
+      {
+        ...makeJob('https://www.charityjob.co.uk/jobs/acme/old-role/122', 'stale'),
+        company_name: 'CharityJob',
+      },
+    ];
+
+    expect(mergeJobsForCache(scraped, cached, 'CharityJob')).toEqual(scraped);
+  });
 });
 
 describe('loadComponentJobs stale cache refresh', () => {
@@ -83,6 +107,31 @@ describe('loadComponentJobs stale cache refresh', () => {
     expect(result.refreshedFromSource).toBe(true);
     expect(new Set(result.jobs.map((job) => job.source_url))).toEqual(
       new Set(['https://example.com/jobs/fresh', 'https://example.com/jobs/stale']),
+    );
+  });
+
+  it('bypasses a fresh cache when force refresh is requested', async () => {
+    const scraped = [makeJob('https://example.com/jobs/fresh', 'fresh')];
+    const cached = [makeJob('https://example.com/jobs/cached', 'cached')];
+
+    readFreshCacheMock.mockResolvedValueOnce(cached);
+    readAnyCacheMock.mockResolvedValueOnce(cached);
+
+    const component = {
+      name: 'ExampleSource',
+      scrapeJobs: vi.fn().mockResolvedValue(scraped),
+    };
+
+    const result = await loadComponentJobs(component, {
+      scrapingEnabled: true,
+      forceRefreshFromSource: true,
+    });
+
+    expect(component.scrapeJobs).toHaveBeenCalledTimes(1);
+    expect(writeCacheMock).toHaveBeenCalledTimes(1);
+    expect(result.refreshedFromSource).toBe(true);
+    expect(new Set(result.jobs.map((job) => job.source_url))).toEqual(
+      new Set(['https://example.com/jobs/fresh', 'https://example.com/jobs/cached']),
     );
   });
 });

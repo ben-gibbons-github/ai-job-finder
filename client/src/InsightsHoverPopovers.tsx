@@ -13,6 +13,7 @@ interface InsightsHoverPopoversProps {
   onAddJob: (draft: AddedJobDraft) => void
   onExportAllData: () => void
   onExportPageAsCsv: () => void
+  onExportPageAsPythonTestJobs?: () => void
   onImportAllData: (xmlText: string) => void | Promise<void>
   userRatingMode: UserRatingMode
   onUserRatingModeChange: (value: UserRatingMode) => void
@@ -20,6 +21,7 @@ interface InsightsHoverPopoversProps {
   onHideAppliedChange: (value: boolean) => void
   hideTagColors: CompanyTagColor[]
   onHideTagColorsChange: (colors: CompanyTagColor[]) => void
+  showBatchDebugActions?: boolean
   visibleJobsCount: number
   jobsWithUserNotesCount: number
   userNotesCoveragePercent: number
@@ -27,6 +29,8 @@ interface InsightsHoverPopoversProps {
   dailyNoteAddsByDay: Record<string, number>
   dailyScoreBreakdownByDay: DailyScoreBreakdownByDay
   tagCloud: TagCloudEntry[]
+  onTagCloudOpen: () => void
+  onScoreDistributionOpen: () => void
   onTagCloudWordClick: (word: string) => void
   isEnabled: boolean
   hasSearched: boolean
@@ -39,6 +43,7 @@ export default function InsightsHoverPopovers({
   onAddJob,
   onExportAllData,
   onExportPageAsCsv,
+  onExportPageAsPythonTestJobs,
   onImportAllData,
   userRatingMode,
   onUserRatingModeChange,
@@ -46,6 +51,7 @@ export default function InsightsHoverPopovers({
   onHideAppliedChange,
   hideTagColors,
   onHideTagColorsChange,
+  showBatchDebugActions = false,
   visibleJobsCount,
   jobsWithUserNotesCount,
   userNotesCoveragePercent,
@@ -53,6 +59,8 @@ export default function InsightsHoverPopovers({
   dailyNoteAddsByDay,
   dailyScoreBreakdownByDay,
   tagCloud,
+  onTagCloudOpen,
+  onScoreDistributionOpen,
   onTagCloudWordClick,
   isEnabled,
   hasSearched,
@@ -65,7 +73,9 @@ export default function InsightsHoverPopovers({
     userNotes: 0,
   })
   const tagCloudPanelRef = useRef<HTMLDivElement | null>(null)
+  const hasRequestedTagCloudRef = useRef(false)
   const distributionPanelRef = useRef<HTMLDivElement | null>(null)
+  const hasRequestedDistributionRef = useRef(false)
   const actionsPanelRef = useRef<HTMLDivElement | null>(null)
   const userNotesPanelRef = useRef<HTMLDivElement | null>(null)
   const {
@@ -140,6 +150,20 @@ export default function InsightsHoverPopovers({
       window.removeEventListener('scroll', runClamp, true)
     }
   }, [clampPanelToViewport, isExpanded, visiblePopover])
+
+  useEffect(() => {
+    if (visiblePopover === 'tagCloud' && !hasRequestedTagCloudRef.current) {
+      hasRequestedTagCloudRef.current = true
+      onTagCloudOpen()
+    }
+  }, [onTagCloudOpen, visiblePopover])
+
+  useEffect(() => {
+    if (visiblePopover === 'distribution' && !hasRequestedDistributionRef.current) {
+      hasRequestedDistributionRef.current = true
+      onScoreDistributionOpen()
+    }
+  }, [onScoreDistributionOpen, visiblePopover])
 
   const panelStyle = (key: InsightsPopoverKey): CSSProperties => {
     const style: CSSProperties = {}
@@ -222,6 +246,7 @@ export default function InsightsHoverPopovers({
         onAddJob={onAddJob}
         onExportAllData={onExportAllData}
         onExportPageAsCsv={onExportPageAsCsv}
+        onExportPageAsPythonTestJobs={onExportPageAsPythonTestJobs}
         onImportAllData={onImportAllData}
         userRatingMode={userRatingMode}
         onUserRatingModeChange={onUserRatingModeChange}
@@ -229,6 +254,7 @@ export default function InsightsHoverPopovers({
         onHideAppliedChange={onHideAppliedChange}
         hideTagColors={hideTagColors}
         onHideTagColorsChange={onHideTagColorsChange}
+        showBatchDebugActions={showBatchDebugActions}
         isEnabled={isEnabled}
       />
 

@@ -15,8 +15,8 @@ const DEFAULT_USAJOBS_KEYWORDS = getSharedJobTitleKeywords([
   'public health specialist',
 ]);
 const DEFAULT_RESULTS_PER_PAGE = 250;
-const DEFAULT_MAX_PAGES = 12;
-const DEFAULT_USAJOBS_MAX_KEYWORDS = 100;
+const DEFAULT_MAX_PAGES = 20;
+const DEFAULT_USAJOBS_MAX_KEYWORDS = 150;
 
 interface UsaJobsItem {
   MatchedObjectDescriptor?: {

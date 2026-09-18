@@ -1,4 +1,5 @@
 import type { NormalizedPortalJob } from './PortalIngestionUtils.js';
+import { recordScraperUrlTraversal } from './ScrapeDebugTelemetry.js';
 
 const DEFAULT_FETCH_TIMEOUT_MS = 30_000;
 
@@ -44,40 +45,61 @@ export async function collectPaginatedHtmlJobs(
 ): Promise<NormalizedPortalJob[]> {
   const jobs: NormalizedPortalJob[] = [];
   const seenUrls = new Set<string>();
+  const plannedUrlCount = Math.max(1, Number(options.maxPages) || 1);
+  let actualUrlCount = 0;
+  let stopReason = 'reached-max-pages';
 
-  for (let page = 1; page <= options.maxPages; page += 1) {
-    const url = options.pageUrl(page);
-    const html = await fetchHtml(url);
+  try {
+    for (let page = 1; page <= options.maxPages; page += 1) {
+      const url = options.pageUrl(page);
+      actualUrlCount += 1;
+      const html = await fetchHtml(url);
 
-    if (!html) {
-      if (page === 1) {
-        return [];
+      if (!html) {
+        stopReason = page === 1 ? 'first-page-fetch-failed' : 'page-fetch-failed';
+        break;
       }
-      break;
-    }
 
-    const pageJobs = options.parseJobs(html, page);
-    if (pageJobs.length === 0) {
-      break;
-    }
-
-    let added = 0;
-    for (const job of pageJobs) {
-      if (!job.sourceUrl || seenUrls.has(job.sourceUrl)) {
-        continue;
+      const pageJobs = options.parseJobs(html, page);
+      if (pageJobs.length === 0) {
+        stopReason = 'page-returned-zero-jobs';
+        break;
       }
-      seenUrls.add(job.sourceUrl);
-      jobs.push(job);
-      added += 1;
-    }
 
-    if (added === 0) {
-      break;
-    }
+      let added = 0;
+      for (const job of pageJobs) {
+        if (!job.sourceUrl || seenUrls.has(job.sourceUrl)) {
+          continue;
+        }
+        seenUrls.add(job.sourceUrl);
+        jobs.push(job);
+        added += 1;
+      }
 
-    if (options.hasNextPage && !options.hasNextPage(html, page)) {
-      break;
+      if (added === 0) {
+        stopReason = 'page-produced-no-new-urls';
+        break;
+      }
+
+      if (options.hasNextPage && !options.hasNextPage(html, page)) {
+        stopReason = 'no-next-page-signal';
+        break;
+      }
+
+      if (page === options.maxPages) {
+        stopReason = 'reached-max-pages';
+      }
     }
+  } catch (error) {
+    stopReason = 'scrape-exception';
+    throw error;
+  } finally {
+    recordScraperUrlTraversal({
+      sourceName: options.sourceName,
+      plannedUrlCount,
+      actualUrlCount,
+      stopReason,
+    });
   }
 
   return jobs;

@@ -1,0 +1,4 @@
+.DS_Store
+server/node_modules/
+scripts/test_company_ai_prompt.ipynb
+scripts/gemini_prompt_answer_cache.jsonl

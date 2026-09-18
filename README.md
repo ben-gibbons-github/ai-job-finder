@@ -136,6 +136,22 @@ Lint the client:
 npm run lint --prefix client
 ```
 
+## Search API
+
+In addition to the browser client (which talks to the server over socket.io), the server exposes a public REST search endpoint that runs the same ranking pipeline:
+
+```bash
+# GET
+curl "http://localhost:4000/api/search?q=software%20engineer&location=New%20York&start=0&end=25&includeRemoteJobs=true"
+
+# POST (JSON body, supports everything GET does plus resumeText and scoreWeights)
+curl -X POST http://localhost:4000/api/search \
+  -H 'content-type: application/json' \
+  -d '{"query":"nurse","locationText":"Chicago","start":0,"end":25}'
+```
+
+Both return `{ query, location, start, end, total, results }`, where each result has the job's public fields plus a `score`, a per-category `scores` breakdown, and any available AI audit/impact/quality-of-life summaries. `start`/`end` paginate (max page size 100). Requests are rate-limited per client IP and return `429` when exceeded; `503` is returned while the job corpus is still loading at startup.
+
 ## Docker
 
 The production image builds both applications and serves the Vite bundle from the Express server:

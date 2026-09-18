@@ -53,6 +53,10 @@ const DEFAULT_GREENHOUSE_BOARDS = [
   // ── Climate / Cleantech ──────────────────────────────────────────────────
   'watershed', 'climateai', 'pachama', 'terraformation', 'carbonchain',
   'arcadia', 'stem-energy', 'sunrun', 'sunnova', 'sunpower',
+  'energyhub', 'carbondirect', 'redwoodmaterials', 'mill',
+  'rondoenergy', 'antora', 'aircompany', 'remoracarbon', 'silananotechnologies',
+  'quilt', 'palmetto', 'overstory', 'energyinnovation', 'breakthroughenergy', 'koboldmetals',
+  'oklo', 'kairospower', 'avnos', 'captura', 'patch',
   'chargepoint', 'blink', 'evgo', 'electrify-america', 'volta',
   'rivian', 'lucid-motors', 'fisker', 'canoo', 'arrival',
   'nextera', 'clearway', 'pattern-energy', 'invenergy',
@@ -62,6 +66,8 @@ const DEFAULT_GREENHOUSE_BOARDS = [
   // ── Healthcare / Biotech ─────────────────────────────────────────────────
   'modernatx', 'recursion', 'insitro', 'seer-bio', 'tempus-ai',
   'komodo-health', 'cityblock', 'oscar-health', 'clover-health',
+  'dimagi', 'uniteus', 'resolvetosavelives', 'beamup',
+  'collectivehealth', 'flatironhealth', 'komodohealth', 'oscar', 'mavenclinic',
   'hims', 'ro-co', 'teladoc', 'livongo', 'optum', 'dario-health',
   'whoop', 'oura', 'withings', 'biogen', 'regeneron', 'gilead',
   'amgen', 'vertex', 'illumina', 'pacbio', 'oxford-nanopore',
@@ -71,7 +77,10 @@ const DEFAULT_GREENHOUSE_BOARDS = [
   // ── Edtech ───────────────────────────────────────────────────────────────
   'chegg', 'instructure', 'powerschool', 'nwea', 'renaissance',
   'newsela', 'achieve3000', 'imagine-learning', 'dreambox',
-  'prodigy-education', 'outschool', 'synthesis', 'primer-edu',
+  'prodigy-education', 'outschool', 'synthesis', 'primer-edu', 'donorschoose',
+  'codeorg', 'achievementfirst', 'understood', 'matriculate', 'guild',
+  'teachinglab', 'leadingeducators',
+  'transcendeducation',
   'codeacademy', 'codecombat', 'hackerrank', 'replit', 'codesandbox',
   'edx', 'futurelearn', 'general-assembly', 'flatiron-school',
   'ironhack', 'lewagon', 'springboard', 'careerfoundry',
@@ -81,12 +90,17 @@ const DEFAULT_GREENHOUSE_BOARDS = [
   'amnesty', 'human-rights-watch', 'oxfam', 'care', 'save-the-children',
   'irc', 'mercy-corps', 'direct-relief', 'americares', 'globalgiving',
   'codeforamerica', 'bridgespan', 'acumen-fund', 'skoll', 'ashoka',
+  'givedirectly', 'flyzipline', 'oneacrefund',
+  'givewell',
+  'southernpovertylawcenter', 'thorn', 'wikimedia', 'mozilla',
+  'dra', 'levelaccess', 'teamrubicon', 'mercyforanimals', 'acumen',
+  'chanzuckerberginitiative', 'omidyarnetwork',
   // ── Media / Publishing ───────────────────────────────────────────────────
   'axios', 'politico', 'theatlantic', 'theintercept', 'vice',
   'voxmedia', 'buzzfeed', 'huffpost', 'slate',
   'bloomberg', 'reuters', 'wsj', 'nytimes', 'washpost', 'economist',
   // ── Government / Civic Tech ───────────────────────────────────────────────
-  'navapbc', 'truss', 'fearless', 'skylight', 'bixal', 'nava-pbc',
+  'navapbc', 'truss', 'fearless', 'skylight', 'bixal', 'nava-pbc', 'recidiviz',
   // ── Infrastructure / DevOps ──────────────────────────────────────────────
   'grafana', 'influxdata', 'timescale', 'questdb', 'clickhouse',
   'firebolt', 'starburst', 'duckdb', 'motherduck', 'rill',
@@ -148,11 +162,12 @@ const DEFAULT_GREENHOUSE_BOARDS = [
   'at-bay', 'corvus', 'cowbell', 'resilience-cyber', 'paladin-risk',
   'embroker', 'vouch', 'newfront', 'layr', 'inswee',
   // AgriTech / Food
-  'inari', 'indigo-ag', 'benson-hill', 'taranis', 'granular',
+  'inari', 'indigo-ag', 'benson-hill', 'taranis', 'granular', 'pivotbio',
   'farmers-business', 'agrian', 'crop-zone', 'agworld', 'telus-ag',
   'cargill', 'archer-daniels', 'bunge', 'corteva', 'syngenta',
   'mosaic', 'cf-industries', 'nutrien', 'oci', 'ameropa',
   'impossible-foods', 'beyond-meat', 'just-egg', 'new-wave-foods',
+  'theeverycompany',
   'rebellyous-foods', 'good-catch', 'atlantic-natural-foods',
   'ripple-foods', 'miyokos', 'violife', 'so-delicious', 'daiya',
   // Logistics Tech
@@ -164,8 +179,8 @@ const DEFAULT_GREENHOUSE_BOARDS = [
   'project44', 'fourkites', 'visibility', 'macropoint', 'descartes',
 ];
 const DEFAULT_GREENHOUSE_PER_PAGE = 100;
-const DEFAULT_MAX_GREENHOUSE_PAGES = 25;
-const DEFAULT_MAX_GREENHOUSE_BOARDS = 200;
+const DEFAULT_MAX_GREENHOUSE_PAGES = 500;
+const DEFAULT_MAX_GREENHOUSE_BOARDS = 3000;
 const DEFAULT_GREENHOUSE_INCLUDE_CONTENT = false;
 
 interface GreenhouseJob {
@@ -213,6 +228,7 @@ export async function fetchAllGreenhouseJobs(): Promise<ScrapedJob[]> {
 
   for (const board of activeBoards) {
     try {
+      const seenJobUrls = new Set<string>();
       for (let page = 1; page <= maxPages; page += 1) {
         const urlObj = new URL(`https://boards-api.greenhouse.io/v1/boards/${encodeURIComponent(board)}/jobs`);
         urlObj.searchParams.set('page', String(page));
@@ -228,7 +244,21 @@ export async function fetchAllGreenhouseJobs(): Promise<ScrapedJob[]> {
           break;
         }
 
-        normalized.push(...jobs.map((job) => parseGreenhouseJob(board, job)));
+        const pageJobs = jobs
+          .map((job) => parseGreenhouseJob(board, job))
+          .filter((job) => {
+            if (seenJobUrls.has(job.sourceUrl)) {
+              return false;
+            }
+            seenJobUrls.add(job.sourceUrl);
+            return true;
+          });
+
+        if (pageJobs.length === 0) {
+          break;
+        }
+
+        normalized.push(...pageJobs);
 
         if (jobs.length < perPage) {
           break;

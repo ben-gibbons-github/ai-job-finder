@@ -2,6 +2,15 @@
  * Job freshness scoring functionality
  * Calculates how recent a job posting is to help with ranking
  */
+/** Cached version — pass the ScrapedJob to get O(1) repeated lookups within the same day. */
+export function getJobFreshnessScore(job) {
+    if (typeof job.freshness_number === 'number' && Number.isFinite(job.freshness_number)) {
+        return job.freshness_number;
+    }
+    const score = calculateFreshnessScore(job.posted);
+    job.freshness_number = score;
+    return score;
+}
 /**
  * Calculates a freshness score based on how recently a job was posted
  * Score ranges from 0 to 1, with newer jobs getting higher scores

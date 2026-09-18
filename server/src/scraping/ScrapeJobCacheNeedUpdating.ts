@@ -2,12 +2,16 @@ import path from 'node:path';
 import { readFile, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 
+import { ensureJobTypeClassification } from '../searching/JobTypeClassify.js';
 import { readAnyCache, readFreshCache, writeCache } from './ScrapingCache.js';
+import { recordScraperUrlTraversal, runWithScraperSource, tagJobsWithLoadOrigin } from './ScrapeDebugTelemetry.js';
 import type { ScrapedJob } from './ScrapedJob.js';
 
 const moduleDir = path.dirname(fileURLToPath(import.meta.url));
 const CACHES_NEED_UPDATING_FILE = path.resolve(moduleDir, '../../cache/cachesNeedUpdating.json');
-const SCRAPER_TIMEOUT_MS = 120_000;
+const SCRAPER_TIMEOUT_MS = 300_000;
+const JOB_TYPE_CLASSIFICATION_ENABLED = process.env.JOB_TYPE_CLASSIFICATION_ENABLED === '1'
+  || process.env.JOB_TYPE_CLASSIFICATION_ENABLED === 'true';
 
 export interface ScraperComponent {
   name: string;
@@ -45,7 +49,15 @@ function buildJobMergeKey(job: ScrapedJob): string {
   ].join('|');
 }
 
-export function mergeJobsForCache(scrapedJobs: ScrapedJob[], cachedJobs: ScrapedJob[]): ScrapedJob[] {
+export function mergeJobsForCache(
+  scrapedJobs: ScrapedJob[],
+  cachedJobs: ScrapedJob[],
+  componentName = '',
+): ScrapedJob[] {
+  if (componentName === 'ImpactPool' || componentName === 'CharityJob') {
+    return scrapedJobs;
+  }
+
   const mergedByKey = new Map<string, ScrapedJob>();
 
   for (const job of cachedJobs) {
@@ -113,6 +125,20 @@ function parseCachesNeedUpdatingPayload(payload: string): string[] {
   return [];
 }
 
+function ensureCachedJobClassifications(jobs: ScrapedJob[]): boolean {
+  if (!JOB_TYPE_CLASSIFICATION_ENABLED) {
+    return false;
+  }
+
+  let changed = false;
+  for (const job of jobs) {
+    if (ensureJobTypeClassification(job)) {
+      changed = true;
+    }
+  }
+  return changed;
+}
+
 export async function readCachesNeedUpdatingRequests(): Promise<string[]> {
   try {
     const raw = await readFile(CACHES_NEED_UPDATING_FILE, 'utf8');
@@ -151,7 +177,8 @@ async function scrapeWithTimeout(component: ScraperComponent): Promise<{ jobs: S
     }, SCRAPER_TIMEOUT_MS);
   });
 
-  const scrapePromise = component.scrapeJobs().then((jobs) => ({ jobs, timedOut: false }));
+  const scrapePromise = runWithScraperSource(component.name, () => component.scrapeJobs())
+    .then((jobs) => ({ jobs, timedOut: false }));
 
   const result = await Promise.race([scrapePromise, timeoutPromise]);
   if (timeoutHandle) {
@@ -168,7 +195,12 @@ export async function loadComponentJobs(
   const { scrapingEnabled, forceRefreshFromSource = false } = options;
 
   const freshCachedJobs = await readFreshCache(component.name);
-  if (freshCachedJobs) {
+  if (freshCachedJobs && !forceRefreshFromSource) {
+    const classificationChanged = ensureCachedJobClassifications(freshCachedJobs);
+    if (classificationChanged) {
+      await writeCache(component.name, freshCachedJobs);
+    }
+
     if (forceRefreshFromSource) {
       console.log(
         `Force refresh requested for ${component.name}, but a fresh cache exists (< 7 days). Using cached jobs instead of pulling from source.`,
@@ -177,10 +209,23 @@ export async function loadComponentJobs(
       console.log(`Loaded ${freshCachedJobs.length} jobs from cache for ${component.name}`);
     }
 
+    tagJobsWithLoadOrigin(freshCachedJobs, component.name, 'cache');
+    recordScraperUrlTraversal({
+      sourceName: component.name,
+      plannedUrlCount: null,
+      actualUrlCount: 0,
+      stopReason: 'used-fresh-cache',
+    });
     return {
       jobs: freshCachedJobs,
       refreshedFromSource: false,
     };
+  }
+
+  if (freshCachedJobs && forceRefreshFromSource) {
+    console.log(
+      `Force refresh requested for ${component.name}; bypassing fresh cache and scraping source anyway.`,
+    );
   }
 
   if (!scrapingEnabled) {
@@ -192,9 +237,21 @@ export async function loadComponentJobs(
 
     const cachedJobs = await readAnyCache(component.name);
     if (cachedJobs) {
+      const classificationChanged = ensureCachedJobClassifications(cachedJobs);
+      if (classificationChanged) {
+        await writeCache(component.name, cachedJobs);
+      }
+
       console.log(
         `Scraping disabled for current environment. Loaded ${cachedJobs.length} cached jobs for ${component.name}`,
       );
+      tagJobsWithLoadOrigin(cachedJobs, component.name, 'cache');
+      recordScraperUrlTraversal({
+        sourceName: component.name,
+        plannedUrlCount: null,
+        actualUrlCount: 0,
+        stopReason: 'scraping-disabled-used-cache',
+      });
       return {
         jobs: cachedJobs,
         refreshedFromSource: false,
@@ -204,6 +261,12 @@ export async function loadComponentJobs(
     console.warn(
       `Scraping disabled for current environment and no cache found for ${component.name}. Returning 0 jobs.`,
     );
+    recordScraperUrlTraversal({
+      sourceName: component.name,
+      plannedUrlCount: null,
+      actualUrlCount: 0,
+      stopReason: 'scraping-disabled-no-cache',
+    });
     return {
       jobs: [],
       refreshedFromSource: false,
@@ -219,6 +282,12 @@ export async function loadComponentJobs(
     console.warn(
       `[ScraperTimeout] ${component.name} exceeded ${Math.round(SCRAPER_TIMEOUT_MS / 1000)}s and was bailed out.`,
     );
+    recordScraperUrlTraversal({
+      sourceName: component.name,
+      plannedUrlCount: null,
+      actualUrlCount: 0,
+      stopReason: 'scraper-timeout',
+    });
   }
 
   if (scrapedJobs.length === 0) {
@@ -226,15 +295,33 @@ export async function loadComponentJobs(
 
     const staleCache = await readAnyCache(component.name);
     if (staleCache) {
+      const classificationChanged = ensureCachedJobClassifications(staleCache);
+      if (classificationChanged) {
+        await writeCache(component.name, staleCache);
+      }
+
       console.warn(
         `Using stale cache for ${component.name} because fresh scrape returned 0 jobs (${staleCache.length} jobs)`,
       );
+      tagJobsWithLoadOrigin(staleCache, component.name, 'cache');
+      recordScraperUrlTraversal({
+        sourceName: component.name,
+        plannedUrlCount: null,
+        actualUrlCount: 0,
+        stopReason: 'source-empty-used-stale-cache',
+      });
       return {
         jobs: staleCache,
         refreshedFromSource: false,
       };
     }
 
+    recordScraperUrlTraversal({
+      sourceName: component.name,
+      plannedUrlCount: null,
+      actualUrlCount: 0,
+      stopReason: timedOut ? 'scraper-timeout-no-cache' : 'source-empty-no-cache',
+    });
     return {
       jobs: [],
       refreshedFromSource: false,
@@ -243,8 +330,21 @@ export async function loadComponentJobs(
 
   const existingCachedJobs = await readAnyCache(component.name);
   const mergedJobs = existingCachedJobs
-    ? mergeJobsForCache(scrapedJobs, existingCachedJobs)
+    ? mergeJobsForCache(scrapedJobs, existingCachedJobs, component.name)
     : scrapedJobs;
+
+  if (existingCachedJobs) {
+    const scrapedJobKeys = new Set(scrapedJobs.map((job) => buildJobMergeKey(job)));
+    for (const job of mergedJobs) {
+      tagJobsWithLoadOrigin(
+        [job],
+        component.name,
+        scrapedJobKeys.has(buildJobMergeKey(job)) ? 'source' : 'cache',
+      );
+    }
+  } else {
+    tagJobsWithLoadOrigin(mergedJobs, component.name, 'source');
+  }
 
   if (existingCachedJobs) {
     const { scrapedOnly, cacheOnly, overlap } = getMergeBreakdown(scrapedJobs, existingCachedJobs);

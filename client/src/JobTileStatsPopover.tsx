@@ -70,20 +70,11 @@ const formatPercent = (score?: number): string => {
 
 /** If remote is 'Unknown' but location implies remote, return 'Remote'. */
 function resolveRemoteDisplay(remote: string | undefined, location: string | undefined): string {
-  const r = String(remote ?? '').trim()
-  
-
-/** If remote is 'Unknown' but location implies remote, return 'Remote'. */
-function resolveRemoteDisplay(remote: string | undefined, location: string | undefined): string {
-  const r = String(remote ?? '').trim()
-  const loc = String(location ?? '').trim().toLowerCase()
-  if (r && r.toLowerCase() !== 'unknown') return r
-  if (/\bremote\b|\bhybrid\b|work from home|\bwfh\b/.test(loc)) return 'Remote'
-  return r || 'Unknown'
-}const loc = String(location ?? '').trim().toLowerCase()
-  if (r && r.toLowerCase() !== 'unknown') return r
-  if (/\bremote\b|\bhybrid\b|work from home|\bwfh\b/.test(loc)) return 'Remote'
-  return r || 'Unknown'
+  const r = String(remote ?? '').trim();
+  const loc = String(location ?? '').trim().toLowerCase();
+  if (r && r.toLowerCase() !== 'unknown') return r;
+  if (/\bremote\b|\bhybrid\b|work from home|\bwfh\b/.test(loc)) return 'Remote';
+  return r || 'Unknown';
 }
 
 const withFallback = (value?: string): string => {

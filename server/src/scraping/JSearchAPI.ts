@@ -16,9 +16,9 @@ const DEFAULT_JSEARCH_KEYWORDS = getSharedJobTitleKeywords([
   'environmental engineer',
   'public health',
 ]);
-const DEFAULT_JSEARCH_MAX_KEYWORDS = 80;
-const DEFAULT_JSEARCH_MAX_PAGES = 3; // 10 results/page by default
-const DEFAULT_JSEARCH_NUM_PAGES = 10; // results per page (max 10)
+const DEFAULT_JSEARCH_MAX_KEYWORDS = 1200;
+const DEFAULT_JSEARCH_MAX_PAGES = 60; // 10 results/page by default
+const DEFAULT_JSEARCH_NUM_PAGES = 100; // results per page (max 10)
 
 interface JSearchJob {
   job_id?: string;

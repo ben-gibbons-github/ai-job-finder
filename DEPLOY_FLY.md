@@ -23,7 +23,7 @@ From repo root:
 ```bash
 cd /Users/8s/Documents/code/web/job_finder_super
 fly launch --no-deploy
-fly volumes create cache_data --region iad --size 5
+fly volumes create cache_data --region dfw --size 10
 ```
 
 ## 4) Set required secrets
@@ -62,13 +62,32 @@ fly secrets set \
   SOCKET_RATE_LIMIT_JOB_AUDIT_LEAK_PER_SECOND=0.4
 ```
 
-## 5) Deploy
+## 5) Upload the SQLite corpus
+
+The production image does not contain the local database. Upload it directly to the mounted volume:
+
+```bash
+fly ssh sftp put server/cache/scraped_jobs.sqlite \
+  /app/server/cache/scraped_jobs.sqlite.uploading \
+  --app job-finder-super --machine <machine-id>
+fly ssh console --app job-finder-super --machine <machine-id> \
+  -C 'mv /app/server/cache/scraped_jobs.sqlite.uploading /app/server/cache/scraped_jobs.sqlite'
+```
+
+Verify the upload before deploying:
+
+```bash
+fly ssh console --app job-finder-super --machine <machine-id> \
+  -C 'sha256sum /app/server/cache/scraped_jobs.sqlite'
+```
+
+## 6) Deploy
 
 ```bash
 fly deploy
 ```
 
-## 6) Verify
+## 7) Verify
 
 ```bash
 fly status
@@ -85,11 +104,10 @@ Then open `https://<your-fly-app>.fly.dev` and verify:
 
 - Client socket URL uses `VITE_SERVER_URL` when provided, otherwise same-origin in production.
 - This deploy path uses same-origin, so no extra client env variable is required.
-- Cache data persists on mounted volume at `/app/server/cache`.
-- Cache seed files are bundled at `/app/server/cache_seed` from repo `server/cache` during image build.
-- `CACHE_SEED_MODE=overwrite` refreshes mounted cache files from git-uploaded seed caches at startup.
-- `CACHE_SEED_MODE=missing` only copies missing files from `cache_seed` to mounted cache volume.
-- `CACHE_SEED_MODE=off` disables startup seeding.
+- Cache data persists on the mounted volume at `/app/server/cache`.
+- The SQLite corpus is intentionally ignored by Git and excluded from the Docker image; upload it directly to the Fly volume.
+- `SQL_ONLY_CACHE_LOADING=true` ensures production reads the job corpus and supporting cache tables only from SQLite, not legacy JSON or saved HTTP/HTML cache files.
+- A 10 GB volume is required for the current 5.1 GB database and SQLite working headroom. Existing volumes can be expanded with `fly volumes extend`.
 - `ASHBY_FEED_ENDPOINTS`, `ASHBY_ORGS`, `GREENHOUSE_BOARDS`, and `LEVER_BOARDS` control how many boards/orgs are ingested.
 - If `ASHBY_ORGS`, `GREENHOUSE_BOARDS`, or `LEVER_BOARDS` are omitted, the app now falls back to expanded built-in generalist target packs.
 - `INDEED_RSS_QUERIES` can be set to custom comma-separated non-tech terms; if omitted, a large built-in generalist query pack is used.

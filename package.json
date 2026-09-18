@@ -5,6 +5,13 @@
   "scripts": {
     "dev": "node -e \"const {execSync}=require('child_process');try{execSync('lsof -ti:4000,3010 | xargs kill -9',{stdio:'ignore'})}catch{}\" && concurrently --kill-others --kill-others-on-fail -n server,client -c cyan,magenta \"npm run dev --prefix server\" \"npm run dev --prefix client\"",
     "quickDev": "node -e \"const {execSync}=require('child_process');try{execSync('lsof -ti:4000,3010 | xargs kill -9',{stdio:'ignore'})}catch{}\" && concurrently --kill-others --kill-others-on-fail -n server,client -c cyan,magenta \"CACHE_ONLY_SCRAPING=1 npm run dev --prefix server\" \"npm run dev --prefix client\"",
+    "backupDB": "node scripts/backupDB.mjs",
+    "restoreDB": "node scripts/restoreDB.mjs",
+    "harvest-slugs": "node --env-file=server/.env scripts/harvestCompanySlugs.mjs",
+    "extract-ats-slugs": "node scripts/extractAtsSlugsFromJobsDb.mjs",
+    "import-open-ats-datasets": "node scripts/importOpenAtsDatasets.mjs",
+    "reloadCache": "node -e \"const {execSync}=require('child_process');try{execSync('lsof -ti:4000,3010 | xargs kill -9',{stdio:'ignore'})}catch{}\" && node -e \"const fs=require('fs');const path=require('path');const scrapeMainPath=path.join(process.cwd(),'server/src/scraping/core/main/ScrapeJobMain.ts');const cacheTargetsPath=path.join(process.cwd(),'server/cache/cachesNeedUpdating.json');const source=fs.readFileSync(scrapeMainPath,'utf8');const names=[...source.matchAll(/name:\\s*'([^']+)'/g)].map((m)=>m[1]);const uniqueNames=[...new Set(names)];if(uniqueNames.length===0){throw new Error('No scraper component names found in ScrapeJobMain.ts');}fs.writeFileSync(cacheTargetsPath,JSON.stringify(uniqueNames,null,2)+'\\n','utf8');console.log('Prepared '+uniqueNames.length+' cache refresh target(s).');\" && concurrently --kill-others --kill-others-on-fail -n server,client -c cyan,magenta \"npm run dev --prefix server\" \"npm run dev --prefix client\"",
+    "reload-scraper": "node scripts/reloadScraper.mjs",
     "test-llm": "tsx server/src/llms/testAskLLM.ts"
   },
   "keywords": [],

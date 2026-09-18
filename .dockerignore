@@ -4,9 +4,14 @@
 **/dist
 **/.DS_Store
 **/*.log
+.venv/
+server/src/cache/
+server/pending_llm_requests/
+server/node_modules/
 
 # Local caches and large scraped artifacts
 server/build_output.txt
+server/cache/*
 
 # Local env files
 **/.env
