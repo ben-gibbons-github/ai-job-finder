@@ -2,7 +2,8 @@ import type { ScrapedJob } from '../scraping/core/ScrapedJob.js'
 import type { JobScores, SearchLogFlags } from './SearchInterfaces.js'
 import { getJobFreshnessScore } from './SearchFreshness.js'
 import { calculateLocationScore } from './searchDistance/SearchDistance.js'
-import { tokenize, calculateResumeScore } from './SearchResumeMatch.js'
+import { calculateResumeScore } from './SearchResumeMatch.js'
+import { getTokenRepositorySize, internToken, internTokens, lookupToken } from './TokenRepository.js'
 import { getOrCreateEmployer } from '../scraping/core/ScrapedEmployerCache.js'
 import { getEffectiveUnifiedCompanyAiScores } from './SearchCompanyAiUnified.js'
 
@@ -21,27 +22,9 @@ export interface QueryMatchTelemetry {
 // A Set<number> of token IDs uses ~4 bytes/entry vs ~50+ bytes/entry for Set<string>.
 const jobHaystackCache = new WeakMap<ScrapedJob, Set<number>>()
 
-// Global vocabulary: maps normalized token string → stable integer ID.
-// Only populated from haystack warmup/build, never shrinks.
-const vocab = new Map<string, number>()
-
-function internToken(token: string): number {
-  let id = vocab.get(token)
-  if (id === undefined) {
-    id = vocab.size
-    vocab.set(token, id)
-  }
-  return id
-}
-
-/** Return the vocab ID for a token, or -1 if it has never been seen. */
-function lookupToken(token: string): number {
-  return vocab.get(token) ?? -1
-}
-
 /** Returns the vocab size (number of unique tokens seen across all jobs). */
 export function getVocabSize(): number {
-  return vocab.size
+  return getTokenRepositorySize()
 }
 
 // Caps applied to RAW strings BEFORE any toLowerCase / regex processing.
@@ -74,7 +57,7 @@ function getJobHaystackTokens(job: ScrapedJob, telemetry?: QueryMatchTelemetry):
   ].join(' ')
   // Final cap on the total to bound tokenize() input regardless of field count.
   const bounded = raw.length > HAYSTACK_TOTAL_CAP ? raw.slice(0, HAYSTACK_TOTAL_CAP) : raw
-  const ids = new Set(tokenize(bounded).map(internToken))
+  const ids = new Set(internTokens(bounded))
   jobHaystackCache.set(job, ids)
   if (telemetry !== undefined) {
     telemetry.haystackCacheMisses += 1

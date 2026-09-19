@@ -1,9 +1,14 @@
+import { getHeapStatistics } from 'node:v8';
 import type { ScrapedJob } from '../../scraping/core/ScrapedJob.js';
 import { warmJobHaystachCache, getVocabSize } from '../../searching/SearchUtils.js';
 import { warmJobResumeTargetStats } from '../../searching/SearchResumeMatch.js';
 import { clearActiveOperation, setActiveOperation } from '../ServerActivityTracker.js';
 
 const LOG_HAYSTACK_FINE = false;
+
+function formatMemoryMb(bytes: number): string {
+  return `${(bytes / 1024 / 1024).toFixed(0)} MB`;
+}
 
 export function warmHaystackAsync(jobs: ScrapedJob[]): void {
   const warmupTotal = jobs.length;
@@ -78,8 +83,10 @@ export function warmHaystackAsync(jobs: ScrapedJob[]): void {
       i += CHUNK;
       const elapsed = ((performance.now() - t0) / 1000).toFixed(1);
       const pct = Math.min(100, Math.round((i / warmupTotal) * 100));
+      const memory = process.memoryUsage();
+      const heapLimit = getHeapStatistics().heap_size_limit;
       const level = chunkMs > SLOW_CHUNK_MS ? 'warn' : 'log';
-      console[level](`[Haystack] Warmup ${pct}% — ${Math.min(i, warmupTotal).toLocaleString()}/${warmupTotal.toLocaleString()} jobs — chunk ${chunkMs.toFixed(0)}ms for ${chunk.length} jobs (avg ${(chunkMs / chunk.length).toFixed(1)}ms/job) — ${elapsed}s elapsed`);
+      console[level](`[Haystack] Warmup ${pct}% — ${Math.min(i, warmupTotal).toLocaleString()}/${warmupTotal.toLocaleString()} jobs — ${getVocabSize().toLocaleString()} shared tokens — chunk ${chunkMs.toFixed(0)}ms for ${chunk.length} jobs (avg ${(chunkMs / chunk.length).toFixed(1)}ms/job) — memory ${formatMemoryMb(memory.heapUsed)} used / ${formatMemoryMb(heapLimit)} available — ${elapsed}s elapsed`);
       await new Promise<void>((resolve) => setImmediate(resolve));
     }
     console.log(`[Timer] 🟢 Haystack warmup → ${(performance.now() - t0).toFixed(0)}ms total | vocab: ${getVocabSize().toLocaleString()} unique tokens`);

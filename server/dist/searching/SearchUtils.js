@@ -1,30 +1,16 @@
 import { getJobFreshnessScore } from './SearchFreshness.js';
 import { calculateLocationScore } from './searchDistance/SearchDistance.js';
-import { tokenize, calculateResumeScore } from './SearchResumeMatch.js';
+import { calculateResumeScore } from './SearchResumeMatch.js';
+import { getTokenRepositorySize, internTokens, lookupToken } from './TokenRepository.js';
 import { getOrCreateEmployer } from '../scraping/core/ScrapedEmployerCache.js';
 import { getEffectiveUnifiedCompanyAiScores } from './SearchCompanyAiUnified.js';
 // Per-job haystack token sets — built once per job object lifetime, reused across searches.
 // Uses integer token IDs (not strings) to minimize heap usage.
 // A Set<number> of token IDs uses ~4 bytes/entry vs ~50+ bytes/entry for Set<string>.
 const jobHaystackCache = new WeakMap();
-// Global vocabulary: maps normalized token string → stable integer ID.
-// Only populated from haystack warmup/build, never shrinks.
-const vocab = new Map();
-function internToken(token) {
-    let id = vocab.get(token);
-    if (id === undefined) {
-        id = vocab.size;
-        vocab.set(token, id);
-    }
-    return id;
-}
-/** Return the vocab ID for a token, or -1 if it has never been seen. */
-function lookupToken(token) {
-    return vocab.get(token) ?? -1;
-}
 /** Returns the vocab size (number of unique tokens seen across all jobs). */
 export function getVocabSize() {
-    return vocab.size;
+    return getTokenRepositorySize();
 }
 // Caps applied to RAW strings BEFORE any toLowerCase / regex processing.
 // This is critical: toSafeText().toLowerCase() on a 500 KB string takes seconds.
@@ -54,7 +40,7 @@ function getJobHaystackTokens(job, telemetry) {
     ].join(' ');
     // Final cap on the total to bound tokenize() input regardless of field count.
     const bounded = raw.length > HAYSTACK_TOTAL_CAP ? raw.slice(0, HAYSTACK_TOTAL_CAP) : raw;
-    const ids = new Set(tokenize(bounded).map(internToken));
+    const ids = new Set(internTokens(bounded));
     jobHaystackCache.set(job, ids);
     if (telemetry !== undefined) {
         telemetry.haystackCacheMisses += 1;

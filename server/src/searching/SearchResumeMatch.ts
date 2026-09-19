@@ -1,4 +1,7 @@
 import type { ScrapedJob } from '../scraping/core/ScrapedJob.js'
+import { internTokens, lookupToken, tokenize } from './TokenRepository.js'
+
+export { tokenize } from './TokenRepository.js'
 
 const RESUME_MATCH_BM25_ENABLED = String(process.env.RESUME_MATCH_BM25_ENABLED ?? '').toLowerCase() === 'true'
 const JOB_NAME_WEIGHT = 10
@@ -34,22 +37,6 @@ export function toSafeText(value: unknown): string {
 }
 
 /**
- * Tokenizes text into meaningful tokens
- * Converts to lowercase, removes special characters, and filters short tokens
- * 
- * @param text - Text to tokenize
- * @returns Array of tokens with length >= 2
- */
-export function tokenize(text: string): string[] {
-  return text
-    .toLowerCase()
-    .replace(/[^a-z0-9\s]/g, ' ')
-    .split(/\s+/)
-    .map((t) => t.trim())
-    .filter((t) => t.length >= 2)
-}
-
-/**
  * Calculates overlap score between source tokens and target text
  * Uses a weighted combination of coverage and hit saturation metrics
  * 
@@ -68,14 +55,15 @@ export function overlapScore(sourceTokens: string[], targetText: string): number
   }
 
   const uniqueSourceTokens = Array.from(new Set(sourceTokens))
-  const targetTokens = new Set(tokenize(targetText))
+  const targetTokens = new Set(internTokens(targetText))
   if (targetTokens.size === 0) {
     return 0
   }
 
   let hits = 0
   for (const token of uniqueSourceTokens) {
-    if (targetTokens.has(token)) {
+    const tokenId = lookupToken(token)
+    if (tokenId >= 0 && targetTokens.has(tokenId)) {
       hits += 1
     }
   }
@@ -96,17 +84,15 @@ export function overlapScore(sourceTokens: string[], targetText: string): number
  * @returns Resume match score between 0 and 1
  */
 interface TokenStats {
-  tokenSet: Set<string>
-  tokenFreqs: Map<string, number>
-  weightedTokenFreqs: Map<string, number>
+  tokenIds: Uint32Array
+  weightedTokenFreqs: Uint32Array
   docLength: number
-  weightedDocLength: number
 }
 
 interface JobTargetStats {
   job: TokenStats
   employer: TokenStats
-  titleTokenSet: Set<string>
+  title: TokenStats
 }
 
 // Job-specific stats remain per job; employer descriptions and AI summaries are shared by name.
@@ -114,32 +100,44 @@ const jobTargetStatsCache = new WeakMap<ScrapedJob, JobTargetStats>()
 const employerTargetStatsCache = new Map<string, TokenStats>()
 
 function createTokenStats(fields: Array<{ text: string; weight: number }>): TokenStats {
-  const tokenSet = new Set<string>()
-  const tokenFreqs = new Map<string, number>()
-  const weightedTokenFreqs = new Map<string, number>()
-  let weightedDocLength = 0
+  const weightedTokenFreqs = new Map<number, number>()
+  let docLength = 0
   let processedChars = 0
 
   for (const field of fields) {
     if (processedChars >= RESUME_TARGET_TOTAL_CAP) break
     const remainingChars = RESUME_TARGET_TOTAL_CAP - processedChars
-    const tokens = tokenize(field.text.slice(0, remainingChars))
+    const tokens = internTokens(field.text.slice(0, remainingChars))
     processedChars += Math.min(field.text.length, remainingChars)
     for (const token of tokens) {
-      tokenSet.add(token)
-      tokenFreqs.set(token, (tokenFreqs.get(token) ?? 0) + 1)
       weightedTokenFreqs.set(token, (weightedTokenFreqs.get(token) ?? 0) + field.weight)
-      weightedDocLength += field.weight
+      docLength += 1
     }
   }
 
+  const tokenIds = Array.from(weightedTokenFreqs.keys()).sort((a, b) => a - b)
   return {
-    tokenSet,
-    tokenFreqs,
-    weightedTokenFreqs,
-    docLength: tokenSet.size === 0 ? 0 : Array.from(tokenSet).reduce((sum, token) => sum + (tokenFreqs.get(token) ?? 0), 0),
-    weightedDocLength,
+    tokenIds: Uint32Array.from(tokenIds),
+    weightedTokenFreqs: Uint32Array.from(tokenIds, (token) => weightedTokenFreqs.get(token) ?? 0),
+    docLength,
   }
+}
+
+function findTokenIndex(stats: TokenStats, tokenId: number): number {
+  let left = 0
+  let right = stats.tokenIds.length - 1
+  while (left <= right) {
+    const middle = (left + right) >> 1
+    const current = stats.tokenIds[middle]
+    if (current === tokenId) return middle
+    if (current < tokenId) left = middle + 1
+    else right = middle - 1
+  }
+  return -1
+}
+
+function hasToken(stats: TokenStats, tokenId: number): boolean {
+  return findTokenIndex(stats, tokenId) >= 0
 }
 
 function normalizeEmployerKey(name: unknown): string {
@@ -181,7 +179,7 @@ function getJobTargetStats(job: ScrapedJob): JobTargetStats {
   const stats: JobTargetStats = {
     job: jobStats,
     employer: getEmployerTargetStats(job),
-    titleTokenSet: new Set(tokenize(toSafeText(job.name))),
+    title: createTokenStats([{ text: capTargetField(job.name), weight: JOB_NAME_WEIGHT }]),
   }
 
   jobTargetStatsCache.set(job, stats)
@@ -210,34 +208,33 @@ const resumeScoreCache: { fingerprint: string; scores: Map<string, number> } = {
 const RESUME_MAX_CHARS = 6000
 
 function calculateTitlePenaltyMultiplier(sourceTokens: string[], targetStats: JobTargetStats): number {
-  const sourceSet = new Set(sourceTokens)
   let titleMissPenalty = 0
-  for (const token of targetStats.titleTokenSet) {
-    if (!sourceSet.has(token)) {
+  for (const tokenId of targetStats.title.tokenIds) {
+    if (!sourceTokens.some((token) => lookupToken(token) === tokenId)) {
       titleMissPenalty += JOB_NAME_WEIGHT
     }
   }
 
-  if (targetStats.titleTokenSet.size === 0) {
+  if (targetStats.title.tokenIds.length === 0) {
     return 1
   }
 
-  const maxPenalty = targetStats.titleTokenSet.size * JOB_NAME_WEIGHT
+  const maxPenalty = targetStats.title.tokenIds.length * JOB_NAME_WEIGHT
   return Math.max(0, 1 - titleMissPenalty / maxPenalty)
 }
 
 function calculateOverlapResumeScore(sourceTokens: string[], targetStats: JobTargetStats): number {
-  const sourceSet = new Set(sourceTokens)
+  const sourceIds = sourceTokens.map(lookupToken)
   let weightedHits = 0
-  for (const token of sourceTokens) {
-    if (!targetStats.job.tokenSet.has(token) && !targetStats.employer.tokenSet.has(token)) {
+  for (const tokenId of sourceIds) {
+    if (tokenId < 0 || (!hasToken(targetStats.job, tokenId) && !hasToken(targetStats.employer, tokenId))) {
       continue
     }
-    weightedHits += targetStats.titleTokenSet.has(token) ? JOB_NAME_WEIGHT : DEFAULT_FIELD_WEIGHT
+    weightedHits += hasToken(targetStats.title, tokenId) ? JOB_NAME_WEIGHT : DEFAULT_FIELD_WEIGHT
   }
 
   const titlePenaltyMultiplier = calculateTitlePenaltyMultiplier(sourceTokens, targetStats)
-  const coverage = weightedHits / Math.max(1, weightedHits + (targetStats.titleTokenSet.size * JOB_NAME_WEIGHT))
+  const coverage = weightedHits / Math.max(1, weightedHits + (targetStats.title.tokenIds.length * JOB_NAME_WEIGHT))
   const hitSaturation = weightedHits / (weightedHits + 5)
   const raw = Math.min(1, coverage * 0.35 + hitSaturation * 0.65) * 2
   return Math.min(1, raw * 0.74 * titlePenaltyMultiplier)
@@ -251,15 +248,19 @@ function calculateBm25ResumeScore(sourceTokens: string[], targetStats: JobTarget
   let bm25Sum = 0
 
   for (const token of sourceTokens) {
+    const tokenId = lookupToken(token)
+    if (tokenId < 0) continue
+    const jobIndex = findTokenIndex(targetStats.job, tokenId)
+    const employerIndex = findTokenIndex(targetStats.employer, tokenId)
     const termFrequency =
-      (targetStats.job.weightedTokenFreqs.get(token) ?? 0)
-      + (targetStats.employer.weightedTokenFreqs.get(token) ?? 0)
+      (jobIndex >= 0 ? targetStats.job.weightedTokenFreqs[jobIndex] : 0)
+      + (employerIndex >= 0 ? targetStats.employer.weightedTokenFreqs[employerIndex] : 0)
     if (termFrequency <= 0) {
       continue
     }
 
     matchedTerms += 1
-    const tokenWeight = targetStats.titleTokenSet.has(token) ? JOB_NAME_WEIGHT : DEFAULT_FIELD_WEIGHT
+    const tokenWeight = hasToken(targetStats.title, tokenId) ? JOB_NAME_WEIGHT : DEFAULT_FIELD_WEIGHT
     const adjustedFrequency = termFrequency * tokenWeight
     bm25Sum += (adjustedFrequency * (BM25_K1 + 1)) / (adjustedFrequency + BM25_K1 * docLengthNorm)
   }
@@ -295,7 +296,7 @@ export function calculateResumeScore(job: ScrapedJob, resumeText: string, should
   }
 
   const targetStats = getJobTargetStats(job)
-  if (targetStats.job.tokenSet.size === 0 && targetStats.employer.tokenSet.size === 0) {
+  if (targetStats.job.tokenIds.length === 0 && targetStats.employer.tokenIds.length === 0) {
     if (jobKey) resumeScoreCache.scores.set(jobKey, 0)
     return 0
   }
