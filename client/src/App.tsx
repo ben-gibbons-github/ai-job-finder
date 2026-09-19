@@ -450,10 +450,10 @@ function EmployerCategoryFilterDropdown({ selectedCategory, onChange, isEnabled 
         aria-haspopup="true"
         disabled={!isEnabled}
       >
-        {draft ? `Prioritizing: ${EMPLOYER_IMPACT_CATEGORY_LABELS[draft]}` : 'Prioritize badge'} {open ? '▲' : '▼'}
+        {draft ? `Prioritizing: ${EMPLOYER_IMPACT_CATEGORY_LABELS[draft]}` : 'Prioritize cause'} {open ? '▲' : '▼'}
       </button>
       {open && (
-        <div className="search-settings-panel" role="dialog" aria-label="Prioritize badge">
+        <div className="search-settings-panel" role="dialog" aria-label="Prioritize cause">
           <EmployerCategoryFilter selectedCategory={draft} onChange={selectAndClose} />
         </div>
       )}
@@ -2086,7 +2086,7 @@ function App() {
   return (
     <main className="app">
       <h1 className={`app-title${isSearching ? ' app-title--searching' : ''}`}>Job Search for Good</h1>
-      <p className="app-subtitle">helping find jobs that matter</p>
+      <p className="app-subtitle"> --- helping to find jobs that matter</p>
       {totalJobsInDb > 0 && (
         <p className="app-db-count">
           {totalJobsInDb.toLocaleString()} jobs in database, {totalEmployersInDb.toLocaleString()} employers, {totalSourcesInDb.toLocaleString()} sources

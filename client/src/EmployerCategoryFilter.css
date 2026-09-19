@@ -1,3 +1,10 @@
+
+.app .employer-category-filter__tile--active {
+  border-color: #3bf679;
+  background: #e7ffe7;
+}
+
+
 .employer-category-filter {
   background: #fff;
   border: 1px solid #e2e8f0;
@@ -29,13 +36,8 @@
   border-color: #93c5fd;
 }
 
-.employer-category-filter__tile--active {
-  border-color: #3b82f6;
-  background: #eff6ff;
-}
-
 .employer-category-filter__tile:not(.employer-category-filter__tile--active) {
-  opacity: 0.45;
+  /* opacity: 0.45; */
 }
 
 .employer-category-filter__tile-icon {
